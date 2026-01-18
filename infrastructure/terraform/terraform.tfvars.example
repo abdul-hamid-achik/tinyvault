@@ -1,0 +1,25 @@
+# Hetzner Cloud API Token
+# Create at: https://console.hetzner.cloud/projects/YOUR_PROJECT/security/tokens
+hcloud_token = "your-hetzner-api-token"
+
+# SSH Public Key for server access
+ssh_public_key = "ssh-ed25519 AAAA..."
+
+# Environment (production, staging)
+environment = "production"
+
+# Hetzner datacenter location
+# Options: nbg1 (Nuremberg), fsn1 (Falkenstein), hel1 (Helsinki), ash (Ashburn), hil (Hillsboro)
+location = "hil"
+
+# Server type
+# cx22: 2 vCPU, 4GB RAM (~$4.50/mo) - Recommended for small deployments
+# cx32: 4 vCPU, 8GB RAM (~$15/mo) - For larger workloads
+server_type = "cx22"
+
+# Volume sizes (in GB)
+postgres_volume_size = 20
+data_volume_size = 10
+
+# Domain
+domain = "tinyvault.dev"

@@ -1,0 +1,32 @@
+{
+	email admin@tinyvault.dev
+}
+
+tinyvault.dev {
+	reverse_proxy app:8080
+
+	# Security headers
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-XSS-Protection "1; mode=block"
+	}
+
+	# Compression
+	encode gzip zstd
+
+	# Access logs
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 10mb
+			roll_keep 10
+		}
+	}
+}
+
+# Health check endpoint for load balancers
+:80 {
+	respond /health 200
+}

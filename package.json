@@ -1,0 +1,12 @@
+{
+  "name": "tinyvault",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "css:build": "tailwindcss -i ./web/static/css/input.css -o ./web/static/css/output.css --minify",
+    "css:watch": "tailwindcss -i ./web/static/css/input.css -o ./web/static/css/output.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^4.0.0"
+  }
+}

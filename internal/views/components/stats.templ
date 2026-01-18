@@ -1,0 +1,38 @@
+package components
+
+import "fmt"
+
+templ StatCard(label string, value int, iconPath string) {
+	<div class="card p-6">
+		<div class="flex items-center justify-between">
+			<div>
+				<p class="text-nord3 text-sm">{ label }</p>
+				<p class="text-3xl font-bold text-nord6 mt-1">{ fmt.Sprintf("%d", value) }</p>
+			</div>
+			<div class="w-12 h-12 bg-nord10/20 rounded-lg flex items-center justify-center">
+				<svg class="w-6 h-6 text-nord8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={ iconPath }/>
+				</svg>
+			</div>
+		</div>
+	</div>
+}
+
+templ ActionBadge(action string) {
+	switch action {
+		case "secret.read":
+			<span class="badge-primary">Read</span>
+		case "secret.create":
+			<span class="badge-success">Created</span>
+		case "secret.update":
+			<span class="badge-warning">Updated</span>
+		case "secret.delete":
+			<span class="badge-error">Deleted</span>
+		case "project.create":
+			<span class="badge-success">Project Created</span>
+		case "project.delete":
+			<span class="badge-error">Project Deleted</span>
+		default:
+			<span class="badge-primary">{ action }</span>
+	}
+}

@@ -1,0 +1,126 @@
+package pages
+
+import (
+	"github.com/abdul-hamid-achik/tinyvault/internal/views/layout"
+	"github.com/abdul-hamid-achik/tinyvault/internal/views/components"
+)
+
+type ProjectInfo struct {
+	ID          string
+	Name        string
+	Description string
+	SecretCount int
+	CreatedAt   string
+}
+
+templ Projects(projects []ProjectInfo) {
+	@layout.Base("Projects", true) {
+		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+			<!-- Header -->
+			<div class="flex items-center justify-between mb-8">
+				<div>
+					<h1 class="text-2xl font-bold text-nord6">Projects</h1>
+					<p class="text-nord4">Manage your secret vaults</p>
+				</div>
+				<a href="/projects/new" class="btn-primary">
+					@components.PlusIcon(components.IconMD)
+					<span>New Project</span>
+				</a>
+			</div>
+
+			<!-- Projects Grid -->
+			if len(projects) == 0 {
+				<div class="card p-12 text-center">
+					<div class="w-16 h-16 bg-nord2 rounded-full flex items-center justify-center mx-auto mb-4 text-nord4">
+						@components.FolderIcon(components.IconXL)
+					</div>
+					<h3 class="text-lg font-semibold text-nord6 mb-2">No projects yet</h3>
+					<p class="text-nord4 mb-6">Create your first project to start storing secrets.</p>
+					<a href="/projects/new" class="btn-primary">Create Project</a>
+				</div>
+			} else {
+				<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+					for _, project := range projects {
+						@ProjectCard(project)
+					}
+				</div>
+			}
+		</div>
+	}
+}
+
+templ ProjectCard(project ProjectInfo) {
+	<a href={ templ.SafeURL("/projects/" + project.ID) } class="card hover:border-nord10 transition-colors group">
+		<div class="card-body">
+			<div class="flex items-start justify-between">
+				<div class="w-10 h-10 bg-nord10/20 rounded-lg flex items-center justify-center text-nord8">
+					@components.FolderIcon(components.IconMD)
+				</div>
+				<span class="text-nord3 group-hover:text-nord8 transition-colors">
+					@components.ChevronRightIcon(components.IconMD)
+				</span>
+			</div>
+			<h3 class="text-lg font-semibold text-nord6 mt-4">{ project.Name }</h3>
+			if project.Description != "" {
+				<p class="text-nord4 text-sm mt-1 line-clamp-2">{ project.Description }</p>
+			}
+			<div class="flex items-center gap-4 mt-4 text-sm text-nord3">
+				<span class="flex items-center gap-1">
+					@components.KeyIcon(components.IconSM)
+					{ itoa(project.SecretCount) } secrets
+				</span>
+			</div>
+		</div>
+	</a>
+}
+
+templ NewProject() {
+	@layout.Base("New Project", true) {
+		<div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+			<div class="mb-8">
+				<a href="/projects" class="text-nord4 hover:text-nord6 flex items-center gap-1 mb-4">
+					@components.ChevronLeftIcon(components.IconSM)
+					Back to Projects
+				</a>
+				<h1 class="text-2xl font-bold text-nord6">Create Project</h1>
+				<p class="text-nord4">Create a new vault for your secrets.</p>
+			</div>
+
+			<div class="card">
+				<form action="/projects" method="POST" class="card-body space-y-6">
+					<div class="form-group">
+						<label for="name" class="label">Project Name</label>
+						<input
+							type="text"
+							id="name"
+							name="name"
+							class="input"
+							placeholder="my-awesome-project"
+							required
+							pattern="[a-z0-9-]+"
+							title="Lowercase letters, numbers, and hyphens only"
+						/>
+						<p class="text-sm text-nord3 mt-1">Lowercase letters, numbers, and hyphens only.</p>
+					</div>
+
+					<div class="form-group">
+						<label for="description" class="label">Description (optional)</label>
+						<textarea
+							id="description"
+							name="description"
+							class="input"
+							rows="3"
+							placeholder="What is this project for?"
+						></textarea>
+					</div>
+
+					<div class="flex items-center justify-end gap-4">
+						<a href="/projects" class="btn-ghost">Cancel</a>
+						<button type="submit" class="btn-primary">Create Project</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	}
+}
+

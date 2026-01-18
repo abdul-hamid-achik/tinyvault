@@ -1,0 +1,101 @@
+version: 2
+
+project_name: tinyvault
+
+before:
+  hooks:
+    - go mod tidy
+    - templ generate
+
+builds:
+  - id: server
+    main: ./cmd/server
+    binary: tinyvault-server
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+  - id: tvault
+    main: ./cmd/tvault
+    binary: tvault
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: server
+    builds:
+      - server
+    name_template: "{{ .ProjectName }}-server_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+
+  - id: tvault
+    builds:
+      - tvault
+    name_template: "tvault_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+
+brews:
+  - name: tvault
+    ids:
+      - tvault
+    repository:
+      owner: abdul-hamid-achik
+      name: homebrew-tap
+    folder: Formula
+    homepage: https://tinyvault.dev
+    description: Dead simple secrets management CLI
+    license: MIT
+    install: |
+      bin.install "tvault"
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: abdul-hamid-achik
+    name: tinyvault
+  draft: false
+  prerelease: auto
+  name_template: "v{{ .Version }}"

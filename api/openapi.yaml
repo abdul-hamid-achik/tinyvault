@@ -1,0 +1,526 @@
+openapi: 3.0.3
+info:
+  title: TinyVault API
+  description: |
+    TinyVault is a dead-simple secrets management system.
+
+    ## Authentication
+
+    All API endpoints require authentication using a Bearer token. Create an API token
+    in the web dashboard under Settings > API Tokens.
+
+    ```
+    Authorization: Bearer <your-api-token>
+    ```
+
+    ## Scopes
+
+    API tokens have scopes that control access:
+    - `projects:read` - List and view projects
+    - `projects:write` - Create projects
+    - `projects:delete` - Delete projects
+    - `secrets:read` - List, view, and export secrets
+    - `secrets:write` - Create and update secrets
+    - `secrets:delete` - Delete secrets
+    - `*` - Full access (all permissions)
+  version: 1.0.0
+  contact:
+    name: TinyVault Support
+    url: https://github.com/abdul-hamid-achik/tinyvault/issues
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development server
+  - url: https://your-domain.com/api/v1
+    description: Production server
+
+tags:
+  - name: Projects
+    description: Project management endpoints
+  - name: Secrets
+    description: Secret management endpoints
+
+paths:
+  /projects:
+    get:
+      tags:
+        - Projects
+      summary: List projects
+      description: Returns a list of all projects owned by the authenticated user.
+      operationId: listProjects
+      security:
+        - BearerAuth: [projects:read]
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      tags:
+        - Projects
+      summary: Create project
+      description: Creates a new project for the authenticated user.
+      operationId: createProject
+      security:
+        - BearerAuth: [projects:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+      responses:
+        '201':
+          description: Project created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /projects/{projectId}:
+    get:
+      tags:
+        - Projects
+      summary: Get project
+      description: Returns a specific project by ID.
+      operationId: getProject
+      security:
+        - BearerAuth: [projects:read]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Projects
+      summary: Delete project
+      description: Deletes a project and all its secrets.
+      operationId: deleteProject
+      security:
+        - BearerAuth: [projects:delete]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '204':
+          description: Project deleted successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /projects/{projectId}/secrets:
+    get:
+      tags:
+        - Secrets
+      summary: List secrets
+      description: Returns a list of all secrets in a project (keys only, not values).
+      operationId: listSecrets
+      security:
+        - BearerAuth: [secrets:read]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /projects/{projectId}/secrets/export:
+    get:
+      tags:
+        - Secrets
+      summary: Export all secrets
+      description: Returns all secrets with their decrypted values as key-value pairs.
+      operationId: exportSecrets
+      security:
+        - BearerAuth: [secrets:read]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretExportResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /projects/{projectId}/secrets/{key}:
+    get:
+      tags:
+        - Secrets
+      summary: Get secret
+      description: Returns a specific secret by key with its decrypted value.
+      operationId: getSecret
+      security:
+        - BearerAuth: [secrets:read]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/SecretKey'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Secrets
+      summary: Set secret
+      description: Creates or updates a secret. If the secret exists, its version is incremented.
+      operationId: setSecret
+      security:
+        - BearerAuth: [secrets:write]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/SecretKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetSecretRequest'
+      responses:
+        '200':
+          description: Secret created or updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags:
+        - Secrets
+      summary: Delete secret
+      description: Deletes a secret by key.
+      operationId: deleteSecret
+      security:
+        - BearerAuth: [secrets:delete]
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/SecretKey'
+      responses:
+        '204':
+          description: Secret deleted successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: API token from the web dashboard
+
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      description: Project UUID
+      schema:
+        type: string
+        format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+
+    SecretKey:
+      name: key
+      in: path
+      required: true
+      description: |
+        Secret key (environment variable name format).
+        Must start with a letter or underscore, followed by letters, numbers, or underscores.
+      schema:
+        type: string
+        pattern: '^[a-zA-Z_][a-zA-Z0-9_]*$'
+        maxLength: 255
+        example: DATABASE_URL
+
+  schemas:
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Project unique identifier
+        name:
+          type: string
+          description: Project name
+          maxLength: 100
+        description:
+          type: string
+          description: Project description
+          maxLength: 500
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+      required:
+        - id
+        - name
+        - created_at
+        - updated_at
+
+    Secret:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Secret unique identifier
+        key:
+          type: string
+          description: Secret key (environment variable name)
+        value:
+          type: string
+          description: Decrypted secret value
+        version:
+          type: integer
+          description: Secret version number (incremented on each update)
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+      required:
+        - id
+        - key
+        - value
+        - version
+        - created_at
+        - updated_at
+
+    SecretMetadata:
+      type: object
+      description: Secret metadata without the decrypted value
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+        version:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - id
+        - key
+        - version
+        - created_at
+        - updated_at
+
+    CreateProjectRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Project name
+          minLength: 1
+          maxLength: 100
+          example: my-app
+        description:
+          type: string
+          description: Project description
+          maxLength: 500
+          example: Production secrets for my application
+      required:
+        - name
+
+    SetSecretRequest:
+      type: object
+      properties:
+        value:
+          type: string
+          description: Secret value to store
+          example: postgres://user:pass@localhost:5432/db
+      required:
+        - value
+
+    ProjectListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Project'
+
+    ProjectResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Project'
+
+    SecretListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SecretMetadata'
+
+    SecretResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Secret'
+
+    SecretExportResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            DATABASE_URL: postgres://user:pass@localhost:5432/db
+            API_KEY: sk_live_abc123
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: Error code
+              example: INVALID_INPUT
+            message:
+              type: string
+              description: Human-readable error message
+              example: Name is required
+          required:
+            - code
+            - message
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: INVALID_INPUT
+              message: Invalid project ID
+
+    Unauthorized:
+      description: Authentication required or invalid token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: UNAUTHORIZED
+              message: Authentication required
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: NOT_FOUND
+              message: Project not found
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: INTERNAL_ERROR
+              message: Failed to process request
+
+security:
+  - BearerAuth: []

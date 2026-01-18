@@ -1,0 +1,567 @@
+# Taskfile.yml - Developer Experience First
+version: "3"
+
+vars:
+  BINARY_NAME: tinyvault
+  CLI_NAME: tvault
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
+  GO_FILES:
+    sh: find . -name '*.go' -not -path './vendor/*' 2>/dev/null | head -1 || echo ""
+
+env:
+  CGO_ENABLED: "0"
+
+dotenv: ['.env', '.env.local']
+
+tasks:
+  default:
+    desc: "Show available commands"
+    cmds:
+      - |
+        echo ""
+        echo "  TinyVault Development Commands"
+        echo "  ================================"
+        echo ""
+        echo "  Quick Start:"
+        echo "    task setup      - First time setup (install deps, start DB)"
+        echo "    task dev        - Start development server with hot reload"
+        echo "    task check      - Run all checks before committing"
+        echo ""
+        echo "  Common Commands:"
+        echo "    task test       - Run tests"
+        echo "    task lint       - Run linter"
+        echo "    task build      - Build binaries"
+        echo ""
+        echo "  Database:"
+        echo "    task db:up      - Start PostgreSQL & Redis"
+        echo "    task db:migrate - Run migrations"
+        echo "    task db:reset   - Reset database"
+        echo ""
+        echo "  Docker:"
+        echo "    task up         - Start all services"
+        echo "    task down       - Stop all services"
+        echo "    task logs       - View logs"
+        echo ""
+        echo "  Run 'task --list' for all available commands"
+        echo ""
+    silent: true
+
+  # ============================================================================
+  # QUICK START
+  # ============================================================================
+
+  setup:
+    desc: "First time setup - run this after cloning"
+    cmds:
+      - task: init
+      - echo "Installing dependencies..."
+      - task: deps
+      - echo "Starting database..."
+      - task: db:up
+      - echo "Waiting for PostgreSQL..."
+      - sleep 3
+      - echo "Running migrations..."
+      - task: db:migrate
+      - echo "Building CSS..."
+      - task: css
+      - echo "Generating templ files..."
+      - task: templ
+      - echo ""
+      - echo "Setup complete! Run 'task dev' to start developing"
+      - echo ""
+
+  init:
+    desc: "Initialize development environment (create .env if needed)"
+    status:
+      - test -f .env
+    cmds:
+      - echo "Creating .env file with development defaults..."
+      - cp .env.example .env
+      - echo ".env created successfully!"
+      - echo ""
+      - echo "GitHub OAuth is optional. To enable:"
+      - echo "  1. Create an OAuth app at https://github.com/settings/developers"
+      - echo "  2. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in .env"
+      - echo ""
+
+  dev:
+    desc: "Start development server with hot reload"
+    deps: [_ensure-deps]
+    cmds:
+      - |
+        echo "Starting development server..."
+        echo "  App:   http://localhost:8080"
+        echo "  Proxy: http://localhost:8081 (with hot reload)"
+        echo ""
+      - task: _dev-parallel
+    interactive: true
+
+  _dev-parallel:
+    internal: true
+    deps:
+      - task: _watch-templ
+      - task: _watch-css
+      - task: _watch-go
+
+  _watch-templ:
+    internal: true
+    cmds:
+      - templ generate --watch --proxy="http://localhost:8080" --proxyport=8081
+    ignore_error: true
+
+  _watch-css:
+    internal: true
+    cmds:
+      - tailwindcss -i web/static/css/input.css -o web/static/dist/styles.css --watch
+    ignore_error: true
+
+  _watch-go:
+    internal: true
+    cmds:
+      - air -c .air.toml
+    ignore_error: true
+
+  check:
+    desc: "Run all checks (lint, test, build) - run before committing"
+    cmds:
+      - echo "Running linter..."
+      - task: lint
+      - echo "Running tests..."
+      - task: test
+      - echo "Building..."
+      - task: build:all
+      - echo ""
+      - echo "All checks passed! Safe to commit."
+      - echo ""
+
+  # ============================================================================
+  # BUILD COMMANDS
+  # ============================================================================
+
+  build:
+    desc: "Build server binary"
+    deps: [templ, css:build]
+    cmds:
+      - mkdir -p bin
+      - go build -ldflags="-s -w -X main.version={{.VERSION}}" -o bin/{{.BINARY_NAME}} ./cmd/server
+      - echo "Built bin/{{.BINARY_NAME}}"
+
+  build:cli:
+    desc: "Build CLI binary"
+    cmds:
+      - mkdir -p bin
+      - go build -ldflags="-s -w -X main.version={{.VERSION}}" -o bin/{{.CLI_NAME}} ./cmd/tvault
+      - echo "Built bin/{{.CLI_NAME}}"
+
+  build:all:
+    desc: "Build all binaries"
+    cmds:
+      - task: build
+      - task: build:cli
+
+  build:docker:
+    desc: "Build Docker image"
+    cmds:
+      - docker build -t tinyvault:{{.VERSION}} -t tinyvault:latest .
+      - echo "Built tinyvault:{{.VERSION}}"
+
+  # ============================================================================
+  # TESTING
+  # ============================================================================
+
+  test:
+    desc: "Run all tests"
+    cmds:
+      - go test -v -race -cover -coverprofile=coverage.out ./...
+      - echo ""
+      - go tool cover -func=coverage.out | tail -1
+
+  test:watch:
+    desc: "Run tests in watch mode"
+    cmds:
+      - gotestsum --watch --format=short
+    interactive: true
+
+  test:unit:
+    desc: "Run unit tests only (fast)"
+    cmds:
+      - go test -v -race -short ./...
+
+  test:integration:
+    desc: "Run integration tests"
+    cmds:
+      - go test -v -race -tags=integration ./...
+
+  test:coverage:
+    desc: "Generate HTML coverage report"
+    cmds:
+      - go test -v -race -coverprofile=coverage.out ./...
+      - go tool cover -html=coverage.out -o coverage.html
+      - 'echo "Coverage report: coverage.html"'
+
+  test:crypto:
+    desc: "Run crypto package tests (security critical)"
+    cmds:
+      - go test -v -race -cover ./internal/crypto/...
+
+  # ============================================================================
+  # LINTING & FORMATTING
+  # ============================================================================
+
+  lint:
+    desc: "Run linter and fix issues"
+    cmds:
+      - golangci-lint run --fix
+      - templ fmt .
+      - echo "Linting complete"
+
+  lint:check:
+    desc: "Check linting without fixes (for CI)"
+    cmds:
+      - golangci-lint run
+      - templ fmt . --check
+
+  fmt:
+    desc: "Format all code"
+    cmds:
+      - go fmt ./...
+      - goimports -w .
+      - templ fmt .
+      - echo "Formatting complete"
+
+  # ============================================================================
+  # DATABASE
+  # ============================================================================
+
+  db:up:
+    desc: "Start PostgreSQL and Redis"
+    cmds:
+      - docker compose -f docker-compose.yml up -d postgres redis
+      - echo "Database started"
+      - 'echo "  PostgreSQL: localhost:5432"'
+      - 'echo "  Redis:      localhost:6379"'
+
+  db:down:
+    desc: "Stop PostgreSQL and Redis"
+    cmds:
+      - docker compose -f docker-compose.yml stop postgres redis
+
+  db:migrate:
+    desc: "Run database migrations"
+    cmds:
+      - goose -dir internal/database/migrations postgres "$DATABASE_URL" up
+      - echo "Migrations complete"
+
+  db:migrate:create:
+    desc: "Create a new migration"
+    vars:
+      NAME: '{{.CLI_ARGS}}'
+    cmds:
+      - goose -dir internal/database/migrations create {{.NAME}} sql
+      - echo "Created migration"
+
+  db:rollback:
+    desc: "Rollback last migration"
+    cmds:
+      - goose -dir internal/database/migrations postgres "$DATABASE_URL" down
+      - echo "Rolled back"
+
+  db:reset:
+    desc: "Reset database (destructive!)"
+    prompt: "This will delete all data. Are you sure?"
+    cmds:
+      - goose -dir internal/database/migrations postgres "$DATABASE_URL" reset
+      - task: db:migrate
+      - echo "Database reset complete"
+
+  db:status:
+    desc: "Show migration status"
+    cmds:
+      - goose -dir internal/database/migrations postgres "$DATABASE_URL" status
+
+  db:seed:
+    desc: "Seed database with test data"
+    cmds:
+      - go run scripts/seed.go
+      - echo "Database seeded"
+
+  db:psql:
+    desc: "Open PostgreSQL shell"
+    cmds:
+      - docker compose -f docker-compose.yml exec postgres psql -U tinyvault
+    interactive: true
+
+  db:redis:
+    desc: "Open Redis CLI"
+    cmds:
+      - docker compose -f docker-compose.yml exec redis redis-cli
+    interactive: true
+
+  # ============================================================================
+  # FRONTEND (Templ + Tailwind)
+  # ============================================================================
+
+  templ:
+    desc: "Generate templ files"
+    cmds:
+      - templ generate
+      - echo "Templ generated"
+    sources:
+      - "**/*.templ"
+    generates:
+      - "**/*_templ.go"
+
+  css:
+    desc: "Build Tailwind CSS"
+    cmds:
+      - tailwindcss -i web/static/css/input.css -o web/static/css/output.css
+      - echo "CSS built"
+
+  css:build:
+    desc: "Build Tailwind CSS (minified)"
+    cmds:
+      - tailwindcss -i web/static/css/input.css -o web/static/css/output.css --minify
+      - echo "CSS built (minified)"
+
+  sqlc:
+    desc: "Generate SQLC code"
+    cmds:
+      - sqlc generate
+      - echo "SQLC generated"
+
+  generate:
+    desc: "Generate all code (templ, sqlc, css)"
+    cmds:
+      - task: templ
+      - task: sqlc
+      - task: css
+      - echo "All generated"
+
+  # ============================================================================
+  # DOCKER
+  # ============================================================================
+
+  up:
+    desc: "Start all services (app + db + monitoring)"
+    cmds:
+      - docker compose -f docker-compose.yml up -d
+      - echo ""
+      - 'echo "Services started:"'
+      - 'echo "  App:        http://localhost:8080"'
+      - 'echo "  PostgreSQL: localhost:5432"'
+      - 'echo "  Redis:      localhost:6379"'
+      - echo ""
+
+  down:
+    desc: "Stop all services"
+    cmds:
+      - docker compose -f docker-compose.yml down
+
+  logs:
+    desc: "View logs (all services)"
+    cmds:
+      - docker compose -f docker-compose.yml logs -f
+    interactive: true
+
+  logs:app:
+    desc: "View app logs only"
+    cmds:
+      - docker compose -f docker-compose.yml logs -f app
+    interactive: true
+
+  clean:docker:
+    desc: "Remove all Docker resources"
+    prompt: "This will delete all containers and volumes. Continue?"
+    cmds:
+      - docker compose -f docker-compose.yml down -v --rmi local
+      - echo "Cleaned"
+
+  # ============================================================================
+  # DEPLOYMENT
+  # ============================================================================
+
+  deploy:
+    desc: "Deploy to production"
+    cmds:
+      - ansible-playbook -i deploy/ansible/inventory/production.yml deploy/ansible/playbooks/deploy.yml
+
+  deploy:dry-run:
+    desc: "Dry-run deployment (check mode)"
+    cmds:
+      - ansible-playbook -i deploy/ansible/inventory/production.yml deploy/ansible/playbooks/deploy.yml --check --diff
+
+  infra:plan:
+    desc: "Terraform plan"
+    dir: deploy/terraform
+    cmds:
+      - terraform plan
+
+  infra:apply:
+    desc: "Terraform apply"
+    dir: deploy/terraform
+    cmds:
+      - terraform apply
+
+  # ============================================================================
+  # RELEASE
+  # ============================================================================
+
+  release:snapshot:
+    desc: "Create snapshot release (for testing)"
+    cmds:
+      - goreleaser release --snapshot --clean
+
+  release:
+    desc: "Create release (requires GITHUB_TOKEN)"
+    cmds:
+      - goreleaser release --clean
+
+  # ============================================================================
+  # UTILITIES
+  # ============================================================================
+
+  clean:
+    desc: "Clean build artifacts"
+    cmds:
+      - rm -rf bin/
+      - rm -rf web/static/dist/
+      - find . -name '*_templ.go' -delete 2>/dev/null || true
+      - rm -f coverage.out coverage.html
+      - echo "Cleaned"
+
+  deps:
+    desc: "Install all development dependencies"
+    cmds:
+      - echo "Installing Go tools..."
+      - go install github.com/a-h/templ/cmd/templ@latest
+      - go install github.com/air-verse/air@latest
+      - go install github.com/pressly/goose/v3/cmd/goose@latest
+      - go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+      - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+      - go install golang.org/x/tools/cmd/goimports@v0.34.0
+      - go install gotest.tools/gotestsum@latest
+      - go install github.com/goreleaser/goreleaser/v2@latest
+      - echo ""
+      - echo "Installing Tailwind CSS..."
+      - task: _install-tailwind
+      - echo ""
+      - echo "Dependencies installed!"
+
+  _install-tailwind:
+    internal: true
+    cmds:
+      - |
+        if command -v tailwindcss &> /dev/null; then
+          echo "  Tailwind CSS already installed"
+          exit 0
+        fi
+
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+        ARCH=$(uname -m)
+
+        if [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
+          ARCH="arm64"
+        else
+          ARCH="x64"
+        fi
+
+        URL="https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-${OS}-${ARCH}"
+
+        echo "  Downloading from $URL"
+        curl -sL "$URL" -o /tmp/tailwindcss
+        chmod +x /tmp/tailwindcss
+
+        if [ -w /usr/local/bin ]; then
+          mv /tmp/tailwindcss /usr/local/bin/tailwindcss
+        else
+          sudo mv /tmp/tailwindcss /usr/local/bin/tailwindcss
+        fi
+
+        echo "  Tailwind CSS installed"
+
+  deps:check:
+    desc: "Check if all dependencies are installed"
+    cmds:
+      - |
+        echo "Checking dependencies..."
+        missing=0
+        for cmd in go templ air goose sqlc golangci-lint goimports tailwindcss; do
+          if command -v $cmd &> /dev/null; then
+            echo "  $cmd - installed"
+          else
+            echo "  $cmd - MISSING"
+            missing=1
+          fi
+        done
+        if [ $missing -eq 1 ]; then
+          echo ""
+          echo "Run 'task deps' to install missing dependencies"
+          exit 1
+        fi
+        echo ""
+        echo "All dependencies installed!"
+
+  update:
+    desc: "Update all dependencies"
+    cmds:
+      - go get -u ./...
+      - go mod tidy
+      - task: deps
+      - echo "Updated"
+
+  # ============================================================================
+  # INTERNAL TASKS
+  # ============================================================================
+
+  _ensure-deps:
+    internal: true
+    cmds:
+      - |
+        if ! command -v templ &> /dev/null; then
+          echo "Missing dependencies. Run 'task setup' first."
+          exit 1
+        fi
+    silent: true
+
+  # ============================================================================
+  # HELP & DOCUMENTATION
+  # ============================================================================
+
+  help:
+    desc: "Show detailed help"
+    cmds:
+      - |
+        echo ""
+        echo "  TinyVault Development Guide"
+        echo "  ============================"
+        echo ""
+        echo "  FIRST TIME SETUP"
+        echo "    1. Clone the repo"
+        echo "    2. Copy .env.example to .env"
+        echo "    3. Run 'task setup'"
+        echo "    4. Run 'task dev'"
+        echo ""
+        echo "  DAILY WORKFLOW"
+        echo "    Start dev server:     task dev"
+        echo "    Run tests:            task test"
+        echo "    Before committing:    task check"
+        echo ""
+        echo "  DATABASE"
+        echo "    Create migration:     task db:migrate:create -- <name>"
+        echo "    Run migrations:       task db:migrate"
+        echo "    Reset database:       task db:reset"
+        echo "    Open psql:            task db:psql"
+        echo ""
+        echo "  TESTING"
+        echo "    All tests:            task test"
+        echo "    Watch mode:           task test:watch"
+        echo "    Coverage report:      task test:coverage"
+        echo "    Crypto tests:         task test:crypto"
+        echo ""
+        echo "  BUILDING"
+        echo "    Build server:         task build"
+        echo "    Build CLI:            task build:cli"
+        echo "    Docker image:         task build:docker"
+        echo ""
+    silent: true

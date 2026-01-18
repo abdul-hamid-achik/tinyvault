@@ -1,0 +1,108 @@
+package layout
+
+import "github.com/abdul-hamid-achik/tinyvault/internal/views/components"
+
+templ Base(title string, authenticated bool) {
+	<!DOCTYPE html>
+	<html lang="en" class="h-full">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<meta name="description" content="TinyVault - Dead simple secrets management"/>
+			<title>{ title } | TinyVault</title>
+			<link rel="preconnect" href="https://fonts.googleapis.com"/>
+			<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+			<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+			<link rel="stylesheet" href="/static/css/output.css?v=2"/>
+			<!-- PrismJS for syntax highlighting -->
+			<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css"/>
+			<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+			<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+			<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+		</head>
+		<body class="h-full flex flex-col" hx-boost="true">
+			@Nav(authenticated)
+			<main class="flex-1" id="main-content" role="main" tabindex="-1">
+				{ children... }
+			</main>
+			@Footer()
+			@components.ToastContainer()
+			<script src="/static/js/toast.js"></script>
+			<script src="/static/js/main.js"></script>
+		</body>
+	</html>
+}
+
+templ Nav(authenticated bool) {
+	<nav class="bg-nord1 border-b border-nord2" role="navigation" aria-label="Main navigation">
+		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+			<div class="flex items-center justify-between h-16">
+				<div class="flex items-center gap-8">
+					<a href="/" class="flex items-center gap-2 text-nord8">
+						@components.LockIcon(components.IconXL)
+						<span class="font-semibold text-nord6 text-lg">TinyVault</span>
+					</a>
+					if authenticated {
+						<div class="hidden md:flex items-center gap-1">
+							<a href="/dashboard" class="px-3 py-2 rounded-lg text-nord4 hover:bg-nord2 hover:text-nord6 transition-colors">Dashboard</a>
+							<a href="/projects" class="px-3 py-2 rounded-lg text-nord4 hover:bg-nord2 hover:text-nord6 transition-colors">Projects</a>
+							<a href="/settings/tokens" class="px-3 py-2 rounded-lg text-nord4 hover:bg-nord2 hover:text-nord6 transition-colors">API Tokens</a>
+						</div>
+					}
+				</div>
+				<div class="flex items-center gap-4">
+					if authenticated {
+						<a href="/settings" class="hidden md:block px-3 py-2 rounded-lg text-nord4 hover:bg-nord2 hover:text-nord6 transition-colors">Settings</a>
+						<form action="/auth/logout" method="POST" class="hidden md:block">
+							<button type="submit" class="px-3 py-1.5 text-sm rounded-lg text-nord4 hover:bg-nord2 transition-colors">Logout</button>
+						</form>
+						<!-- Mobile menu button -->
+						<button
+							type="button"
+							class="md:hidden text-nord4 hover:text-nord6 p-2"
+							data-toggle-menu="mobile-menu"
+							aria-label="Toggle mobile menu"
+						>
+							@components.MenuIcon(components.IconLG)
+						</button>
+					} else {
+						<a href="/auth/login" class="hidden sm:inline-block px-4 py-2 text-sm text-nord4 hover:text-nord6 transition-colors">Sign in</a>
+						<a href="/auth/register" class="inline-block px-5 py-2 text-sm font-medium bg-nord8 text-nord0 hover:bg-nord7 rounded-md transition-colors">Sign up</a>
+					}
+				</div>
+			</div>
+		</div>
+		<!-- Mobile menu -->
+		if authenticated {
+			<div id="mobile-menu" class="hidden md:hidden border-t border-nord2">
+				<div class="px-4 py-3 space-y-1">
+					<a href="/dashboard" class="block px-3 py-2 rounded-lg text-nord4 hover:bg-nord2 hover:text-nord6 transition-colors">Dashboard</a>
+					<a href="/projects" class="block px-3 py-2 rounded-lg text-nord4 hover:bg-nord2 hover:text-nord6 transition-colors">Projects</a>
+					<a href="/settings/tokens" class="block px-3 py-2 rounded-lg text-nord4 hover:bg-nord2 hover:text-nord6 transition-colors">API Tokens</a>
+					<a href="/settings" class="block px-3 py-2 rounded-lg text-nord4 hover:bg-nord2 hover:text-nord6 transition-colors">Settings</a>
+					<form action="/auth/logout" method="POST" class="pt-2 border-t border-nord2 mt-2">
+						<button type="submit" class="w-full text-left px-3 py-1.5 text-sm rounded-lg text-nord4 hover:bg-nord2 transition-colors">Logout</button>
+					</form>
+				</div>
+			</div>
+		}
+	</nav>
+}
+
+templ Footer() {
+	<footer class="bg-nord1 border-t border-nord2 py-8">
+		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+			<div class="flex flex-col md:flex-row items-center justify-between gap-4">
+				<div class="flex items-center gap-2 text-nord4">
+					@components.LockIcon(components.IconMD)
+					<span class="font-medium">TinyVault</span>
+				</div>
+				<div class="flex items-center gap-6 text-sm text-nord4">
+					<a href="/docs" class="hover:text-nord6 transition-colors">Docs</a>
+					<a href="/pricing" class="hover:text-nord6 transition-colors">Pricing</a>
+					<a href="https://github.com/abdul-hamid-achik/tinyvault" class="hover:text-nord6 transition-colors">GitHub</a>
+				</div>
+			</div>
+		</div>
+	</footer>
+}
