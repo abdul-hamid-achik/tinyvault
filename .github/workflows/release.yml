@@ -9,31 +9,50 @@ permissions:
   contents: write
   packages: write
 
-env:
-  GO_VERSION: '1.25'
-
 jobs:
   release:
-    name: Release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version: '1.25'
+
+      - name: Cache templ binary
+        id: cache-templ
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin/templ
+          key: templ-${{ runner.os }}-v0.3.977
 
       - name: Install templ
-        run: go install github.com/a-h/templ/cmd/templ@latest
+        if: steps.cache-templ.outputs.cache-hit != 'true'
+        run: go install github.com/a-h/templ/cmd/templ@v0.3.977
 
-      - name: Generate templ
-        run: templ generate
+      - name: Generate templ files
+        run: ~/go/bin/templ generate
+
+      - name: Cache sqlc binary
+        id: cache-sqlc
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin/sqlc
+          key: sqlc-${{ runner.os }}-v1.28.0
+
+      - name: Install sqlc
+        if: steps.cache-sqlc.outputs.cache-hit != 'true'
+        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.28.0
+
+      - name: Generate sqlc
+        run: ~/go/bin/sqlc generate
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v5
+        uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: latest
@@ -51,6 +70,9 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -62,7 +84,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile

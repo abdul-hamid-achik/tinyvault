@@ -7,32 +7,10 @@ on:
     branches: [main]
 
 env:
-  GO_VERSION: '1.25'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Install templ
-        run: go install github.com/a-h/templ/cmd/templ@latest
-
-      - name: Generate templ
-        run: templ generate
-
-      - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v4
-        with:
-          version: latest
-          args: --timeout=5m
-
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -66,68 +44,99 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version: '1.25'
+          cache: true
+
+      - name: Cache templ binary
+        id: cache-templ
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin/templ
+          key: templ-${{ runner.os }}-v0.3.977
 
       - name: Install templ
-        run: go install github.com/a-h/templ/cmd/templ@latest
+        if: steps.cache-templ.outputs.cache-hit != 'true'
+        run: go install github.com/a-h/templ/cmd/templ@v0.3.977
 
-      - name: Generate templ
-        run: templ generate
+      - name: Generate templ files
+        run: ~/go/bin/templ generate
+
+      - name: Cache sqlc binary
+        id: cache-sqlc
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin/sqlc
+          key: sqlc-${{ runner.os }}-v1.28.0
 
       - name: Install sqlc
-        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+        if: steps.cache-sqlc.outputs.cache-hit != 'true'
+        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.28.0
 
       - name: Generate sqlc
-        run: sqlc generate
+        run: ~/go/bin/sqlc generate
 
       - name: Run tests
         env:
           DATABASE_URL: postgres://test:test@localhost:5432/tinyvault_test?sslmode=disable
           REDIS_URL: redis://localhost:6379/0
-          MASTER_KEY: dGVzdC1tYXN0ZXIta2V5LWZvci1jaS10ZXN0aW5n
-        run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
+          ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS1mb3ItY2ktdGVzdA==
+        run: go test -v -race -coverprofile=coverage.out ./...
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
-          file: ./coverage.out
-          flags: unittests
-          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.out
+          fail_ci_if_error: false
 
-  build:
-    name: Build
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
-    needs: [lint, test]
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version: '1.25'
+          cache: true
+
+      - name: Cache templ binary
+        id: cache-templ
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin/templ
+          key: templ-${{ runner.os }}-v0.3.977
 
       - name: Install templ
-        run: go install github.com/a-h/templ/cmd/templ@latest
+        if: steps.cache-templ.outputs.cache-hit != 'true'
+        run: go install github.com/a-h/templ/cmd/templ@v0.3.977
 
-      - name: Generate templ
-        run: templ generate
+      - name: Generate templ files
+        run: ~/go/bin/templ generate
 
-      - name: Build server
-        run: CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/server ./cmd/server
-
-      - name: Build CLI
-        run: CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/tvault ./cmd/tvault
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - name: Cache sqlc binary
+        id: cache-sqlc
+        uses: actions/cache@v4
         with:
-          name: binaries
-          path: bin/
+          path: ~/go/bin/sqlc
+          key: sqlc-${{ runner.os }}-v1.28.0
 
-  docker:
-    name: Build Docker Image
+      - name: Install sqlc
+        if: steps.cache-sqlc.outputs.cache-hit != 'true'
+        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.28.0
+
+      - name: Generate sqlc
+        run: ~/go/bin/sqlc generate
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.1.6
+
+  build:
+    name: Build
     runs-on: ubuntu-latest
-    needs: [build]
+    needs: [test, lint]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
@@ -135,24 +144,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to GitHub Container Registry
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha
+            type=raw,value=latest
+
       - name: Build and push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile
           push: true
-          tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
