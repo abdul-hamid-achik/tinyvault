@@ -208,11 +208,15 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 // getGitHubUser fetches user data from GitHub API.
 func (h *AuthHandler) getGitHubUser(ctx context.Context, client *http.Client) (*services.GitHubUser, error) {
 	// Get user info
-	resp, err := client.Get("https://api.github.com/user")
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.github.com/user", nil)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
 
 	var userData struct {
 		ID        int64  `json:"id"`
@@ -228,9 +232,13 @@ func (h *AuthHandler) getGitHubUser(ctx context.Context, client *http.Client) (*
 
 	// If email is not public, fetch from emails endpoint
 	if userData.Email == "" {
-		emailResp, err := client.Get("https://api.github.com/user/emails")
+		emailReq, err := http.NewRequestWithContext(ctx, "GET", "https://api.github.com/user/emails", nil)
+		if err != nil {
+			return nil, err
+		}
+		emailResp, err := client.Do(emailReq)
 		if err == nil {
-			defer emailResp.Body.Close()
+			defer func() { _ = emailResp.Body.Close() }()
 
 			var emails []struct {
 				Email    string `json:"email"`

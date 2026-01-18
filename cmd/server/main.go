@@ -81,7 +81,11 @@ func run() error {
 		return fmt.Errorf("failed to parse Redis URL: %w", err)
 	}
 	redisClient := redis.NewClient(opt)
-	defer redisClient.Close()
+	defer func() {
+		if err := redisClient.Close(); err != nil {
+			logger.Error("failed to close redis client", "error", err)
+		}
+	}()
 
 	if err := redisClient.Ping(ctx).Err(); err != nil {
 		return fmt.Errorf("failed to ping Redis: %w", err)

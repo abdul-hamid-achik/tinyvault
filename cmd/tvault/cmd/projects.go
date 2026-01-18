@@ -76,11 +76,11 @@ func runProjectsList(_ *cobra.Command, _ []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tNAME\tDESCRIPTION\tCREATED")
+	_, _ = fmt.Fprintln(w, "ID\tNAME\tDESCRIPTION\tCREATED")
 	for _, p := range projects {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", p.ID, p.Name, p.Description, p.CreatedAt)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", p.ID, p.Name, p.Description, p.CreatedAt)
 	}
-	w.Flush()
+	_ = w.Flush()
 
 	return nil
 }

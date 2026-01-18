@@ -19,22 +19,22 @@ var (
 
 // Success prints a success message in green.
 func Success(format string, a ...any) {
-	successColor.Fprintf(os.Stdout, "✓ "+format+"\n", a...)
+	_, _ = successColor.Fprintf(os.Stdout, "✓ "+format+"\n", a...)
 }
 
 // Error prints an error message in red.
 func Error(format string, a ...any) {
-	errorColor.Fprintf(os.Stderr, "✗ "+format+"\n", a...)
+	_, _ = errorColor.Fprintf(os.Stderr, "✗ "+format+"\n", a...)
 }
 
 // Warning prints a warning message in yellow.
 func Warning(format string, a ...any) {
-	warningColor.Fprintf(os.Stdout, "⚠ "+format+"\n", a...)
+	_, _ = warningColor.Fprintf(os.Stdout, "⚠ "+format+"\n", a...)
 }
 
 // Info prints an info message in cyan.
 func Info(format string, a ...any) {
-	infoColor.Fprintf(os.Stdout, "ℹ "+format+"\n", a...)
+	_, _ = infoColor.Fprintf(os.Stdout, "ℹ "+format+"\n", a...)
 }
 
 // Bold prints text in bold.

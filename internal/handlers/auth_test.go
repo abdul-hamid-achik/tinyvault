@@ -46,7 +46,8 @@ func (m *mockAuthService) ValidateSession(ctx context.Context, token string) (*s
 	return m.session, nil
 }
 
-func (m *mockAuthService) RecordLoginAttempt(ctx context.Context, email, ipAddress string, success bool) {}
+func (m *mockAuthService) RecordLoginAttempt(ctx context.Context, email, ipAddress string, success bool) {
+}
 
 func (m *mockAuthService) DeleteSession(ctx context.Context, token string) error {
 	return nil

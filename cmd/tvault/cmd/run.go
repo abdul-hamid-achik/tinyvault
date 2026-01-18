@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -72,8 +74,12 @@ func runRun(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("command not found: %s", args[0])
 	}
 
-	// Create the command
-	execCmd := exec.Command(executable, args[1:]...)
+	// Create context for the command
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create the command with context
+	execCmd := exec.CommandContext(ctx, executable, args[1:]...)
 	execCmd.Env = env
 	execCmd.Stdin = os.Stdin
 	execCmd.Stdout = os.Stdout
@@ -92,13 +98,14 @@ func runRun(_ *cobra.Command, args []string) error {
 	go func() {
 		sig := <-sigChan
 		if execCmd.Process != nil {
-			execCmd.Process.Signal(sig)
+			_ = execCmd.Process.Signal(sig)
 		}
 	}()
 
 	// Wait for the command to finish
 	if err := execCmd.Wait(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			os.Exit(exitErr.ExitCode())
 		}
 		return fmt.Errorf("command failed: %w", err)

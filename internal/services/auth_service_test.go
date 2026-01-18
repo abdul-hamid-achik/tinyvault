@@ -10,11 +10,11 @@ import (
 
 func TestAuthService_IsAccountLocked(t *testing.T) {
 	tests := []struct {
-		name           string
-		maxAttempts    int
+		name            string
+		maxAttempts     int
 		lockoutDuration time.Duration
-		failedAttempts int
-		wantLocked     bool
+		failedAttempts  int
+		wantLocked      bool
 	}{
 		{
 			name:            "lockout disabled when maxAttempts is 0",

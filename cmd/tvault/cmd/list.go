@@ -48,11 +48,11 @@ func runList(_ *cobra.Command, _ []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "KEY\tVERSION\tUPDATED")
+	_, _ = fmt.Fprintln(w, "KEY\tVERSION\tUPDATED")
 	for _, s := range secrets {
-		fmt.Fprintf(w, "%s\t%d\t%s\n", s.Key, s.Version, s.UpdatedAt)
+		_, _ = fmt.Fprintf(w, "%s\t%d\t%s\n", s.Key, s.Version, s.UpdatedAt)
 	}
-	w.Flush()
+	_ = w.Flush()
 
 	return nil
 }
