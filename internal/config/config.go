@@ -14,11 +14,11 @@ import (
 
 // Config holds all application configuration.
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	Redis    RedisConfig
-	Security SecurityConfig
-	GitHub   GitHubConfig
+	Server    ServerConfig
+	Database  DatabaseConfig
+	Redis     RedisConfig
+	Security  SecurityConfig
+	GitHub    GitHubConfig
 	RateLimit RateLimitConfig
 }
 
@@ -196,7 +196,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("env", "development")
 	v.SetDefault("log.level", "info")
 	v.SetDefault("security.cleanup_interval", 1*time.Hour)
-	v.SetDefault("security.audit_retention", 90*24*time.Hour) // 90 days
+	v.SetDefault("security.audit_retention", 90*24*time.Hour)   // 90 days
 	v.SetDefault("security.max_request_body_size", 1*1024*1024) // 1MB
 	v.SetDefault("security.max_login_attempts", 5)
 	v.SetDefault("security.lockout_duration", 15*time.Minute)

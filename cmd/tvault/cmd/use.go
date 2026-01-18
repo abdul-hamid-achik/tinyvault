@@ -21,7 +21,7 @@ func init() {
 	rootCmd.AddCommand(useCmd)
 }
 
-func runUse(cmd *cobra.Command, args []string) error {
+func runUse(_ *cobra.Command, args []string) error {
 	token := getToken()
 	if token == "" {
 		return fmt.Errorf("not logged in. Run 'tvault login' first")

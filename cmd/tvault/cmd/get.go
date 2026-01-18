@@ -20,7 +20,7 @@ func init() {
 	rootCmd.AddCommand(getCmd)
 }
 
-func runGet(cmd *cobra.Command, args []string) error {
+func runGet(_ *cobra.Command, args []string) error {
 	token := getToken()
 	if token == "" {
 		return fmt.Errorf("not logged in. Run 'tvault login' first")

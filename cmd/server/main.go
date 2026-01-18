@@ -69,8 +69,8 @@ func run() error {
 	}
 	defer dbPool.Close()
 
-	if err := dbPool.Ping(ctx); err != nil {
-		return fmt.Errorf("failed to ping database: %w", err)
+	if pingErr := dbPool.Ping(ctx); pingErr != nil {
+		return fmt.Errorf("failed to ping database: %w", pingErr)
 	}
 	logger.Info("connected to PostgreSQL")
 
@@ -168,7 +168,7 @@ func run() error {
 	case <-quit:
 		logger.Info("shutting down server")
 	case <-ctx.Done():
-		logger.Info("context cancelled")
+		logger.Info("context canceled")
 	}
 
 	// Graceful shutdown

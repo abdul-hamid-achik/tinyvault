@@ -28,7 +28,7 @@ func init() {
 	deleteCmd.Flags().BoolVarP(&deleteForce, "yes", "y", false, "Skip confirmation prompt")
 }
 
-func runDelete(cmd *cobra.Command, args []string) error {
+func runDelete(_ *cobra.Command, args []string) error {
 	token := getToken()
 	if token == "" {
 		return fmt.Errorf("not logged in. Run 'tvault login' first")
@@ -44,7 +44,7 @@ func runDelete(cmd *cobra.Command, args []string) error {
 	// Prompt for confirmation unless --yes flag is set
 	if !deleteForce {
 		if !PromptConfirm(fmt.Sprintf("Delete secret '%s'?", key)) {
-			Info("Cancelled")
+			Info("Canceled")
 			return nil
 		}
 	}

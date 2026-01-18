@@ -17,7 +17,7 @@ var (
 	verbose   bool
 )
 
-// rootCmd represents the base command
+// rootCmd represents the base command.
 var rootCmd = &cobra.Command{
 	Use:   "tvault",
 	Short: "TinyVault CLI - Dead simple secrets management",
@@ -40,7 +40,7 @@ Examples:
 	SilenceUsage: true,
 }
 
-// Execute runs the root command
+// Execute runs the root command.
 func Execute() error {
 	return rootCmd.Execute()
 }
@@ -80,16 +80,19 @@ func initConfig() {
 	_ = viper.ReadInConfig()
 }
 
-// getConfigPath returns the path to the config file
+// getConfigPath returns the path to the config file.
 func getConfigPath() string {
 	if cfgFile != "" {
 		return cfgFile
 	}
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ".tvault.yaml"
+	}
 	return filepath.Join(home, ".tvault.yaml")
 }
 
-// getAPIURL returns the API URL
+// getAPIURL returns the API URL.
 func getAPIURL() string {
 	if url := viper.GetString("api_url"); url != "" {
 		return url
@@ -97,12 +100,12 @@ func getAPIURL() string {
 	return "https://tinyvault.dev"
 }
 
-// getToken returns the stored API token
+// getToken returns the stored API token.
 func getToken() string {
 	return viper.GetString("token")
 }
 
-// getProject returns the current project
+// getProject returns the current project.
 func getProject() string {
 	if projectID != "" {
 		return projectID

@@ -25,7 +25,7 @@ func init() {
 	rootCmd.AddCommand(loginCmd)
 }
 
-func runLogin(cmd *cobra.Command, args []string) error {
+func runLogin(_ *cobra.Command, _ []string) error {
 	fmt.Println("TinyVault Login")
 	fmt.Println("===============")
 	fmt.Println()
@@ -61,7 +61,7 @@ func runLogin(cmd *cobra.Command, args []string) error {
 		}
 	}
 	// Set restrictive file permissions (owner read/write only)
-	if err := os.Chmod(configPath, 0600); err != nil {
+	if err := os.Chmod(configPath, 0o600); err != nil {
 		return fmt.Errorf("failed to set config file permissions: %w", err)
 	}
 
@@ -87,7 +87,7 @@ func init() {
 	rootCmd.AddCommand(logoutCmd)
 }
 
-func runLogout(cmd *cobra.Command, args []string) error {
+func runLogout(_ *cobra.Command, _ []string) error {
 	viper.Set("token", "")
 	viper.Set("project", "")
 

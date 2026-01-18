@@ -158,6 +158,9 @@ issues:
         - gocognit
         - gosec
         - errcheck
+        - govet
+        - goconst
+        - errorlint
 
     # Exclude known false positives
     - path: internal/database/db/
@@ -169,6 +172,26 @@ issues:
       linters:
         - gocyclo
         - gocognit
+
+    # HTTP handlers commonly ignore json.Encode errors (client disconnected)
+    - linters:
+        - errcheck
+      text: "Error return value of `\\(\\*encoding/json\\.Encoder\\)\\.Encode` is not checked"
+
+    # Async audit logging intentionally doesn't pass context
+    - linters:
+        - contextcheck
+      text: "Function `LogAsync"
+
+    # Viper configuration errors are often intentionally ignored
+    - linters:
+        - errcheck
+      text: "Error return value of `viper\\."
+
+    # Template render errors in HTTP handlers
+    - linters:
+        - errcheck
+      text: "Error return value of `component\\.Render` is not checked"
 
   max-issues-per-linter: 50
   max-same-issues: 10

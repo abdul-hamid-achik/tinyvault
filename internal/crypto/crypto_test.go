@@ -516,12 +516,12 @@ func TestZeroBytes(t *testing.T) {
 	}
 }
 
-func TestZeroBytes_Empty(t *testing.T) {
+func TestZeroBytes_Empty(_ *testing.T) {
 	data := []byte{}
 	ZeroBytes(data) // Should not panic
 }
 
-// Benchmark tests
+// Benchmark tests.
 func BenchmarkEncrypt(b *testing.B) {
 	key, _ := GenerateKey()
 	plaintext := make([]byte, 1024)

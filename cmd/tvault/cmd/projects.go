@@ -42,8 +42,8 @@ WARNING: This action cannot be undone. All secrets in the project will be perman
 }
 
 var (
-	projectDescription  string
-	projectDeleteForce  bool
+	projectDescription string
+	projectDeleteForce bool
 )
 
 func init() {
@@ -56,7 +56,7 @@ func init() {
 	projectsDeleteCmd.Flags().BoolVarP(&projectDeleteForce, "yes", "y", false, "Skip confirmation prompt")
 }
 
-func runProjectsList(cmd *cobra.Command, args []string) error {
+func runProjectsList(_ *cobra.Command, _ []string) error {
 	token := getToken()
 	if token == "" {
 		return fmt.Errorf("not logged in. Run 'tvault login' first")
@@ -85,7 +85,7 @@ func runProjectsList(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runProjectsCreate(cmd *cobra.Command, args []string) error {
+func runProjectsCreate(_ *cobra.Command, args []string) error {
 	token := getToken()
 	if token == "" {
 		return fmt.Errorf("not logged in. Run 'tvault login' first")
@@ -107,7 +107,7 @@ func runProjectsCreate(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runProjectsDelete(cmd *cobra.Command, args []string) error {
+func runProjectsDelete(_ *cobra.Command, args []string) error {
 	token := getToken()
 	if token == "" {
 		return fmt.Errorf("not logged in. Run 'tvault login' first")
@@ -119,7 +119,7 @@ func runProjectsDelete(cmd *cobra.Command, args []string) error {
 	if !projectDeleteForce {
 		Warning("This will permanently delete the project and all its secrets.")
 		if !PromptConfirm(fmt.Sprintf("Delete project '%s'?", projectIDArg)) {
-			Info("Cancelled")
+			Info("Canceled")
 			return nil
 		}
 	}

@@ -57,9 +57,9 @@ const (
 
 // Errors
 var (
-	ErrEmailExists       = errors.New("email already registered")
+	ErrEmailExists        = errors.New("email already registered")
 	ErrInvalidCredentials = errors.New("invalid email or password")
-	ErrUserNotFound      = errors.New("user not found")
+	ErrUserNotFound       = errors.New("user not found")
 )
 
 // dbUserToUser converts a db.User to a services.User

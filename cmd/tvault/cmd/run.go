@@ -30,7 +30,7 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 }
 
-func runRun(cmd *cobra.Command, args []string) error {
+func runRun(_ *cobra.Command, args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("command is required")
 	}

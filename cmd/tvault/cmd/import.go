@@ -39,7 +39,7 @@ func init() {
 	importCmd.Flags().BoolVar(&importDryRun, "dry-run", false, "Show what would be imported without making changes")
 }
 
-func runImport(cmd *cobra.Command, args []string) error {
+func runImport(_ *cobra.Command, args []string) error {
 	token := getToken()
 	if token == "" {
 		return fmt.Errorf("not logged in. Run 'tvault login' first")
@@ -135,7 +135,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// parseEnvFile reads a .env file and returns a map of key-value pairs
+// parseEnvFile reads a .env file and returns a map of key-value pairs.
 func parseEnvFile(filePath string) (map[string]string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {

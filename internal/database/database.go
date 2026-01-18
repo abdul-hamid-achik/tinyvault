@@ -65,11 +65,11 @@ func (db *DB) Health(ctx context.Context) (map[string]any, error) {
 	stats := db.Pool.Stat()
 
 	health := map[string]any{
-		"status":           "healthy",
-		"total_conns":      stats.TotalConns(),
-		"acquired_conns":   stats.AcquiredConns(),
-		"idle_conns":       stats.IdleConns(),
-		"max_conns":        stats.MaxConns(),
+		"status":             "healthy",
+		"total_conns":        stats.TotalConns(),
+		"acquired_conns":     stats.AcquiredConns(),
+		"idle_conns":         stats.IdleConns(),
+		"max_conns":          stats.MaxConns(),
 		"constructing_conns": stats.ConstructingConns(),
 	}
 

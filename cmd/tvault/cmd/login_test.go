@@ -28,19 +28,19 @@ func TestGetConfigPath(t *testing.T) {
 
 func TestSecureFilePermissions(t *testing.T) {
 	// This test verifies that the login flow sets correct file permissions
-	// The actual login flow sets 0600 permissions on the config file
+	// The actual login flow sets 0o600 permissions on the config file
 
 	// Create a temporary file to test permissions
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, ".tvault.yaml")
 
 	// Create the file with default permissions (like viper would)
-	if err := os.WriteFile(tmpFile, []byte("token: test-token"), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("token: test-token"), 0o644); err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 
 	// Set restrictive permissions (as our fix does)
-	if err := os.Chmod(tmpFile, 0600); err != nil {
+	if err := os.Chmod(tmpFile, 0o600); err != nil {
 		t.Fatalf("Failed to set permissions: %v", err)
 	}
 
@@ -52,12 +52,12 @@ func TestSecureFilePermissions(t *testing.T) {
 
 	// Check that only owner has read/write permissions
 	mode := info.Mode().Perm()
-	if mode != 0600 {
-		t.Errorf("File permissions = %o, want 0600", mode)
+	if mode != 0o600 {
+		t.Errorf("File permissions = %o, want 0o600", mode)
 	}
 
 	// Verify that group and others have no access
-	if mode&0077 != 0 {
+	if mode&0o077 != 0 {
 		t.Errorf("File should not be accessible by group or others, mode = %o", mode)
 	}
 }
@@ -99,7 +99,7 @@ func TestGetAPIURL(t *testing.T) {
 	}
 }
 
-func TestGetToken(t *testing.T) {
+func TestGetToken(_ *testing.T) {
 	// Test that getToken returns empty string when no token is set
 	token := getToken()
 	// Just verify it doesn't panic and returns a string

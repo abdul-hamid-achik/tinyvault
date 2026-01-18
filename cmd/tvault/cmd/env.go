@@ -33,7 +33,7 @@ func init() {
 	envCmd.Flags().BoolVarP(&envExport, "export", "e", true, "Include 'export' prefix (shell format only)")
 }
 
-func runEnv(cmd *cobra.Command, args []string) error {
+func runEnv(_ *cobra.Command, _ []string) error {
 	token := getToken()
 	if token == "" {
 		return fmt.Errorf("not logged in. Run 'tvault login' first")
