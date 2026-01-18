@@ -87,23 +87,24 @@ changelog:
       - Merge pull request
       - Merge branch
 
-brews:
-  - name: tvault
-    ids:
-      - tvault
-    repository:
-      owner: abdul-hamid-achik
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    directory: Formula
-    homepage: "https://tinyvault.dev"
-    description: "Dead simple secrets management CLI"
-    license: "MIT"
-    install: |
-      bin.install "tvault"
-    test: |
-      system "#{bin}/tvault", "--version"
-    skip_upload: "{{ if .Env.HOMEBREW_TAP_TOKEN }}false{{ else }}true{{ end }}"
+# Homebrew formula - disabled for now until homebrew-tap repo is set up
+# brews:
+#   - name: tvault
+#     ids:
+#       - tvault
+#     repository:
+#       owner: abdul-hamid-achik
+#       name: homebrew-tap
+#       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+#     directory: Formula
+#     homepage: "https://tinyvault.dev"
+#     description: "Dead simple secrets management CLI"
+#     license: "MIT"
+#     install: |
+#       bin.install "tvault"
+#     test: |
+#       system "#{bin}/tvault", "--version"
+#     skip_upload: auto
 
 nfpms:
   - id: packages

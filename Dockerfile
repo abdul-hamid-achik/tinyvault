@@ -9,7 +9,8 @@ FROM golang:1.25-alpine AS builder
 RUN apk add --no-cache git ca-certificates
 RUN go install github.com/a-h/templ/cmd/templ@v0.3.977
 WORKDIR /app
-COPY --from=deps /go/pkg /go/pkg
+COPY go.mod go.sum ./
+RUN go mod download
 COPY . .
 RUN templ generate
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/server ./cmd/server
