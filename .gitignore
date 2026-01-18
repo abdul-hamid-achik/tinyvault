@@ -36,7 +36,7 @@ web/static/dist/
 
 # Generated files
 *_templ.go
-internal/database/db/
+# Note: internal/database/db/ is committed (sqlc generated code)
 
 # Dependencies
 vendor/
