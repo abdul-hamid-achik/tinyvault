@@ -1,25 +1,22 @@
-# Build stage
-FROM golang:alpine AS builder
-
-RUN apk add --no-cache git ca-certificates
-
+# Dependencies stage
+FROM golang:1.25-alpine AS deps
 WORKDIR /app
-
-# Copy go mod files
 COPY go.mod go.sum ./
-RUN go mod download
+RUN go mod download && go mod verify
 
-# Copy source code
+# Build stage
+FROM golang:1.25-alpine AS builder
+RUN apk add --no-cache git ca-certificates
+RUN go install github.com/a-h/templ/cmd/templ@v0.3.977
+WORKDIR /app
+COPY --from=deps /go/pkg /go/pkg
 COPY . .
-
-# Build the server binary
+RUN templ generate
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/server ./cmd/server
-
-# Build the CLI binary
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/tvault ./cmd/tvault
 
 # Final stage
-FROM alpine:3.19
+FROM alpine:3.20
 
 RUN apk add --no-cache ca-certificates tzdata
 
