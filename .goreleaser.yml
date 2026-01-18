@@ -22,7 +22,7 @@ builds:
     ldflags:
       - -s -w
       - -X main.version={{.Version}}
-      - -X main.commit={{.Commit}}
+      - -X main.commit={{.ShortCommit}}
       - -X main.date={{.Date}}
 
   - id: tvault
@@ -40,7 +40,7 @@ builds:
     ldflags:
       - -s -w
       - -X main.version={{.Version}}
-      - -X main.commit={{.Commit}}
+      - -X main.commit={{.ShortCommit}}
       - -X main.date={{.Date}}
 
 archives:
@@ -48,33 +48,27 @@ archives:
     builds:
       - server
     name_template: "{{ .ProjectName }}-server_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    format: tar.gz
+    formats:
+      - tar.gz
     format_overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
+    files:
+      - README.md
 
   - id: tvault
     builds:
       - tvault
     name_template: "tvault_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    format: tar.gz
+    formats:
+      - tar.gz
     format_overrides:
       - goos: windows
-        format: zip
-
-brews:
-  - name: tvault
-    ids:
-      - tvault
-    repository:
-      owner: abdul-hamid-achik
-      name: homebrew-tap
-    directory: Formula
-    homepage: https://tinyvault.dev
-    description: Dead simple secrets management CLI
-    license: MIT
-    install: |
-      bin.install "tvault"
+        formats:
+          - zip
+    files:
+      - README.md
 
 checksum:
   name_template: 'checksums.txt'
@@ -89,8 +83,41 @@ changelog:
       - '^docs:'
       - '^test:'
       - '^ci:'
+      - '^chore:'
       - Merge pull request
       - Merge branch
+
+brews:
+  - name: tvault
+    ids:
+      - tvault
+    repository:
+      owner: abdul-hamid-achik
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://tinyvault.dev"
+    description: "Dead simple secrets management CLI"
+    license: "MIT"
+    install: |
+      bin.install "tvault"
+    test: |
+      system "#{bin}/tvault", "--version"
+    skip_upload: "{{ if .Env.HOMEBREW_TAP_TOKEN }}false{{ else }}true{{ end }}"
+
+nfpms:
+  - id: packages
+    package_name: tvault
+    vendor: TinyVault
+    homepage: https://tinyvault.dev
+    maintainer: Abdul Hamid Achik <abdul.achik@gmail.com>
+    description: "Dead simple secrets management CLI"
+    license: MIT
+    formats:
+      - deb
+      - rpm
+      - apk
+    bindir: /usr/bin
 
 release:
   github:
@@ -98,4 +125,4 @@ release:
     name: tinyvault
   draft: false
   prerelease: auto
-  name_template: "v{{ .Version }}"
+  name_template: "v{{.Version}}"
