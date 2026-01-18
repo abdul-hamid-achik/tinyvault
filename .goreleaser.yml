@@ -69,7 +69,7 @@ brews:
     repository:
       owner: abdul-hamid-achik
       name: homebrew-tap
-    folder: Formula
+    directory: Formula
     homepage: https://tinyvault.dev
     description: Dead simple secrets management CLI
     license: MIT
