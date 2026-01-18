@@ -37,20 +37,6 @@ jobs:
       - name: Generate templ files
         run: ~/go/bin/templ generate
 
-      - name: Cache sqlc binary
-        id: cache-sqlc
-        uses: actions/cache@v4
-        with:
-          path: ~/go/bin/sqlc
-          key: sqlc-${{ runner.os }}-v1.28.0
-
-      - name: Install sqlc
-        if: steps.cache-sqlc.outputs.cache-hit != 'true'
-        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.28.0
-
-      - name: Generate sqlc
-        run: ~/go/bin/sqlc generate
-
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -59,6 +45,7 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
   docker:
     name: Build Docker Image
