@@ -239,24 +239,94 @@ Before every commit:
 
 ## Logging Guidelines
 
+### Using the Logging Package
+
+TinyVault uses a dedicated `internal/logging` package for context-aware logging with automatic request ID propagation. This ensures all logs within a request can be correlated.
+
 ```go
-// Use structured logging
-slog.Info("secret created",
-    "project_id", projectID,
-    "key", key,
-    "user_id", userID,
-)
+import "github.com/abdul-hamid-achik/tinyvault/internal/logging"
 
-// Never log sensitive data
-// BAD: slog.Info("secret", "value", secretValue)
-// BAD: slog.Info("auth", "token", token)
+func MyHandler(w http.ResponseWriter, r *http.Request) {
+    log := logging.Logger(r.Context())  // Gets logger with request_id
 
-// Log at appropriate levels
-slog.Debug("...")  // Development details
-slog.Info("...")   // Normal operations
-slog.Warn("...")   // Recoverable issues
-slog.Error("...")  // Failures requiring attention
+    log.Info("operation_completed", "user_id", userID)
+    // Output includes: request_id=abc-123 user_id=xyz-456 msg=operation_completed
+}
 ```
+
+### Security-First Logging (CRITICAL)
+
+**NEVER log:**
+- Passwords or password hashes
+- OAuth tokens or authorization codes
+- Session tokens
+- API keys
+- Secret values
+- Encryption keys or nonces
+- Full credit card numbers
+- Social security numbers
+
+**ALWAYS safe to log:**
+- User IDs, email addresses, usernames
+- Project IDs, resource IDs
+- Secret keys (the identifier, NOT the value)
+- Timestamps, IP addresses
+- Request IDs, session IDs (the database ID, not the token)
+- Error messages (but sanitize internal details)
+
+```go
+// CORRECT - logs key but not value
+log.Info("secret_created", "project_id", projectID, "key", key, "user_id", userID)
+
+// WRONG - never log secret values!
+log.Info("secret_created", "key", key, "value", secretValue) // NEVER DO THIS
+```
+
+### Log Levels Guide
+
+| Level | When to Use | Examples |
+|-------|-------------|----------|
+| Debug | Flow tracing, development details | `session_validated`, `oauth_token_exchanged`, `user_upserted` |
+| Info | Business events, successful operations | `user_logged_in`, `project_created`, `secret_deleted` |
+| Warn | Suspicious activity, recoverable issues | `account_locked`, `oauth_state_mismatch`, `invalid_credentials` |
+| Error | Failures requiring attention | DB errors, API failures, token generation failures |
+
+### Logging Patterns by Layer
+
+**Handlers (highest level):**
+```go
+log := logging.Logger(r.Context())
+// Log business events at Info level
+log.Info("user_logged_in", "user_id", user.ID, "provider", "github")
+// Log failures at Error level
+log.Error("project_creation_failed", "user_id", user.ID, "error", err)
+```
+
+**Services (business logic):**
+```go
+log := logging.Logger(ctx)
+// Log operations at Debug level
+log.Debug("session_created", "session_id", session.ID, "user_id", userID)
+// Log security events at Warn level
+log.Warn("account_locked", "email", email, "failed_attempts", count)
+```
+
+**Database (infrastructure):**
+```go
+log := logging.Logger(ctx)
+// Only log errors at this layer
+log.Error("transaction_commit_failed", "error", err)
+```
+
+### Architecture Notes
+
+The logging package (`internal/logging`) is kept separate from middleware to avoid import cycles:
+- `internal/logging` - Core logger utilities, no dependencies
+- `internal/middleware` - HTTP middleware, imports logging
+- `internal/services` - Business logic, imports logging
+- `internal/handlers` - HTTP handlers, can import either
+
+This allows request IDs to propagate through all layers while keeping the dependency graph clean.
 
 ## Environment Configuration
 

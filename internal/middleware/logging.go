@@ -2,15 +2,15 @@
 package middleware
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
-)
 
-// RequestIDKey is the context key for the request ID.
-type RequestIDKey struct{}
+	"github.com/abdul-hamid-achik/tinyvault/internal/logging"
+)
 
 // responseWriter wraps http.ResponseWriter to capture the status code.
 type responseWriter struct {
@@ -43,7 +43,7 @@ func Logging(logger *slog.Logger) func(next http.Handler) http.Handler {
 				status:         http.StatusOK,
 			}
 
-			ctx := r.Context()
+			ctx := context.WithValue(r.Context(), logging.RequestIDKey{}, requestID)
 			next.ServeHTTP(wrapped, r.WithContext(ctx))
 
 			duration := time.Since(start)
@@ -77,4 +77,14 @@ func Recovery(logger *slog.Logger) func(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// GetRequestID returns the request ID from the context, or empty string if not found.
+func GetRequestID(ctx context.Context) string {
+	return logging.GetRequestID(ctx)
+}
+
+// Logger returns a logger with the request_id from the context.
+func Logger(ctx context.Context) *slog.Logger {
+	return logging.Logger(ctx)
 }

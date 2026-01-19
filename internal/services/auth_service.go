@@ -12,6 +12,7 @@ import (
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/crypto"
 	"github.com/abdul-hamid-achik/tinyvault/internal/database/db"
+	"github.com/abdul-hamid-achik/tinyvault/internal/logging"
 )
 
 const (
@@ -62,9 +63,12 @@ type SessionWithUser struct {
 
 // CreateSession creates a new session for a user.
 func (s *AuthService) CreateSession(ctx context.Context, userID uuid.UUID, ipAddress, userAgent string) (*Session, error) {
+	log := logging.Logger(ctx)
+
 	// Generate a secure session token
 	token, err := crypto.GenerateTokenString(SessionTokenLength)
 	if err != nil {
+		log.Error("session_token_generation_failed", "user_id", userID, "error", err)
 		return nil, fmt.Errorf("failed to generate session token: %w", err)
 	}
 
@@ -94,6 +98,7 @@ func (s *AuthService) CreateSession(ctx context.Context, userID uuid.UUID, ipAdd
 		ExpiresAt: expiresAt,
 	})
 	if err != nil {
+		log.Error("session_creation_failed", "user_id", userID, "error", err)
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 
@@ -106,6 +111,8 @@ func (s *AuthService) CreateSession(ctx context.Context, userID uuid.UUID, ipAdd
 	if dbSession.UserAgent != nil {
 		uaStr = *dbSession.UserAgent
 	}
+
+	log.Debug("session_created", "session_id", dbSession.ID, "user_id", userID)
 
 	return &Session{
 		ID:           dbSession.ID,
@@ -121,14 +128,19 @@ func (s *AuthService) CreateSession(ctx context.Context, userID uuid.UUID, ipAdd
 
 // ValidateSession validates a session token and returns the session with user.
 func (s *AuthService) ValidateSession(ctx context.Context, token string) (*SessionWithUser, error) {
+	log := logging.Logger(ctx)
+
 	// Hash the provided token
 	tokenHash := crypto.HashTokenString(token)
 
 	// Look up the session
 	row, err := s.queries.GetSessionWithUser(ctx, tokenHash)
 	if err != nil {
+		log.Debug("session_validation_failed", "error", err)
 		return nil, fmt.Errorf("invalid session: %w", err)
 	}
+
+	log.Debug("session_validated", "session_id", row.ID, "user_id", row.UserID)
 
 	// Update last active time asynchronously with timeout
 	go func() {
@@ -233,6 +245,8 @@ var ErrAccountLocked = fmt.Errorf("account temporarily locked due to too many fa
 
 // IsAccountLocked checks if an account is locked due to too many failed login attempts.
 func (s *AuthService) IsAccountLocked(ctx context.Context, email string) (bool, error) {
+	log := logging.Logger(ctx)
+
 	if s.maxAttempts <= 0 {
 		return false, nil // Lockout disabled
 	}
@@ -243,10 +257,16 @@ func (s *AuthService) IsAccountLocked(ctx context.Context, email string) (bool, 
 		CreatedAt: since,
 	})
 	if err != nil {
+		log.Error("lockout_check_failed", "email", email, "error", err)
 		return false, fmt.Errorf("failed to check login attempts: %w", err)
 	}
 
-	return count >= int64(s.maxAttempts), nil
+	locked := count >= int64(s.maxAttempts)
+	if locked {
+		log.Warn("account_locked", "email", email, "failed_attempts", count)
+	}
+
+	return locked, nil
 }
 
 // RecordLoginAttempt records a login attempt.

@@ -13,6 +13,7 @@ import (
 	"golang.org/x/oauth2/github"
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/crypto"
+	"github.com/abdul-hamid-achik/tinyvault/internal/middleware"
 	"github.com/abdul-hamid-achik/tinyvault/internal/services"
 	"github.com/abdul-hamid-achik/tinyvault/internal/validation"
 	"github.com/abdul-hamid-achik/tinyvault/internal/views/pages"
@@ -63,14 +64,19 @@ func (h *AuthHandler) IsGitHubEnabled() bool {
 
 // GitHubLogin redirects to GitHub OAuth.
 func (h *AuthHandler) GitHubLogin(w http.ResponseWriter, r *http.Request) {
+	log := middleware.Logger(r.Context())
+
 	if !h.githubEnabled {
 		http.Error(w, "GitHub authentication is not configured", http.StatusNotFound)
 		return
 	}
 
+	log.Debug("oauth_flow_started", "provider", "github")
+
 	// Generate cryptographically secure state for CSRF protection
 	state, err := crypto.GenerateTokenString(32)
 	if err != nil {
+		log.Error("oauth_state_generation_failed", "error", err)
 		http.Error(w, "Failed to generate state", http.StatusInternalServerError)
 		return
 	}
@@ -92,6 +98,8 @@ func (h *AuthHandler) GitHubLogin(w http.ResponseWriter, r *http.Request) {
 
 // GitHubCallback handles the GitHub OAuth callback.
 func (h *AuthHandler) GitHubCallback(w http.ResponseWriter, r *http.Request) {
+	log := middleware.Logger(r.Context())
+
 	if !h.githubEnabled {
 		http.Error(w, "GitHub authentication is not configured", http.StatusNotFound)
 		return
@@ -101,6 +109,7 @@ func (h *AuthHandler) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	stateCookie, err := r.Cookie("oauth_state")
 	queryState := r.URL.Query().Get("state")
 	if err != nil || !crypto.CompareTokens([]byte(stateCookie.Value), []byte(queryState)) {
+		log.Warn("oauth_state_mismatch", "cookie_present", err == nil)
 		http.Error(w, "Invalid state", http.StatusBadRequest)
 		return
 	}
@@ -118,21 +127,26 @@ func (h *AuthHandler) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	token, err := h.oauth2Config.Exchange(r.Context(), code)
 	if err != nil {
+		log.Error("oauth_token_exchange_failed", "error", err)
 		http.Error(w, "Failed to exchange token", http.StatusInternalServerError)
 		return
 	}
+	log.Debug("oauth_token_exchanged", "provider", "github")
 
 	// Get user info from GitHub
 	client := h.oauth2Config.Client(r.Context(), token)
-	githubUser, err := h.getGitHubUser(r.Context(), client)
+	githubUser, err := h.getGitHubUser(r.Context(), client, log)
 	if err != nil {
+		log.Error("github_user_fetch_failed", "error", err)
 		http.Error(w, "Failed to get user info", http.StatusInternalServerError)
 		return
 	}
+	log.Debug("github_user_fetched", "github_id", githubUser.ID)
 
 	// Create or update user
 	user, err := h.userService.CreateOrUpdate(r.Context(), githubUser)
 	if err != nil {
+		log.Error("user_creation_failed", "github_id", githubUser.ID, "error", err)
 		http.Error(w, "Failed to create user", http.StatusInternalServerError)
 		return
 	}
@@ -140,6 +154,7 @@ func (h *AuthHandler) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	// Create session
 	session, err := h.authService.CreateSession(r.Context(), user.ID, r.RemoteAddr, r.UserAgent())
 	if err != nil {
+		log.Error("session_creation_failed", "user_id", user.ID, "error", err)
 		http.Error(w, "Failed to create session", http.StatusInternalServerError)
 		return
 	}
@@ -164,6 +179,8 @@ func (h *AuthHandler) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 		Secure:   r.TLS != nil,
 		SameSite: http.SameSiteLaxMode,
 	})
+
+	log.Info("user_logged_in", "user_id", user.ID, "provider", "github")
 
 	// Redirect to dashboard
 	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
@@ -206,7 +223,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 // getGitHubUser fetches user data from GitHub API.
-func (h *AuthHandler) getGitHubUser(ctx context.Context, client *http.Client) (*services.GitHubUser, error) {
+func (h *AuthHandler) getGitHubUser(ctx context.Context, client *http.Client, log *slog.Logger) (*services.GitHubUser, error) {
 	// Get user info
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.github.com/user", nil)
 	if err != nil {
@@ -217,6 +234,11 @@ func (h *AuthHandler) getGitHubUser(ctx context.Context, client *http.Client) (*
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Error("github_api_error", "endpoint", "/user", "status", resp.StatusCode)
+		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+	}
 
 	var userData struct {
 		ID        int64  `json:"id"`
@@ -232,43 +254,13 @@ func (h *AuthHandler) getGitHubUser(ctx context.Context, client *http.Client) (*
 
 	// If email is not public, fetch from emails endpoint
 	if userData.Email == "" {
-		emailReq, err := http.NewRequestWithContext(ctx, "GET", "https://api.github.com/user/emails", nil)
-		if err != nil {
-			return nil, err
-		}
-		emailResp, err := client.Do(emailReq)
-		if err == nil {
-			defer func() { _ = emailResp.Body.Close() }()
-
-			var emails []struct {
-				Email    string `json:"email"`
-				Primary  bool   `json:"primary"`
-				Verified bool   `json:"verified"`
-			}
-
-			if err := json.NewDecoder(emailResp.Body).Decode(&emails); err == nil {
-				// First try to find primary verified email
-				for _, e := range emails {
-					if e.Primary && e.Verified {
-						userData.Email = e.Email
-						break
-					}
-				}
-				// Fall back to any verified email
-				if userData.Email == "" {
-					for _, e := range emails {
-						if e.Verified {
-							userData.Email = e.Email
-							break
-						}
-					}
-				}
-			}
-		}
+		log.Debug("github_email_not_public", "github_id", userData.ID)
+		userData.Email = h.fetchGitHubEmail(ctx, client)
 	}
 
 	// Require an email address
 	if userData.Email == "" {
+		log.Warn("github_no_verified_email", "github_id", userData.ID)
 		return nil, fmt.Errorf("no verified email found on GitHub account")
 	}
 
@@ -279,6 +271,43 @@ func (h *AuthHandler) getGitHubUser(ctx context.Context, client *http.Client) (*
 		Name:      userData.Name,
 		AvatarURL: userData.AvatarURL,
 	}, nil
+}
+
+// fetchGitHubEmail fetches the user's primary verified email from GitHub.
+func (h *AuthHandler) fetchGitHubEmail(ctx context.Context, client *http.Client) string {
+	emailReq, err := http.NewRequestWithContext(ctx, "GET", "https://api.github.com/user/emails", nil)
+	if err != nil {
+		return ""
+	}
+	emailResp, err := client.Do(emailReq)
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = emailResp.Body.Close() }()
+
+	var emails []struct {
+		Email    string `json:"email"`
+		Primary  bool   `json:"primary"`
+		Verified bool   `json:"verified"`
+	}
+
+	if err := json.NewDecoder(emailResp.Body).Decode(&emails); err != nil {
+		return ""
+	}
+
+	// First try to find primary verified email
+	for _, e := range emails {
+		if e.Primary && e.Verified {
+			return e.Email
+		}
+	}
+	// Fall back to any verified email
+	for _, e := range emails {
+		if e.Verified {
+			return e.Email
+		}
+	}
+	return ""
 }
 
 // LoginPage renders the login page.
@@ -297,6 +326,8 @@ func (h *AuthHandler) LoginPage(w http.ResponseWriter, r *http.Request) {
 
 // EmailLogin handles email/password login.
 func (h *AuthHandler) EmailLogin(w http.ResponseWriter, r *http.Request) {
+	log := middleware.Logger(r.Context())
+
 	if err := r.ParseForm(); err != nil {
 		render(w, r, pages.Login("Invalid form data", h.githubEnabled))
 		return
@@ -310,14 +341,17 @@ func (h *AuthHandler) EmailLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Debug("login_attempt", "email", email)
+
 	// Check if account is locked - fail closed on error
 	locked, err := h.authService.IsAccountLocked(r.Context(), email)
 	if err != nil {
-		slog.Error("failed to check account lockout", "error", err)
+		log.Error("lockout_check_failed", "email", email, "error", err)
 		render(w, r, pages.Login("An error occurred. Please try again later.", h.githubEnabled))
 		return
 	}
 	if locked {
+		log.Warn("login_account_locked", "email", email)
 		render(w, r, pages.Login("Account temporarily locked due to too many failed login attempts. Please try again later.", h.githubEnabled))
 		return
 	}
@@ -329,10 +363,11 @@ func (h *AuthHandler) EmailLogin(w http.ResponseWriter, r *http.Request) {
 		h.authService.RecordLoginAttempt(r.Context(), email, r.RemoteAddr, false)
 
 		if errors.Is(err, services.ErrInvalidCredentials) {
+			log.Warn("login_invalid_credentials", "email", email)
 			render(w, r, pages.Login("Invalid email or password", h.githubEnabled))
 			return
 		}
-		slog.Error("failed to authenticate user", "error", err)
+		log.Error("login_auth_failed", "email", email, "error", err)
 		render(w, r, pages.Login("An error occurred. Please try again.", h.githubEnabled))
 		return
 	}
@@ -343,7 +378,7 @@ func (h *AuthHandler) EmailLogin(w http.ResponseWriter, r *http.Request) {
 	// Create session
 	session, err := h.authService.CreateSession(r.Context(), user.ID, r.RemoteAddr, r.UserAgent())
 	if err != nil {
-		slog.Error("failed to create session", "error", err)
+		log.Error("session_creation_failed", "user_id", user.ID, "error", err)
 		render(w, r, pages.Login("An error occurred. Please try again.", h.githubEnabled))
 		return
 	}
@@ -369,6 +404,8 @@ func (h *AuthHandler) EmailLogin(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
+	log.Info("user_logged_in", "user_id", user.ID, "provider", "email")
+
 	// Redirect to dashboard
 	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 }
@@ -389,6 +426,8 @@ func (h *AuthHandler) RegisterPage(w http.ResponseWriter, r *http.Request) {
 
 // Register handles user registration.
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+	log := middleware.Logger(r.Context())
+
 	if err := r.ParseForm(); err != nil {
 		render(w, r, pages.Register("Invalid form data", h.githubEnabled))
 		return
@@ -420,14 +459,17 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Debug("registration_attempt", "email", email, "username", username)
+
 	// Create user
 	user, err := h.userService.CreateFromEmail(r.Context(), email, password, username)
 	if err != nil {
 		if errors.Is(err, services.ErrEmailExists) {
+			log.Warn("registration_email_exists", "email", email)
 			render(w, r, pages.Register("An account with this email already exists", h.githubEnabled))
 			return
 		}
-		slog.Error("failed to create user", "error", err)
+		log.Error("registration_failed", "email", email, "error", err)
 		render(w, r, pages.Register("An error occurred. Please try again.", h.githubEnabled))
 		return
 	}
@@ -435,7 +477,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	// Create session
 	session, err := h.authService.CreateSession(r.Context(), user.ID, r.RemoteAddr, r.UserAgent())
 	if err != nil {
-		slog.Error("failed to create session", "error", err)
+		log.Error("session_creation_failed", "user_id", user.ID, "error", err)
 		// User was created but session failed - redirect to login
 		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
 		return
@@ -461,6 +503,8 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		Secure:   r.TLS != nil,
 		SameSite: http.SameSiteLaxMode,
 	})
+
+	log.Info("user_registered", "user_id", user.ID, "email", email)
 
 	// Redirect to dashboard
 	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)

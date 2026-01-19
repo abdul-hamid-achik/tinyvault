@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/abdul-hamid-achik/tinyvault/internal/logging"
 	"github.com/abdul-hamid-achik/tinyvault/internal/middleware"
 	"github.com/abdul-hamid-achik/tinyvault/internal/services"
 	"github.com/abdul-hamid-achik/tinyvault/internal/validation"
@@ -90,6 +91,8 @@ func (h *APIHandler) ListProjects(w http.ResponseWriter, r *http.Request) {
 
 // CreateProject handles POST /api/v1/projects
 func (h *APIHandler) CreateProject(w http.ResponseWriter, r *http.Request) {
+	log := logging.Logger(r.Context())
+
 	user := middleware.GetUser(r.Context())
 	if user == nil {
 		jsonError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Authentication required")
@@ -116,6 +119,7 @@ func (h *APIHandler) CreateProject(w http.ResponseWriter, r *http.Request) {
 
 	project, err := h.projectService.Create(r.Context(), user.ID, req.Name, req.Description)
 	if err != nil {
+		log.Error("project_creation_failed", "user_id", user.ID, "name", req.Name, "error", err)
 		jsonError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create project")
 		return
 	}
@@ -130,6 +134,8 @@ func (h *APIHandler) CreateProject(w http.ResponseWriter, r *http.Request) {
 		IPAddress:    r.RemoteAddr,
 		UserAgent:    r.UserAgent(),
 	})
+
+	log.Info("project_created", "project_id", project.ID, "user_id", user.ID, "name", project.Name)
 
 	jsonResponse(w, http.StatusCreated, project)
 }
@@ -159,6 +165,8 @@ func (h *APIHandler) GetProject(w http.ResponseWriter, r *http.Request) {
 
 // DeleteProject handles DELETE /api/v1/projects/{id}
 func (h *APIHandler) DeleteProject(w http.ResponseWriter, r *http.Request) {
+	log := logging.Logger(r.Context())
+
 	user := middleware.GetUser(r.Context())
 	if user == nil {
 		jsonError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Authentication required")
@@ -179,6 +187,7 @@ func (h *APIHandler) DeleteProject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.projectService.Delete(r.Context(), projectID); err != nil {
+		log.Error("project_deletion_failed", "project_id", projectID, "user_id", user.ID, "error", err)
 		jsonError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to delete project")
 		return
 	}
@@ -193,6 +202,8 @@ func (h *APIHandler) DeleteProject(w http.ResponseWriter, r *http.Request) {
 		IPAddress:    r.RemoteAddr,
 		UserAgent:    r.UserAgent(),
 	})
+
+	log.Info("project_deleted", "project_id", projectID, "user_id", user.ID, "name", project.Name)
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -293,6 +304,8 @@ func (h *APIHandler) GetSecret(w http.ResponseWriter, r *http.Request) {
 
 // SetSecret handles PUT /api/v1/projects/{id}/secrets/{key}
 func (h *APIHandler) SetSecret(w http.ResponseWriter, r *http.Request) {
+	log := logging.Logger(r.Context())
+
 	user := middleware.GetUser(r.Context())
 	if user == nil {
 		jsonError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Authentication required")
@@ -327,6 +340,7 @@ func (h *APIHandler) SetSecret(w http.ResponseWriter, r *http.Request) {
 
 	secret, err := h.secretService.Upsert(r.Context(), projectID, key, []byte(req.Value))
 	if err != nil {
+		log.Error("secret_upsert_failed", "project_id", projectID, "key", key, "user_id", user.ID, "error", err)
 		jsonError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to set secret")
 		return
 	}
@@ -346,11 +360,19 @@ func (h *APIHandler) SetSecret(w http.ResponseWriter, r *http.Request) {
 		UserAgent:    r.UserAgent(),
 	})
 
+	if secret.Version == 1 {
+		log.Info("secret_created", "project_id", projectID, "key", key, "user_id", user.ID)
+	} else {
+		log.Info("secret_updated", "project_id", projectID, "key", key, "version", secret.Version, "user_id", user.ID)
+	}
+
 	jsonResponse(w, http.StatusOK, secret)
 }
 
 // DeleteSecret handles DELETE /api/v1/projects/{id}/secrets/{key}
 func (h *APIHandler) DeleteSecret(w http.ResponseWriter, r *http.Request) {
+	log := logging.Logger(r.Context())
+
 	user := middleware.GetUser(r.Context())
 	if user == nil {
 		jsonError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Authentication required")
@@ -376,6 +398,7 @@ func (h *APIHandler) DeleteSecret(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.secretService.Delete(r.Context(), projectID, key); err != nil {
+		log.Error("secret_deletion_failed", "project_id", projectID, "key", key, "user_id", user.ID, "error", err)
 		jsonError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to delete secret")
 		return
 	}
@@ -389,6 +412,8 @@ func (h *APIHandler) DeleteSecret(w http.ResponseWriter, r *http.Request) {
 		IPAddress:    r.RemoteAddr,
 		UserAgent:    r.UserAgent(),
 	})
+
+	log.Info("secret_deleted", "project_id", projectID, "key", key, "user_id", user.ID)
 
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/crypto"
 	"github.com/abdul-hamid-achik/tinyvault/internal/database/db"
+	"github.com/abdul-hamid-achik/tinyvault/internal/logging"
 )
 
 // UserService handles user-related business logic.
@@ -79,6 +80,8 @@ func dbUserToUser(dbUser db.User) *User {
 
 // CreateOrUpdate creates a new user or updates an existing one from GitHub OAuth.
 func (s *UserService) CreateOrUpdate(ctx context.Context, gu *GitHubUser) (*User, error) {
+	log := logging.Logger(ctx)
+
 	var name, avatar *string
 	if gu.Name != "" {
 		name = &gu.Name
@@ -96,20 +99,25 @@ func (s *UserService) CreateOrUpdate(ctx context.Context, gu *GitHubUser) (*User
 		AvatarUrl: avatar,
 	})
 	if err != nil {
+		log.Error("user_upsert_failed", "github_id", githubID, "error", err)
 		return nil, fmt.Errorf("failed to upsert user: %w", err)
 	}
 
+	log.Debug("user_upserted", "user_id", dbUser.ID, "github_id", githubID)
 	return dbUserToUser(dbUser), nil
 }
 
 // CreateFromEmail creates a new user with email/password authentication.
 func (s *UserService) CreateFromEmail(ctx context.Context, email, password, username string) (*User, error) {
+	log := logging.Logger(ctx)
+
 	// Check if email already exists for email auth
 	exists, err := s.queries.CheckEmailExists(ctx, db.CheckEmailExistsParams{
 		Email:        email,
 		AuthProvider: AuthProviderEmail,
 	})
 	if err != nil {
+		log.Error("email_check_failed", "email", email, "error", err)
 		return nil, fmt.Errorf("failed to check email: %w", err)
 	}
 	if exists {
@@ -119,6 +127,7 @@ func (s *UserService) CreateFromEmail(ctx context.Context, email, password, user
 	// Hash password
 	passwordHash, err := crypto.HashPassword(password)
 	if err != nil {
+		log.Error("password_hash_failed", "error", err)
 		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
 
@@ -128,27 +137,35 @@ func (s *UserService) CreateFromEmail(ctx context.Context, email, password, user
 		PasswordHash: &passwordHash,
 	})
 	if err != nil {
+		log.Error("user_creation_failed", "email", email, "error", err)
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
+	log.Debug("user_created", "user_id", dbUser.ID, "email", email)
 	return dbUserToUser(dbUser), nil
 }
 
 // AuthenticateByEmail validates email/password and returns the user if valid.
 func (s *UserService) AuthenticateByEmail(ctx context.Context, email, password string) (*User, error) {
+	log := logging.Logger(ctx)
+
 	dbUser, err := s.queries.GetUserByEmailForAuth(ctx, email)
 	if err != nil {
+		log.Debug("auth_user_not_found", "email", email)
 		return nil, ErrInvalidCredentials
 	}
 
 	if dbUser.PasswordHash == nil {
+		log.Debug("auth_no_password_hash", "email", email)
 		return nil, ErrInvalidCredentials
 	}
 
 	if !crypto.VerifyPassword(password, *dbUser.PasswordHash) {
+		log.Debug("auth_password_mismatch", "email", email)
 		return nil, ErrInvalidCredentials
 	}
 
+	log.Debug("auth_success", "user_id", dbUser.ID, "email", email)
 	return dbUserToUser(dbUser), nil
 }
 

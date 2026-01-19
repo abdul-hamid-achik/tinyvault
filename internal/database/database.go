@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/config"
+	"github.com/abdul-hamid-achik/tinyvault/internal/logging"
 )
 
 // DB wraps a pgxpool.Pool for database operations.
@@ -92,8 +93,11 @@ func (db *DB) BeginTx(ctx context.Context) (pgx.Tx, error) {
 // If the function returns an error, the transaction is rolled back.
 // Otherwise, the transaction is committed.
 func (db *DB) Transaction(ctx context.Context, fn func(tx pgx.Tx) error) error {
+	log := logging.Logger(ctx)
+
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
+		log.Error("transaction_begin_failed", "error", err)
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
@@ -106,12 +110,14 @@ func (db *DB) Transaction(ctx context.Context, fn func(tx pgx.Tx) error) error {
 
 	if err := fn(tx); err != nil {
 		if rbErr := tx.Rollback(ctx); rbErr != nil {
+			log.Error("transaction_rollback_failed", "tx_error", err, "rollback_error", rbErr)
 			return errors.Join(fmt.Errorf("tx failed: %w", err), fmt.Errorf("rollback failed: %w", rbErr))
 		}
 		return err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
+		log.Error("transaction_commit_failed", "error", err)
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
