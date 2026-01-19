@@ -2,6 +2,48 @@
 (function() {
   'use strict';
 
+  // ==========================================================================
+  // CSRF Protection
+  // ==========================================================================
+
+  // Get CSRF token from cookie (handles base64 tokens with = padding)
+  function getCSRFToken() {
+    const cookie = document.cookie.split('; ').find(function(row) {
+      return row.startsWith('csrf_token=');
+    });
+    return cookie ? cookie.substring('csrf_token='.length) : null;
+  }
+
+  // Configure HTMX to include CSRF token in all requests
+  document.addEventListener('htmx:configRequest', function(e) {
+    var token = getCSRFToken();
+    if (token) {
+      e.detail.headers['X-CSRF-Token'] = token;
+    }
+  });
+
+  // Inject CSRF token into regular form submissions
+  document.addEventListener('submit', function(e) {
+    var form = e.target;
+    if (form.tagName === 'FORM' && form.method.toUpperCase() === 'POST') {
+      var csrfInput = form.querySelector('input[name="csrf_token"]');
+      if (!csrfInput) {
+        csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrf_token';
+        form.appendChild(csrfInput);
+      }
+      var token = getCSRFToken();
+      if (token) {
+        csrfInput.value = token;
+      }
+    }
+  });
+
+  // ==========================================================================
+  // UI Interactions
+  // ==========================================================================
+
   // Icon SVGs
   const icons = {
     check: '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>',
