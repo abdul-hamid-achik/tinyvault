@@ -1164,7 +1164,7 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "{container=~\"tinyvault.*\"}",
+          "expr": "{container=\"tinyvault\"} | json",
           "queryType": "range",
           "refId": "A"
         }
@@ -1202,7 +1202,7 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "{container=~\"tinyvault.*\"} |~ \"(?i)error|fail|panic\" or {container=~\"tinyvault.*\", level=\"error\"}",
+          "expr": "{container=\"tinyvault\"} | json | level=\"error\" or line=~\"(?i)error|fail|panic\"",
           "queryType": "range",
           "refId": "A"
         }
