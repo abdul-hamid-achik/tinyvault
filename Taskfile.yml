@@ -113,7 +113,7 @@ tasks:
   _watch-css:
     internal: true
     cmds:
-      - tailwindcss -i web/static/css/input.css -o web/static/dist/styles.css --watch
+      - tailwindcss -i web/static/css/input.css -o web/static/css/output.css --watch
     ignore_error: true
 
   _watch-go:
@@ -140,8 +140,8 @@ tasks:
   # ============================================================================
 
   build:
-    desc: "Build server binary"
-    deps: [templ, css:build]
+    desc: "Build server binary (runs all code generation first)"
+    deps: [generate]
     cmds:
       - mkdir -p bin
       - go build -ldflags="-s -w -X main.version={{.VERSION}}" -o bin/{{.BINARY_NAME}} ./cmd/server
@@ -313,16 +313,10 @@ tasks:
       - "**/*_templ.go"
 
   css:
-    desc: "Build Tailwind CSS"
-    cmds:
-      - tailwindcss -i web/static/css/input.css -o web/static/css/output.css
-      - echo "CSS built"
-
-  css:build:
-    desc: "Build Tailwind CSS (minified)"
+    desc: "Build Tailwind CSS (minified for production)"
     cmds:
       - tailwindcss -i web/static/css/input.css -o web/static/css/output.css --minify
-      - echo "CSS built (minified)"
+      - echo "CSS built"
 
   sqlc:
     desc: "Generate SQLC code"
