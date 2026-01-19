@@ -122,13 +122,36 @@ jobs:
         env:
           HOST: ${{ secrets.PRODUCTION_HOST }}
         run: |
-          # Wait for Caddy to pick up the new container
+          # Wait for services to stabilize
           sleep 10
 
-          # Check public health endpoint
+          echo "=== Checking TinyVault App ==="
           curl -sf https://tinyvault.dev/health || {
-            echo "Public health check failed!"
+            echo "❌ App health check failed!"
             exit 1
           }
+          echo "✅ App is healthy"
 
-          echo "Deployment verified successfully!"
+          echo ""
+          echo "=== Checking Grafana ==="
+          # Grafana may take a bit longer to start
+          for i in {1..6}; do
+            if curl -sf https://grafana.tinyvault.dev/api/health > /dev/null 2>&1; then
+              echo "✅ Grafana is healthy"
+              break
+            fi
+            if [ $i -eq 6 ]; then
+              echo "⚠️ Grafana health check failed (non-blocking)"
+            else
+              echo "  Waiting for Grafana... (attempt $i/6)"
+              sleep 5
+            fi
+          done
+
+          echo ""
+          echo "=== Deployment Summary ==="
+          echo "  App:     https://tinyvault.dev"
+          echo "  Grafana: https://grafana.tinyvault.dev"
+          echo "  Image:   ${{ needs.build-and-push.outputs.image_tag }}"
+          echo ""
+          echo "✅ Deployment verified successfully!"

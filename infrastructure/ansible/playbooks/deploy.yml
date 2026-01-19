@@ -118,6 +118,46 @@
         dest: "{{ app_dir }}/Caddyfile"
         mode: '0644'
 
+    - name: Copy Taskfile.yml
+      copy:
+        src: ../../../Taskfile.yml
+        dest: "{{ app_dir }}/Taskfile.yml"
+        mode: '0644'
+
+    - name: Copy promtail config
+      copy:
+        src: ../../../promtail-config.yml
+        dest: "{{ app_dir }}/promtail-config.yml"
+        mode: '0644'
+
+    - name: Create prometheus directory
+      file:
+        path: "{{ app_dir }}/prometheus"
+        state: directory
+        mode: '0755'
+
+    - name: Copy prometheus config
+      copy:
+        src: ../../../prometheus/prometheus.yml
+        dest: "{{ app_dir }}/prometheus/prometheus.yml"
+        mode: '0644'
+
+    - name: Create grafana provisioning directories
+      file:
+        path: "{{ app_dir }}/grafana/provisioning/{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - datasources
+        - dashboards
+        - alerting
+
+    - name: Copy grafana provisioning files
+      copy:
+        src: "../../../grafana/provisioning/"
+        dest: "{{ app_dir }}/grafana/provisioning/"
+        mode: '0644'
+
     - name: Copy environment file
       template:
         src: ../templates/env.j2
@@ -137,8 +177,8 @@
         chdir: "{{ app_dir }}"
       changed_when: true
 
-    - name: Start services with prod profile
-      command: docker compose --profile prod up -d --remove-orphans
+    - name: Start services with prod and monitoring profiles
+      command: docker compose --profile prod --profile monitoring up -d --remove-orphans
       args:
         chdir: "{{ app_dir }}"
       changed_when: true

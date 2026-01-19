@@ -18,8 +18,16 @@ type Querier interface {
 	// Check if username exists for another user (excluding the given user ID)
 	CheckUsernameExists(ctx context.Context, arg CheckUsernameExistsParams) (bool, error)
 	CleanupOldLoginAttempts(ctx context.Context, createdAt time.Time) error
+	// Count all non-revoked and non-expired API tokens
+	CountActiveAPITokens(ctx context.Context) (int64, error)
 	CountActiveAPITokensByUser(ctx context.Context, userID uuid.UUID) (int64, error)
+	// Count all non-expired sessions
+	CountActiveSessions(ctx context.Context) (int64, error)
 	CountActiveSessionsByUser(ctx context.Context, userID uuid.UUID) (int64, error)
+	// Count all non-deleted projects
+	CountAllProjects(ctx context.Context) (int64, error)
+	// Count all secrets for non-deleted projects
+	CountAllSecrets(ctx context.Context) (int64, error)
 	CountAuditLogsByUser(ctx context.Context, userID pgtype.UUID) (int64, error)
 	CountAuditLogsByUserActionSince(ctx context.Context, arg CountAuditLogsByUserActionSinceParams) (int64, error)
 	CountAuditLogsByUserSince(ctx context.Context, arg CountAuditLogsByUserSinceParams) (int64, error)

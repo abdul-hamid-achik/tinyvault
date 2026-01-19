@@ -13,6 +13,8 @@ import (
 	"fmt"
 
 	"golang.org/x/crypto/argon2"
+
+	"github.com/abdul-hamid-achik/tinyvault/internal/metrics"
 )
 
 const (
@@ -78,6 +80,7 @@ func Encrypt(key, plaintext []byte) ([]byte, error) {
 
 	// Seal prepends nonce to ciphertext
 	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
+	metrics.EncryptionOperations.WithLabelValues("encrypt").Inc()
 	return ciphertext, nil
 }
 
@@ -111,6 +114,7 @@ func Decrypt(key, ciphertext []byte) ([]byte, error) {
 		return nil, ErrDecryptionFailed
 	}
 
+	metrics.EncryptionOperations.WithLabelValues("decrypt").Inc()
 	return plaintext, nil
 }
 

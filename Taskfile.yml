@@ -394,6 +394,8 @@ tasks:
           "postgres://tinyvault:${DB_PASS}@postgres:5432/tinyvault?sslmode=disable" up
       - echo "Restarting app..."
       - docker compose up -d --force-recreate --no-deps app
+      - echo "Ensuring monitoring services are running..."
+      - docker compose --profile monitoring up -d --no-recreate
       - task: _deploy:wait-healthy
 
   _deploy:wait-healthy:

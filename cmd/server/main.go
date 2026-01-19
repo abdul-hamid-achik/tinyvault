@@ -17,6 +17,7 @@ import (
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/config"
 	"github.com/abdul-hamid-achik/tinyvault/internal/handlers"
+	"github.com/abdul-hamid-achik/tinyvault/internal/metrics"
 	"github.com/abdul-hamid-achik/tinyvault/internal/services"
 )
 
@@ -152,6 +153,9 @@ func run() error {
 			}
 		}
 	}()
+
+	// Start metrics collector (every 30 seconds)
+	go metrics.StartCollector(ctx, dbPool, 30*time.Second)
 
 	// Start server in goroutine
 	go func() {
