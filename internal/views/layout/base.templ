@@ -18,12 +18,15 @@ templ Base(title string, authenticated bool) {
 			<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css"/>
 			<script src="https://unpkg.com/htmx.org@1.9.12"></script>
 			<script>
+				// Get CSRF token from cookie (handles base64 tokens with = padding)
+				function getCSRFToken() {
+					const cookie = document.cookie.split('; ').find(row => row.startsWith('csrf_token='));
+					return cookie ? cookie.substring('csrf_token='.length) : null;
+				}
 				// Configure HTMX to include CSRF token
 				document.addEventListener('htmx:configRequest', function(e) {
-					const csrfCookie = document.cookie.split('; ').find(row => row.startsWith('csrf_token='));
-					if (csrfCookie) {
-						e.detail.headers['X-CSRF-Token'] = csrfCookie.split('=')[1];
-					}
+					const token = getCSRFToken();
+					if (token) e.detail.headers['X-CSRF-Token'] = token;
 				});
 				// Inject CSRF token into regular forms on submit
 				document.addEventListener('submit', function(e) {
@@ -36,10 +39,8 @@ templ Base(title string, authenticated bool) {
 							csrfInput.name = 'csrf_token';
 							form.appendChild(csrfInput);
 						}
-						const csrfCookie = document.cookie.split('; ').find(row => row.startsWith('csrf_token='));
-						if (csrfCookie) {
-							csrfInput.value = csrfCookie.split('=')[1];
-						}
+						const token = getCSRFToken();
+						if (token) csrfInput.value = token;
 					}
 				});
 			</script>
