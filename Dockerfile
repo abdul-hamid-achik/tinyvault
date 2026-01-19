@@ -6,14 +6,16 @@ RUN go mod download && go mod verify
 
 # Build stage
 FROM golang:1.25-alpine AS builder
-RUN apk add --no-cache git ca-certificates
+RUN apk add --no-cache git ca-certificates nodejs npm
 RUN go install github.com/a-h/templ/cmd/templ@v0.3.977
 RUN go install github.com/pressly/goose/v3/cmd/goose@v3.21.1
+RUN npm install -g @tailwindcss/cli@4.1.8
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN templ generate
+RUN tailwindcss -i web/static/css/input.css -o web/static/css/output.css --minify
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/server ./cmd/server
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/tvault ./cmd/tvault
 
