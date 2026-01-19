@@ -395,7 +395,7 @@ tasks:
       - echo "Restarting app..."
       - docker compose up -d --force-recreate --no-deps app
       - echo "Ensuring monitoring services are running..."
-      - docker compose --profile monitoring up -d --no-recreate
+      - docker compose --profile monitoring up -d --force-recreate
       - task: _deploy:wait-healthy
 
   _deploy:wait-healthy:
