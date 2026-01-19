@@ -80,8 +80,19 @@
           - docker.io
           - docker-compose-v2
           - python3-docker
+          - curl
         state: present
         update_cache: yes
+
+    - name: Check if task is installed
+      command: task --version
+      register: task_installed
+      failed_when: false
+      changed_when: false
+
+    - name: Install task (go-task)
+      shell: sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+      when: task_installed.rc != 0
 
     - name: Ensure Docker is running
       service:
