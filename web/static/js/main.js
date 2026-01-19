@@ -55,9 +55,23 @@
   // Initialize all event handlers
   function init() {
     initMobileMenu();
+    initModalClose();
     initCliDemoCopy();
     initToastClose();
     initSecretHandlers();
+  }
+
+  // Modal close handler (replaces hx-on:click which requires eval)
+  function initModalClose() {
+    document.addEventListener('click', function(e) {
+      var closeBtn = e.target.closest('[data-close-modal]');
+      if (closeBtn) {
+        var modalContainer = document.getElementById('modal-container');
+        if (modalContainer) {
+          modalContainer.innerHTML = '';
+        }
+      }
+    });
   }
 
   // Mobile menu toggle

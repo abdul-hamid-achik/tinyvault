@@ -167,7 +167,7 @@ templ SecretRow(projectID string, secret SecretInfo) {
 }
 
 templ SecretModal(projectID, secretKey, secretValue string, isEdit bool) {
-	<div class="modal-backdrop" hx-on:click="this.parentElement.innerHTML = ''"></div>
+	<div class="modal-backdrop" data-close-modal></div>
 	<div class="modal">
 		<div class="modal-content">
 			<div class="modal-header">
@@ -179,7 +179,7 @@ templ SecretModal(projectID, secretKey, secretValue string, isEdit bool) {
 				<button
 					type="button"
 					class="text-nord4 hover:text-nord6"
-					hx-on:click="document.getElementById('modal-container').innerHTML = ''"
+					data-close-modal
 				>
 					@components.XIcon(components.IconMD)
 				</button>
@@ -223,7 +223,7 @@ templ SecretModal(projectID, secretKey, secretValue string, isEdit bool) {
 					<button
 						type="button"
 						class="btn-ghost"
-						hx-on:click="document.getElementById('modal-container').innerHTML = ''"
+						data-close-modal
 					>
 						Cancel
 					</button>
