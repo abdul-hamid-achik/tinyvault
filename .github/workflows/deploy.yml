@@ -84,6 +84,12 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts
 
+      - name: Copy docker-compose.yml
+        env:
+          HOST: ${{ secrets.PRODUCTION_HOST }}
+        run: |
+          scp -o StrictHostKeyChecking=no docker-compose.yml root@$HOST:/opt/tinyvault/docker-compose.yml
+
       - name: Deploy to server
         env:
           HOST: ${{ secrets.PRODUCTION_HOST }}
