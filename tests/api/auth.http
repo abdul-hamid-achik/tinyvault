@@ -1,0 +1,42 @@
+# TinyVault API Authentication Tests
+# These tests verify authentication requirements
+
+### Unauthorized - No Token
+# @name noToken
+# @tags auth, errors
+# @description Requests without auth should return 401
+
+GET {{baseUrl}}/projects
+
+>>>
+expect status 401
+expect body.error exists
+expect body.error.code == "UNAUTHORIZED"
+<<<
+
+### Unauthorized - Invalid Token
+# @name invalidToken
+# @tags auth, errors
+# @description Invalid tokens should return 401
+
+GET {{baseUrl}}/projects
+Authorization: Bearer invalid-token-12345
+
+>>>
+expect status 401
+expect body.error exists
+expect body.error.code == "UNAUTHORIZED"
+<<<
+
+### Unauthorized - Malformed Auth Header
+# @name malformedAuth
+# @tags auth, errors
+# @description Malformed auth headers should return 401
+
+GET {{baseUrl}}/projects
+Authorization: InvalidScheme token123
+
+>>>
+expect status 401
+expect body.error exists
+<<<
