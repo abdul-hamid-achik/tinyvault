@@ -109,7 +109,7 @@ jobs:
             # Run migrations from the new image before starting
             echo "Running database migrations..."
             DB_PASS=$(grep DB_PASSWORD .env | cut -d= -f2)
-            docker compose run --rm --entrypoint "" app /usr/local/bin/goose -dir /app/migrations postgres "postgres://tinyvault:${DB_PASS}@postgres:5432/tinyvault?sslmode=disable" up
+            docker compose run --rm --entrypoint "" app /usr/local/bin/goose -dir /app/migrations postgres "postgres://tinyvault:${DB_PASS}@postgres:5432/tinyvault?sslmode=disable" up < /dev/null
 
             # Stop and remove old container, then start with new image
             echo "Stopping old container..."
