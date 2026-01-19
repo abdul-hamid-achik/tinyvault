@@ -71,7 +71,7 @@ templ Login(errorMessage string, githubEnabled bool) {
 							</div>
 						</div>
 
-						<a href="/auth/github" class="w-full flex items-center justify-center gap-2 px-4 py-2 font-medium rounded-lg bg-nord2 text-nord4 hover:bg-nord3 transition-colors">
+						<a href="/auth/github" hx-boost="false" class="w-full flex items-center justify-center gap-2 px-4 py-2 font-medium rounded-lg bg-nord2 text-nord4 hover:bg-nord3 transition-colors">
 							@components.GitHubIcon(components.IconMD)
 							<span>GitHub</span>
 						</a>
