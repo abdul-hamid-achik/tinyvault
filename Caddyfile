@@ -2,6 +2,28 @@
 	email admin@tinyvault.dev
 }
 
+# Grafana monitoring dashboard
+grafana.tinyvault.dev {
+	reverse_proxy grafana:3000
+
+	# Security headers
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
+	encode gzip zstd
+
+	log {
+		output file /var/log/caddy/grafana-access.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+	}
+}
+
 tinyvault.dev {
 	reverse_proxy app:8080
 
