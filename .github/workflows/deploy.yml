@@ -112,9 +112,13 @@ jobs:
             docker compose run --rm --entrypoint "" app /usr/local/bin/goose -dir /app/migrations postgres "postgres://tinyvault:${DB_PASS}@postgres:5432/tinyvault?sslmode=disable" up
 
             # Stop and remove old container, then start with new image
-            docker compose stop app
-            docker compose rm -f app
+            echo "Stopping old container..."
+            docker compose stop app || true
+            echo "Removing old container..."
+            docker compose rm -f app || true
+            echo "Starting new container..."
             docker compose up -d --no-deps app
+            echo "Container started, waiting for health..."
 
             # Wait for health check
             echo "Waiting for app to be healthy..."
