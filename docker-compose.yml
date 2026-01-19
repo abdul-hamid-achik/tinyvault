@@ -84,6 +84,7 @@ services:
   loki:
     image: grafana/loki:2.9.0
     container_name: tinyvault-loki
+    restart: unless-stopped
     profiles: [monitoring]
     ports:
       - "3100:3100"
@@ -94,6 +95,7 @@ services:
   promtail:
     image: grafana/promtail:2.9.0
     container_name: tinyvault-promtail
+    restart: unless-stopped
     profiles: [monitoring]
     volumes:
       - ./promtail-config.yml:/etc/promtail/config.yml:ro
@@ -105,6 +107,7 @@ services:
   prometheus:
     image: prom/prometheus:v2.48.0
     container_name: tinyvault-prometheus
+    restart: unless-stopped
     profiles: [monitoring]
     ports:
       - "9090:9090"
@@ -120,6 +123,7 @@ services:
   grafana:
     image: grafana/grafana:10.2.0
     container_name: tinyvault-grafana
+    restart: unless-stopped
     profiles: [monitoring]
     ports:
       - "3000:3000"
