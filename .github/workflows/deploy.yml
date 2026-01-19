@@ -111,8 +111,8 @@ jobs:
             DB_PASS=$(grep DB_PASSWORD .env | cut -d= -f2)
             docker compose run --rm --entrypoint "" app /usr/local/bin/goose -dir /app/migrations postgres "postgres://tinyvault:${DB_PASS}@postgres:5432/tinyvault?sslmode=disable" up
 
-            # Restart with zero downtime
-            docker compose up -d --no-deps app
+            # Restart with zero downtime (force recreate to use new image)
+            docker compose up -d --no-deps --force-recreate app
 
             # Wait for health check
             echo "Waiting for app to be healthy..."
