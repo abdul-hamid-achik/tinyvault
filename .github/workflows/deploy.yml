@@ -84,35 +84,6 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Copy migrations
-        env:
-          HOST: ${{ secrets.PRODUCTION_HOST }}
-        run: |
-          scp -o StrictHostKeyChecking=no -r internal/database/migrations root@$HOST:/opt/tinyvault/
-
-      - name: Run migrations
-        env:
-          HOST: ${{ secrets.PRODUCTION_HOST }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-        run: |
-          ssh -o StrictHostKeyChecking=no root@$HOST << 'ENDSSH'
-            set -e
-            cd /opt/tinyvault
-
-            # Install goose if not present
-            if ! command -v goose &> /dev/null; then
-              wget -qO /usr/local/bin/goose https://github.com/pressly/goose/releases/download/v3.21.1/goose_linux_x86_64
-              chmod +x /usr/local/bin/goose
-            fi
-
-            # Get DB password from .env
-            DB_PASS=$(grep DB_PASSWORD .env | cut -d= -f2)
-
-            # Run migrations
-            goose -dir migrations postgres "postgres://tinyvault:${DB_PASS}@localhost:5432/tinyvault?sslmode=disable" up
-            echo "Migrations complete"
-          ENDSSH
-
       - name: Deploy to server
         env:
           HOST: ${{ secrets.PRODUCTION_HOST }}
@@ -128,6 +99,11 @@ jobs:
 
             # Pull latest images
             docker compose pull app
+
+            # Run migrations from the new image before starting
+            echo "Running database migrations..."
+            DB_PASS=$(grep DB_PASSWORD .env | cut -d= -f2)
+            docker compose run --rm --entrypoint "" app /usr/local/bin/goose -dir /app/migrations postgres "postgres://tinyvault:${DB_PASS}@postgres:5432/tinyvault?sslmode=disable" up
 
             # Restart with zero downtime
             docker compose up -d --no-deps app

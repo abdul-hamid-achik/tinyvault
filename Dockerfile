@@ -8,6 +8,7 @@ RUN go mod download && go mod verify
 FROM golang:1.25-alpine AS builder
 RUN apk add --no-cache git ca-certificates
 RUN go install github.com/a-h/templ/cmd/templ@v0.3.977
+RUN go install github.com/pressly/goose/v3/cmd/goose@v3.21.1
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
@@ -30,9 +31,13 @@ WORKDIR /app
 # Copy binaries
 COPY --from=builder /bin/server /app/server
 COPY --from=builder /bin/tvault /usr/local/bin/tvault
+COPY --from=builder /go/bin/goose /usr/local/bin/goose
 
 # Copy static assets
 COPY --from=builder /app/web/static /app/web/static
+
+# Copy migrations
+COPY --from=builder /app/internal/database/migrations /app/migrations
 
 # Set ownership
 RUN chown -R tinyvault:tinyvault /app
