@@ -1,6 +1,6 @@
 services:
   app:
-    image: ${IMAGE:-tinyvault:local}
+    image: ghcr.io/abdul-hamid-achik/tinyvault:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile
