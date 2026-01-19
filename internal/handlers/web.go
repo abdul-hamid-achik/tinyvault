@@ -3,6 +3,9 @@ package handlers
 import (
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
@@ -17,6 +20,7 @@ import (
 type WebHandler struct {
 	projectService *services.ProjectService
 	secretService  *services.SecretService
+	tokenService   *services.TokenService
 	auditService   *services.AuditService
 }
 
@@ -24,11 +28,13 @@ type WebHandler struct {
 func NewWebHandler(
 	projectService *services.ProjectService,
 	secretService *services.SecretService,
+	tokenService *services.TokenService,
 	auditService *services.AuditService,
 ) *WebHandler {
 	return &WebHandler{
 		projectService: projectService,
 		secretService:  secretService,
+		tokenService:   tokenService,
 		auditService:   auditService,
 	}
 }
@@ -54,6 +60,11 @@ func (h *WebHandler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handl
 		r.Get("/projects/{id}/secrets/{key}/reveal", h.RevealSecret)
 		r.Put("/projects/{id}/secrets/{key}", h.UpdateSecret)
 		r.Delete("/projects/{id}/secrets/{key}", h.DeleteSecret)
+
+		// Settings - API Tokens
+		r.Get("/settings/tokens", h.TokensPage)
+		r.Post("/settings/tokens", h.CreateToken)
+		r.Delete("/settings/tokens/{id}", h.RevokeToken)
 	})
 }
 
@@ -445,5 +456,174 @@ func (h *WebHandler) DeleteSecret(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Return empty response to remove the row
+	w.WriteHeader(http.StatusOK)
+}
+
+// TokensPage renders the API tokens settings page.
+func (h *WebHandler) TokensPage(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r.Context())
+	if user == nil {
+		http.Redirect(w, r, "/auth/github", http.StatusSeeOther)
+		return
+	}
+
+	tokens, err := h.tokenService.ListActive(r.Context(), user.ID)
+	if err != nil {
+		slog.Error("failed to list tokens", "user_id", user.ID, "error", err)
+		http.Error(w, "Failed to load tokens", http.StatusInternalServerError)
+		return
+	}
+
+	tokenInfos := make([]pages.TokenInfo, len(tokens))
+	for i, t := range tokens {
+		lastUsed := "Never"
+		if t.LastUsedAt != nil {
+			lastUsed = t.LastUsedAt.Format("Jan 2, 15:04")
+		}
+		expires := "Never"
+		if t.ExpiresAt != nil {
+			expires = t.ExpiresAt.Format("Jan 2, 2006")
+		}
+		tokenInfos[i] = pages.TokenInfo{
+			ID:        t.ID.String(),
+			Name:      t.Name,
+			Scopes:    t.Scopes,
+			LastUsed:  lastUsed,
+			ExpiresAt: expires,
+			CreatedAt: t.CreatedAt.Format("Jan 2, 2006"),
+		}
+	}
+
+	data := pages.TokensPageData{
+		Tokens:   tokenInfos,
+		NewToken: "",
+	}
+
+	render(w, r, pages.TokensPage(data))
+}
+
+// CreateToken handles API token creation.
+func (h *WebHandler) CreateToken(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r.Context())
+	if user == nil {
+		http.Redirect(w, r, "/auth/github", http.StatusSeeOther)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		return
+	}
+
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		http.Error(w, "Token name is required", http.StatusBadRequest)
+		return
+	}
+
+	// Collect selected scopes
+	scopes := r.Form["scopes"]
+	if len(scopes) == 0 {
+		http.Error(w, "At least one scope is required", http.StatusBadRequest)
+		return
+	}
+
+	// Parse expiration
+	var expiresAt *time.Time
+	expiresIn := r.FormValue("expires_in")
+	if expiresIn != "" && expiresIn != "never" {
+		days, err := strconv.Atoi(expiresIn)
+		if err == nil && days > 0 {
+			t := time.Now().AddDate(0, 0, days)
+			expiresAt = &t
+		}
+	}
+
+	token, err := h.tokenService.Create(r.Context(), user.ID, name, scopes, expiresAt)
+	if err != nil {
+		slog.Error("failed to create token", "user_id", user.ID, "error", err)
+		http.Error(w, "Failed to create token", http.StatusInternalServerError)
+		return
+	}
+
+	// Audit log
+	h.auditService.LogAsync(services.LogParams{
+		UserID:       &user.ID,
+		Action:       services.ActionTokenCreate,
+		ResourceType: services.ResourceToken,
+		ResourceID:   &token.ID,
+		ResourceName: name,
+		IPAddress:    r.RemoteAddr,
+		UserAgent:    r.UserAgent(),
+	})
+
+	// Re-fetch tokens to show updated list
+	tokens, err := h.tokenService.ListActive(r.Context(), user.ID)
+	if err != nil {
+		slog.Error("failed to list tokens after creation", "user_id", user.ID, "error", err)
+		http.Error(w, "Failed to load tokens", http.StatusInternalServerError)
+		return
+	}
+
+	tokenInfos := make([]pages.TokenInfo, len(tokens))
+	for i, t := range tokens {
+		lastUsed := "Never"
+		if t.LastUsedAt != nil {
+			lastUsed = t.LastUsedAt.Format("Jan 2, 15:04")
+		}
+		expires := "Never"
+		if t.ExpiresAt != nil {
+			expires = t.ExpiresAt.Format("Jan 2, 2006")
+		}
+		tokenInfos[i] = pages.TokenInfo{
+			ID:        t.ID.String(),
+			Name:      t.Name,
+			Scopes:    t.Scopes,
+			LastUsed:  lastUsed,
+			ExpiresAt: expires,
+			CreatedAt: t.CreatedAt.Format("Jan 2, 2006"),
+		}
+	}
+
+	data := pages.TokensPageData{
+		Tokens:   tokenInfos,
+		NewToken: token.Token, // Show the token once
+	}
+
+	render(w, r, pages.TokensPage(data))
+}
+
+// RevokeToken handles API token revocation.
+func (h *WebHandler) RevokeToken(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r.Context())
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	tokenIDStr := chi.URLParam(r, "id")
+	tokenID, err := uuid.Parse(tokenIDStr)
+	if err != nil {
+		http.Error(w, "Invalid token ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.tokenService.Revoke(r.Context(), tokenID, user.ID); err != nil {
+		slog.Error("failed to revoke token", "token_id", tokenID, "user_id", user.ID, "error", err)
+		http.Error(w, "Failed to revoke token", http.StatusInternalServerError)
+		return
+	}
+
+	// Audit log
+	h.auditService.LogAsync(services.LogParams{
+		UserID:       &user.ID,
+		Action:       services.ActionTokenRevoke,
+		ResourceType: services.ResourceToken,
+		ResourceID:   &tokenID,
+		IPAddress:    r.RemoteAddr,
+		UserAgent:    r.UserAgent(),
+	})
+
+	// Return empty response to remove the row (HTMX)
 	w.WriteHeader(http.StatusOK)
 }

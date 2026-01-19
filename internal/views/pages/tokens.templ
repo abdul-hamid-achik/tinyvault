@@ -1,0 +1,255 @@
+package pages
+
+import (
+	"strings"
+	"github.com/abdul-hamid-achik/tinyvault/internal/views/layout"
+	"github.com/abdul-hamid-achik/tinyvault/internal/views/components"
+)
+
+type TokensPageData struct {
+	Tokens   []TokenInfo
+	NewToken string // Only set immediately after creation
+}
+
+type TokenInfo struct {
+	ID        string
+	Name      string
+	Scopes    []string
+	LastUsed  string
+	ExpiresAt string
+	CreatedAt string
+}
+
+templ TokensPage(data TokensPageData) {
+	@layout.Base("API Tokens", true) {
+		<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+			<!-- Header -->
+			<div class="mb-8">
+				<a href="/dashboard" class="text-nord4 hover:text-nord6 flex items-center gap-1 mb-4">
+					@components.ChevronLeftIcon(components.IconSM)
+					Back to Dashboard
+				</a>
+				<h1 class="text-2xl font-bold text-nord6">API Tokens</h1>
+				<p class="text-nord4 mt-1">Manage your API tokens for programmatic access to TinyVault.</p>
+			</div>
+
+			<!-- New Token Alert (shown only after creation) -->
+			if data.NewToken != "" {
+				<div class="alert-success mb-8" id="new-token-alert">
+					<div class="flex items-start gap-3">
+						<div class="flex-shrink-0">
+							@components.CheckIcon(components.IconMD)
+						</div>
+						<div class="flex-1">
+							<h3 class="font-semibold text-nord14 mb-2">Token created successfully!</h3>
+							<p class="text-sm text-nord14/80 mb-3">
+								Copy your token now. You won't be able to see it again.
+							</p>
+							<div class="flex items-center gap-2 bg-nord0/50 rounded-lg p-3">
+								<code class="text-sm text-nord6 break-all flex-1" id="new-token-value">{ data.NewToken }</code>
+								<button
+									type="button"
+									class="text-nord4 hover:text-nord8 copy-token-btn flex-shrink-0"
+									title="Copy to clipboard"
+									onclick="navigator.clipboard.writeText(document.getElementById('new-token-value').textContent).then(() => this.innerHTML = '✓')"
+								>
+									@components.CopyIcon(components.IconMD)
+								</button>
+							</div>
+						</div>
+						<button
+							type="button"
+							class="text-nord4 hover:text-nord6 flex-shrink-0"
+							onclick="document.getElementById('new-token-alert').remove()"
+						>
+							@components.XIcon(components.IconMD)
+						</button>
+					</div>
+				</div>
+			}
+
+			<!-- Create Token Form -->
+			<div class="card mb-8">
+				<div class="card-header">
+					<h2 class="text-lg font-semibold text-nord6">Create New Token</h2>
+				</div>
+				<div class="card-body">
+					<form method="POST" action="/settings/tokens" class="space-y-6">
+						<!-- Token Name -->
+						<div class="form-group">
+							<label for="name" class="label">Token Name</label>
+							<input
+								type="text"
+								id="name"
+								name="name"
+								class="input"
+								placeholder="e.g., CI/CD Pipeline, Local Development"
+								required
+								maxlength="100"
+							/>
+							<p class="text-sm text-nord3 mt-1">A descriptive name to identify this token.</p>
+						</div>
+
+						<!-- Scopes -->
+						<div class="form-group">
+							<label class="label">Permissions</label>
+							<p class="text-sm text-nord3 mb-3">Select the permissions for this token.</p>
+
+							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+								<!-- Projects -->
+								<div class="bg-nord1 rounded-lg p-4">
+									<h4 class="font-medium text-nord6 mb-3 flex items-center gap-2">
+										@components.FolderIcon(components.IconSM)
+										Projects
+									</h4>
+									<div class="space-y-2">
+										<label class="flex items-center gap-2 cursor-pointer">
+											<input type="checkbox" name="scopes" value="projects:read" class="checkbox" checked/>
+											<span class="text-sm text-nord4">Read projects</span>
+										</label>
+										<label class="flex items-center gap-2 cursor-pointer">
+											<input type="checkbox" name="scopes" value="projects:write" class="checkbox"/>
+											<span class="text-sm text-nord4">Create projects</span>
+										</label>
+										<label class="flex items-center gap-2 cursor-pointer">
+											<input type="checkbox" name="scopes" value="projects:delete" class="checkbox"/>
+											<span class="text-sm text-nord4">Delete projects</span>
+										</label>
+									</div>
+								</div>
+
+								<!-- Secrets -->
+								<div class="bg-nord1 rounded-lg p-4">
+									<h4 class="font-medium text-nord6 mb-3 flex items-center gap-2">
+										@components.KeyIcon(components.IconSM)
+										Secrets
+									</h4>
+									<div class="space-y-2">
+										<label class="flex items-center gap-2 cursor-pointer">
+											<input type="checkbox" name="scopes" value="secrets:read" class="checkbox" checked/>
+											<span class="text-sm text-nord4">Read secrets</span>
+										</label>
+										<label class="flex items-center gap-2 cursor-pointer">
+											<input type="checkbox" name="scopes" value="secrets:write" class="checkbox"/>
+											<span class="text-sm text-nord4">Create/update secrets</span>
+										</label>
+										<label class="flex items-center gap-2 cursor-pointer">
+											<input type="checkbox" name="scopes" value="secrets:delete" class="checkbox"/>
+											<span class="text-sm text-nord4">Delete secrets</span>
+										</label>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- Expiration -->
+						<div class="form-group">
+							<label for="expires_in" class="label">Expiration</label>
+							<select id="expires_in" name="expires_in" class="input">
+								<option value="30">30 days</option>
+								<option value="60">60 days</option>
+								<option value="90" selected>90 days</option>
+								<option value="365">1 year</option>
+								<option value="never">Never</option>
+							</select>
+						</div>
+
+						<!-- Submit -->
+						<div class="flex justify-end">
+							<button type="submit" class="btn-primary">
+								@components.PlusIcon(components.IconMD)
+								<span>Create Token</span>
+							</button>
+						</div>
+					</form>
+				</div>
+			</div>
+
+			<!-- Existing Tokens -->
+			<div class="card">
+				<div class="card-header flex items-center justify-between">
+					<h2 class="text-lg font-semibold text-nord6">Active Tokens</h2>
+					<span class="badge-primary">{ itoa(len(data.Tokens)) } tokens</span>
+				</div>
+				<div class="card-body p-0">
+					if len(data.Tokens) == 0 {
+						<div class="p-12 text-center">
+							<div class="w-16 h-16 bg-nord2 rounded-full flex items-center justify-center mx-auto mb-4 text-nord4">
+								@components.KeyIcon(components.IconXL)
+							</div>
+							<h3 class="text-lg font-semibold text-nord6 mb-2">No API tokens yet</h3>
+							<p class="text-nord4">Create your first token to start using the API.</p>
+						</div>
+					} else {
+						<table class="table">
+							<thead>
+								<tr>
+									<th>Name</th>
+									<th>Scopes</th>
+									<th>Created</th>
+									<th>Last Used</th>
+									<th>Expires</th>
+									<th></th>
+								</tr>
+							</thead>
+							<tbody id="tokens-list">
+								for _, token := range data.Tokens {
+									@TokenRow(token)
+								}
+							</tbody>
+						</table>
+					}
+				</div>
+			</div>
+
+			<!-- API Usage Info -->
+			<div class="alert-info mt-8">
+				<h3 class="font-semibold text-nord8 mb-2">Using your API token</h3>
+				<p class="text-sm text-nord8/80 mb-3">
+					Include your token in the <code class="bg-nord0/50 px-1 rounded">Authorization</code> header:
+				</p>
+				<pre class="bg-nord0/50 rounded-lg p-3 text-sm overflow-x-auto"><code>curl -H "Authorization: Bearer YOUR_TOKEN" \
+  https://api.tinyvault.io/api/v1/projects</code></pre>
+			</div>
+		</div>
+	}
+}
+
+templ TokenRow(token TokenInfo) {
+	<tr id={ "token-" + token.ID }>
+		<td>
+			<span class="font-medium text-nord6">{ token.Name }</span>
+		</td>
+		<td>
+			<div class="flex flex-wrap gap-1">
+				for _, scope := range token.Scopes {
+					<span class="badge-primary text-xs">{ formatScope(scope) }</span>
+				}
+			</div>
+		</td>
+		<td class="text-nord3">{ token.CreatedAt }</td>
+		<td class="text-nord3">{ token.LastUsed }</td>
+		<td class="text-nord3">{ token.ExpiresAt }</td>
+		<td>
+			<button
+				type="button"
+				class="text-nord4 hover:text-nord11 htmx-btn"
+				hx-delete={ "/settings/tokens/" + token.ID }
+				hx-confirm="Are you sure you want to revoke this token? This action cannot be undone."
+				hx-target={ "#token-" + token.ID }
+				hx-swap="outerHTML"
+			>
+				<span class="htmx-indicator">@components.Spinner(components.IconSM)</span>
+				<span class="htmx-hide-on-request">@components.TrashIcon(components.IconSM)</span>
+			</button>
+		</td>
+	</tr>
+}
+
+func formatScope(scope string) string {
+	parts := strings.Split(scope, ":")
+	if len(parts) != 2 {
+		return scope
+	}
+	return parts[1]
+}

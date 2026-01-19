@@ -449,8 +449,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(password) < 8 {
-		render(w, r, pages.Register("Password must be at least 8 characters", h.githubEnabled))
+	if err := validation.Email(email); err != nil {
+		render(w, r, pages.Register(err.Error(), h.githubEnabled))
+		return
+	}
+
+	if len(password) < 12 {
+		render(w, r, pages.Register("Password must be at least 12 characters", h.githubEnabled))
 		return
 	}
 

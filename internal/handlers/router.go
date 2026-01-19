@@ -69,6 +69,7 @@ func NewRouter(deps *Dependencies) http.Handler {
 	webHandler := NewWebHandler(
 		deps.ProjectService,
 		deps.SecretService,
+		deps.TokenService,
 		deps.AuditService,
 	)
 
@@ -81,8 +82,9 @@ func NewRouter(deps *Dependencies) http.Handler {
 	fileServer := http.FileServer(http.Dir("web/static"))
 	r.Handle("/static/*", http.StripPrefix("/static/", fileServer))
 
-	// Auth routes
+	// Auth routes (rate limited to prevent abuse)
 	r.Route("/auth", func(r chi.Router) {
+		r.Use(middleware.RateLimit(rateLimiter))
 		r.Get("/login", authHandler.LoginPage)
 		r.Post("/login", authHandler.EmailLogin)
 		r.Get("/register", authHandler.RegisterPage)

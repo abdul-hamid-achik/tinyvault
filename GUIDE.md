@@ -277,6 +277,7 @@ docker push ghcr.io/your-org/tinyvault:latest
 - [ ] Set `ENV=production`
 - [ ] Enable HTTPS (use Caddy or nginx)
 - [ ] Configure firewall (only expose 80/443)
+- [ ] Restrict `/metrics` endpoint to internal network only (see [Security Considerations](#security-considerations))
 - [ ] Set up database backups
 
 ### Authentication
@@ -320,6 +321,75 @@ pg_dump $DATABASE_URL > backup-$(date +%Y%m%d).sql
 # Restore database
 psql $DATABASE_URL < backup-20240115.sql
 ```
+
+---
+
+## Security Considerations
+
+### Metrics Endpoint
+
+The `/metrics` endpoint exposes Prometheus metrics and is intentionally unauthenticated following standard Prometheus patterns. In production deployments:
+
+- **Network Restriction**: Configure your firewall or load balancer to restrict `/metrics` access to internal monitoring systems only
+- **Kubernetes**: Use NetworkPolicies to limit access to the Prometheus namespace
+- **Cloud Providers**: Use security groups to allow `/metrics` only from your monitoring infrastructure
+- **Reverse Proxy**: Configure nginx/Caddy to block external access:
+
+```nginx
+location /metrics {
+    allow 10.0.0.0/8;      # Internal network
+    allow 192.168.0.0/16;  # Private network
+    deny all;
+}
+```
+
+### Key Rotation
+
+TinyVault uses a two-tier key hierarchy:
+- **Master Key (KEK)**: The `ENCRYPTION_KEY` environment variable
+- **Data Encryption Keys (DEK)**: Per-project keys encrypted by the master key
+
+#### Manual Key Rotation Procedure
+
+**Important**: Key rotation requires careful planning. Test in a non-production environment first.
+
+1. **Prepare New Key**
+   ```bash
+   # Generate new master key
+   NEW_KEY=$(openssl rand -base64 32)
+   echo "New key: $NEW_KEY"
+   ```
+
+2. **Export All Secrets** (while using old key)
+   ```bash
+   # Use the API or tvault CLI to export all secrets
+   tvault export --all > secrets-backup.json
+   ```
+
+3. **Update Master Key**
+   ```bash
+   # Stop the application
+   # Update ENCRYPTION_KEY in your environment/secrets manager
+   # Restart the application
+   ```
+
+4. **Re-encrypt Secrets**
+   - Delete and recreate projects (DEKs are regenerated automatically)
+   - Re-import secrets from backup
+   ```bash
+   tvault import < secrets-backup.json
+   ```
+
+5. **Verify**
+   - Test secret retrieval for all projects
+   - Verify audit logs show successful operations
+
+#### Future Enhancement
+
+Automated key rotation with zero downtime is planned for a future release. This would include:
+- Online re-encryption of DEKs
+- Key versioning
+- Rollback capability
 
 ---
 

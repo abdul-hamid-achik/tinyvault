@@ -78,6 +78,84 @@ func TestUsername(t *testing.T) {
 	}
 }
 
+func TestEmail(t *testing.T) {
+	tests := []struct {
+		name    string
+		email   string
+		wantErr error
+	}{
+		{
+			name:    "valid email",
+			email:   "user@example.com",
+			wantErr: nil,
+		},
+		{
+			name:    "valid email with subdomain",
+			email:   "user@mail.example.com",
+			wantErr: nil,
+		},
+		{
+			name:    "valid email with plus",
+			email:   "user+tag@example.com",
+			wantErr: nil,
+		},
+		{
+			name:    "valid email with dots",
+			email:   "first.last@example.com",
+			wantErr: nil,
+		},
+		{
+			name:    "empty",
+			email:   "",
+			wantErr: ErrEmailEmpty,
+		},
+		{
+			name:    "whitespace only",
+			email:   "   ",
+			wantErr: ErrEmailEmpty,
+		},
+		{
+			name:    "missing @",
+			email:   "userexample.com",
+			wantErr: ErrEmailInvalidFormat,
+		},
+		{
+			name:    "missing domain",
+			email:   "user@",
+			wantErr: ErrEmailInvalidFormat,
+		},
+		{
+			name:    "missing local part",
+			email:   "@example.com",
+			wantErr: ErrEmailInvalidFormat,
+		},
+		{
+			name:    "invalid characters",
+			email:   "user name@example.com",
+			wantErr: ErrEmailInvalidFormat,
+		},
+		{
+			name:    "too long",
+			email:   strings.Repeat("a", 250) + "@b.co",
+			wantErr: ErrEmailInvalidFormat,
+		},
+		{
+			name:    "whitespace is trimmed",
+			email:   "  user@example.com  ",
+			wantErr: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Email(tt.email)
+			if err != tt.wantErr {
+				t.Errorf("Email(%q) = %v, want %v", tt.email, err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestProjectName(t *testing.T) {
 	tests := []struct {
 		name    string

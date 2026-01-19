@@ -233,12 +233,12 @@ func TestRegister_PasswordValidation(t *testing.T) {
 			name:            "password too short",
 			password:        "short",
 			passwordConfirm: "short",
-			wantErr:         "Password must be at least 8 characters",
+			wantErr:         "Password must be at least 12 characters",
 		},
 		{
 			name:            "passwords do not match",
-			password:        "password123",
-			passwordConfirm: "password456",
+			password:        "password12345",
+			passwordConfirm: "password45678",
 			wantErr:         "Passwords do not match",
 		},
 	}
@@ -295,8 +295,8 @@ func TestRegister_InvalidUsername(t *testing.T) {
 			form := url.Values{}
 			form.Add("username", tt.username)
 			form.Add("email", "test@example.com")
-			form.Add("password", "password123")
-			form.Add("password_confirm", "password123")
+			form.Add("password", "password12345")
+			form.Add("password_confirm", "password12345")
 
 			req := httptest.NewRequest(http.MethodPost, "/auth/register", strings.NewReader(form.Encode()))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")

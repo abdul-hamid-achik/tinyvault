@@ -15,6 +15,11 @@ var (
 	// ErrUsernameInvalidChars is returned when username contains invalid characters.
 	ErrUsernameInvalidChars = errors.New("username can only contain letters, numbers, and underscores")
 
+	// ErrEmailEmpty is returned when email is empty.
+	ErrEmailEmpty = errors.New("email is required")
+	// ErrEmailInvalidFormat is returned when email format is invalid.
+	ErrEmailInvalidFormat = errors.New("invalid email format")
+
 	// ErrProjectNameEmpty is returned when project name is empty.
 	ErrProjectNameEmpty = errors.New("project name is required")
 	// ErrProjectNameTooLong is returned when project name exceeds 100 characters.
@@ -34,6 +39,8 @@ var (
 var (
 	usernameRegex  = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 	secretKeyRegex = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+	// Email regex based on a simplified RFC 5322 pattern
+	emailRegex = regexp.MustCompile(`^[a-zA-Z0-9.!#$%&'*+/=?^_` + "`" + `{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$`)
 )
 
 // Username validates a username.
@@ -48,6 +55,22 @@ func Username(username string) error {
 	}
 	if !usernameRegex.MatchString(username) {
 		return ErrUsernameInvalidChars
+	}
+	return nil
+}
+
+// Email validates an email address.
+// Rules: Non-empty, valid email format.
+func Email(email string) error {
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return ErrEmailEmpty
+	}
+	if len(email) > 254 {
+		return ErrEmailInvalidFormat
+	}
+	if !emailRegex.MatchString(email) {
+		return ErrEmailInvalidFormat
 	}
 	return nil
 }
