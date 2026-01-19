@@ -88,9 +88,27 @@ jobs:
         env:
           HOST: ${{ secrets.PRODUCTION_HOST }}
         run: |
+          # Copy main config files
           scp -o StrictHostKeyChecking=no \
-            docker-compose.yml Taskfile.yml \
+            docker-compose.yml Taskfile.yml Caddyfile \
             root@$HOST:/opt/tinyvault/
+
+          # Copy monitoring config files
+          scp -o StrictHostKeyChecking=no \
+            promtail-config.yml \
+            root@$HOST:/opt/tinyvault/
+
+          # Copy prometheus config
+          ssh -o StrictHostKeyChecking=no root@$HOST "mkdir -p /opt/tinyvault/prometheus"
+          scp -o StrictHostKeyChecking=no \
+            prometheus/prometheus.yml \
+            root@$HOST:/opt/tinyvault/prometheus/
+
+          # Copy grafana provisioning
+          ssh -o StrictHostKeyChecking=no root@$HOST "mkdir -p /opt/tinyvault/grafana/provisioning/datasources /opt/tinyvault/grafana/provisioning/dashboards /opt/tinyvault/grafana/provisioning/alerting"
+          scp -o StrictHostKeyChecking=no -r \
+            grafana/provisioning/* \
+            root@$HOST:/opt/tinyvault/grafana/provisioning/
 
       - name: Deploy
         env:
