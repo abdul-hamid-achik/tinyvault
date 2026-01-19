@@ -1151,10 +1151,10 @@
         "enableLogDetails": true,
         "prettifyLogMessage": false,
         "showCommonLabels": false,
-        "showLabels": false,
+        "showLabels": true,
         "showTime": true,
         "sortOrder": "Descending",
-        "wrapLogMessage": false
+        "wrapLogMessage": true
       },
       "pluginVersion": "10.2.0",
       "targets": [
@@ -1164,7 +1164,7 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "{container=\"tinyvault\"} | json",
+          "expr": "{container=\"tinyvault\"}",
           "queryType": "range",
           "refId": "A"
         }
@@ -1189,10 +1189,10 @@
         "enableLogDetails": true,
         "prettifyLogMessage": false,
         "showCommonLabels": false,
-        "showLabels": false,
+        "showLabels": true,
         "showTime": true,
         "sortOrder": "Descending",
-        "wrapLogMessage": false
+        "wrapLogMessage": true
       },
       "pluginVersion": "10.2.0",
       "targets": [
@@ -1202,7 +1202,7 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "{container=\"tinyvault\"} | json | level=\"error\" or line=~\"(?i)error|fail|panic\"",
+          "expr": "{container=\"tinyvault\", level=\"error\"} or {container=\"tinyvault\"} |~ \"(?i)error|fail|panic\"",
           "queryType": "range",
           "refId": "A"
         }

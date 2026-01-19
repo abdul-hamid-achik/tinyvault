@@ -20,10 +20,12 @@ scrape_configs:
       - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
         target_label: 'service'
     pipeline_stages:
+      # Parse JSON logs
       - json:
           expressions:
             level: level
             msg: msg
+            time: time
             request_id: request_id
             user_id: user_id
             method: method
@@ -31,8 +33,14 @@ scrape_configs:
             status: status
             duration_ms: duration_ms
             error: error
+      # Extract labels for filtering
       - labels:
           level:
-          service:
           method:
           status:
+      # Format output as a clean single line
+      - template:
+          source: output
+          template: '{{ if .level }}[{{ .level | ToUpper }}]{{ end }} {{ if .msg }}{{ .msg }}{{ end }}{{ if .method }} method={{ .method }}{{ end }}{{ if .path }} path={{ .path }}{{ end }}{{ if .status }} status={{ .status }}{{ end }}{{ if .duration_ms }} duration={{ .duration_ms }}ms{{ end }}{{ if .error }} error="{{ .error }}"{{ end }}{{ if .request_id }} req={{ .request_id }}{{ end }}'
+      - output:
+          source: output
