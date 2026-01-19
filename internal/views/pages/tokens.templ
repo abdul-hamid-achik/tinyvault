@@ -244,10 +244,12 @@ templ TokenRow(token TokenInfo) {
 				hx-target={ "#token-" + token.ID }
 				hx-swap="outerHTML"
 			>
-				<span class="htmx-indicator">@components.Spinner(components.IconSM)
-</span>
-				<span class="htmx-hide-on-request">@components.TrashIcon(components.IconSM)
-</span>
+				<span class="htmx-indicator">
+					@components.Spinner(components.IconSM)
+				</span>
+				<span class="htmx-hide-on-request">
+					@components.TrashIcon(components.IconSM)
+				</span>
 			</button>
 		</td>
 	</tr>

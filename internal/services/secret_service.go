@@ -30,18 +30,18 @@ func NewSecretService(pool *pgxpool.Pool, projectService *ProjectService) *Secre
 
 // Secret represents a TinyVault secret (without the value for listing).
 type Secret struct {
-	ID        uuid.UUID
-	ProjectID uuid.UUID
-	Key       string
-	Version   int32
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID        uuid.UUID `json:"id"`
+	ProjectID uuid.UUID `json:"project_id"`
+	Key       string    `json:"key"`
+	Version   int32     `json:"version"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // SecretWithValue represents a secret with its decrypted value.
 type SecretWithValue struct {
 	Secret
-	Value []byte
+	Value []byte `json:"value"`
 }
 
 // Create creates a new secret with encrypted value.

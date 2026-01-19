@@ -2,15 +2,20 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/crypto"
 	"github.com/abdul-hamid-achik/tinyvault/internal/database/db"
 )
+
+// ErrDuplicateProjectName is returned when a project name already exists for the user
+var ErrDuplicateProjectName = errors.New("a project with this name already exists")
 
 // ProjectService handles project-related business logic.
 type ProjectService struct {
@@ -30,12 +35,12 @@ func NewProjectService(pool *pgxpool.Pool, masterKey []byte) *ProjectService {
 
 // Project represents a TinyVault project.
 type Project struct {
-	ID          uuid.UUID
-	OwnerID     uuid.UUID
-	Name        string
-	Description *string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID          uuid.UUID `json:"id"`
+	OwnerID     uuid.UUID `json:"owner_id"`
+	Name        string    `json:"name"`
+	Description *string   `json:"description,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // Create creates a new project with a new Data Encryption Key.
@@ -67,6 +72,10 @@ func (s *ProjectService) Create(ctx context.Context, ownerID uuid.UUID, name, de
 		EncryptedDek: encryptedDEK,
 	})
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, ErrDuplicateProjectName
+		}
 		return nil, fmt.Errorf("failed to create project: %w", err)
 	}
 

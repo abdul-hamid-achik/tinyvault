@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 
@@ -119,6 +120,10 @@ func (h *APIHandler) CreateProject(w http.ResponseWriter, r *http.Request) {
 
 	project, err := h.projectService.Create(r.Context(), user.ID, req.Name, req.Description)
 	if err != nil {
+		if errors.Is(err, services.ErrDuplicateProjectName) {
+			jsonError(w, http.StatusBadRequest, "DUPLICATE_NAME", "A project with this name already exists")
+			return
+		}
 		log.Error("project_creation_failed", "user_id", user.ID, "name", req.Name, "error", err)
 		jsonError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create project")
 		return
