@@ -1,0 +1,135 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    name: Build and Push Image
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: production
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to server
+        env:
+          HOST: ${{ secrets.PRODUCTION_HOST }}
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+        run: |
+          ssh -o StrictHostKeyChecking=no root@$HOST << 'ENDSSH'
+            set -e
+
+            cd /opt/tinyvault
+
+            # Update image tag in .env
+            sed -i "s/IMAGE_TAG=.*/IMAGE_TAG=${{ env.IMAGE_TAG }}/" .env 2>/dev/null || echo "IMAGE_TAG=${{ env.IMAGE_TAG }}" >> .env
+
+            # Pull latest images
+            docker compose pull app
+
+            # Restart with zero downtime
+            docker compose up -d --no-deps app
+
+            # Wait for health check
+            echo "Waiting for app to be healthy..."
+            for i in {1..30}; do
+              if curl -sf http://localhost:8080/health > /dev/null; then
+                echo "App is healthy!"
+                exit 0
+              fi
+              echo "Attempt $i/30 - waiting..."
+              sleep 5
+            done
+
+            echo "Health check failed!"
+            docker compose logs app --tail 50
+            exit 1
+          ENDSSH
+
+      - name: Verify deployment
+        env:
+          HOST: ${{ secrets.PRODUCTION_HOST }}
+        run: |
+          # Wait for Caddy to pick up the new container
+          sleep 10
+
+          # Check public health endpoint
+          curl -sf https://tinyvault.dev/health || {
+            echo "Public health check failed!"
+            exit 1
+          }
+
+          echo "Deployment verified successfully!"

@@ -384,24 +384,37 @@ tasks:
   deploy:
     desc: "Deploy to production"
     cmds:
-      - ansible-playbook -i deploy/ansible/inventory/production.yml deploy/ansible/playbooks/deploy.yml
+      - ansible-playbook -i infrastructure/ansible/inventory/production.yml infrastructure/ansible/playbooks/deploy.yml
 
   deploy:dry-run:
     desc: "Dry-run deployment (check mode)"
     cmds:
-      - ansible-playbook -i deploy/ansible/inventory/production.yml deploy/ansible/playbooks/deploy.yml --check --diff
+      - ansible-playbook -i infrastructure/ansible/inventory/production.yml infrastructure/ansible/playbooks/deploy.yml --check --diff
 
   infra:plan:
     desc: "Terraform plan"
-    dir: deploy/terraform
+    dir: infrastructure/terraform
     cmds:
       - terraform plan
 
   infra:apply:
     desc: "Terraform apply"
-    dir: deploy/terraform
+    dir: infrastructure/terraform
     cmds:
       - terraform apply
+
+  infra:output:
+    desc: "Show Terraform outputs"
+    dir: infrastructure/terraform
+    cmds:
+      - terraform output
+
+  infra:destroy:
+    desc: "Destroy infrastructure (dangerous!)"
+    dir: infrastructure/terraform
+    prompt: "This will destroy all infrastructure. Are you sure?"
+    cmds:
+      - terraform destroy
 
   # ============================================================================
   # RELEASE

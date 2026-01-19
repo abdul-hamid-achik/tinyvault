@@ -29,11 +29,11 @@ variable "location" {
 variable "server_type" {
   description = "Hetzner server type"
   type        = string
-  default     = "cx22"  # 2 vCPU, 4GB RAM, ~$4.50/mo
+  default     = "cpx11"  # 2 vCPU, 2GB RAM, ~$5/mo (AMD, available in US)
 
   validation {
-    condition     = contains(["cx11", "cx21", "cx22", "cx31", "cx32", "cx41", "cx42", "cx51", "cx52"], var.server_type)
-    error_message = "Server type must be a valid Hetzner CX type."
+    condition     = can(regex("^(cx|cpx)[0-9]+$", var.server_type))
+    error_message = "Server type must be a valid Hetzner CX or CPX type."
   }
 }
 

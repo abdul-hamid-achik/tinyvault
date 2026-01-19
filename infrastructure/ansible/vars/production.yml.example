@@ -1,0 +1,16 @@
+# Production variables for TinyVault deployment
+# Copy to production.yml and fill in your values
+# This file should NEVER be committed to git
+
+# Required
+db_password: "your-strong-db-password"
+encryption_key: "your-base64-encryption-key"
+domain: tinyvault.dev
+image_tag: latest
+
+# Optional - GitHub OAuth
+# github_client_id: "your-github-client-id"
+# github_client_secret: "your-github-client-secret"
+
+# Optional
+log_level: info

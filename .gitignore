@@ -59,6 +59,7 @@ logs/
 
 # Ansible
 *.retry
+infrastructure/ansible/vars/production.yml
 
 # Docker
 .docker/

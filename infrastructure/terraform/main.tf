@@ -13,10 +13,9 @@ provider "hcloud" {
   token = var.hcloud_token
 }
 
-# SSH Key
-resource "hcloud_ssh_key" "main" {
-  name       = "tinyvault-${var.environment}"
-  public_key = var.ssh_public_key
+# SSH Key - use existing key from Hetzner account
+data "hcloud_ssh_key" "main" {
+  fingerprint = "eb:98:ba:14:e3:db:49:6e:f6:92:29:1f:85:83:52:6c"
 }
 
 # Firewall
@@ -122,7 +121,7 @@ resource "hcloud_server" "main" {
   server_type = var.server_type
   location    = var.location
 
-  ssh_keys = [hcloud_ssh_key.main.id]
+  ssh_keys = [data.hcloud_ssh_key.main.id]
 
   firewall_ids = [hcloud_firewall.main.id]
 
@@ -189,4 +188,29 @@ output "postgres_volume_id" {
 output "data_volume_id" {
   description = "ID of the data volume"
   value       = hcloud_volume.data.id
+}
+
+output "ssh_command" {
+  description = "SSH command to connect to the server"
+  value       = "ssh root@${hcloud_server.main.ipv4_address}"
+}
+
+output "postgres_volume_device" {
+  description = "Device path for PostgreSQL volume (mount to /mnt/postgres)"
+  value       = "/dev/disk/by-id/scsi-0HC_Volume_${hcloud_volume.postgres.id}"
+}
+
+output "data_volume_device" {
+  description = "Device path for data volume (mount to /mnt/data)"
+  value       = "/dev/disk/by-id/scsi-0HC_Volume_${hcloud_volume.data.id}"
+}
+
+output "dns_config" {
+  description = "DNS configuration hint"
+  value       = "Create A record: ${var.domain} -> ${hcloud_server.main.ipv4_address}"
+}
+
+output "server_status" {
+  description = "Current server status"
+  value       = hcloud_server.main.status
 }
