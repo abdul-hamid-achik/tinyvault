@@ -8,8 +8,9 @@ Before marking ANY task complete:
 1. `task lint` passes
 2. `task test` passes
 3. `task build:all` compiles
-4. No hardcoded secrets
-5. Security review for crypto/auth code
+4. `govulncheck ./...` passes (no known vulnerabilities)
+5. No hardcoded secrets
+6. Security review for crypto/auth code
 
 ## Quick Reference
 
@@ -27,6 +28,7 @@ task check
 task lint
 task test
 task test:crypto  # Security-critical tests
+govulncheck ./... # Check for known vulnerabilities
 ```
 
 ## Security Rules (CRITICAL)
@@ -124,6 +126,37 @@ task test:crypto      # Security tests
 task test:coverage    # HTML report
 ```
 
+## Security Scanning (CRITICAL)
+
+### govulncheck
+
+**ALWAYS run govulncheck before pushing changes.** This tool detects known vulnerabilities in Go dependencies and standard library.
+
+```bash
+# Install (one-time)
+go install golang.org/x/vuln/cmd/govulncheck@latest
+
+# Run before pushing
+govulncheck ./...
+```
+
+**Expected output when no issues found:**
+```
+No vulnerabilities found.
+```
+
+**If vulnerabilities are found:**
+1. Check if the vulnerable code paths are actually used in the project
+2. Update the affected dependency if a fix is available
+3. If it's a standard library vulnerability, upgrade Go version
+4. Document any false positives or accepted risks
+
+### Why This Matters
+
+govulncheck analyzes your code's call graph and only reports vulnerabilities that are actually reachable in your codebase. This avoids false positives from unused dependency code.
+
+**CI Integration:** The CI pipeline runs govulncheck automatically. The build will fail if vulnerabilities are found.
+
 ### Writing Tests
 
 ```go
@@ -195,6 +228,7 @@ Before every commit:
 
 - [ ] `task lint` passes
 - [ ] `task test` passes
+- [ ] `govulncheck ./...` passes (no known vulnerabilities)
 - [ ] No `TODO` or `FIXME` without issue link
 - [ ] No hardcoded secrets/credentials
 - [ ] No `fmt.Println` (use `slog`)
