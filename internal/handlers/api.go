@@ -343,6 +343,11 @@ func (h *APIHandler) SetSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Value == "" {
+		jsonError(w, http.StatusBadRequest, "INVALID_INPUT", "Secret value is required")
+		return
+	}
+
 	secret, err := h.secretService.Upsert(r.Context(), projectID, key, []byte(req.Value))
 	if err != nil {
 		log.Error("secret_upsert_failed", "project_id", projectID, "key", key, "user_id", user.ID, "error", err)
@@ -371,7 +376,24 @@ func (h *APIHandler) SetSecret(w http.ResponseWriter, r *http.Request) {
 		log.Info("secret_updated", "project_id", projectID, "key", key, "version", secret.Version, "user_id", user.ID)
 	}
 
-	jsonResponse(w, http.StatusOK, secret)
+	// Return secret with value as string for CLI compatibility
+	type secretResponse struct {
+		ID        string `json:"id"`
+		Key       string `json:"key"`
+		Value     string `json:"value"`
+		Version   int32  `json:"version"`
+		CreatedAt string `json:"created_at"`
+		UpdatedAt string `json:"updated_at"`
+	}
+
+	jsonResponse(w, http.StatusOK, secretResponse{
+		ID:        secret.ID.String(),
+		Key:       secret.Key,
+		Value:     req.Value,
+		Version:   secret.Version,
+		CreatedAt: secret.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt: secret.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+	})
 }
 
 // DeleteSecret handles DELETE /api/v1/projects/{id}/secrets/{key}

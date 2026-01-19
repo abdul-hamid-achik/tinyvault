@@ -1,0 +1,173 @@
+# TinyVault Projects API Tests
+# These tests verify project CRUD operations
+
+### List Projects
+# @name listProjects
+# @tags projects, read
+# @auth bearer {{token}}
+# @description List all projects for authenticated user
+
+GET {{baseUrl}}/projects
+
+>>>
+expect status 200
+expect body.data exists
+expect body.data type array
+<<<
+
+### Create Project
+# @name createProject
+# @tags projects, write
+# @auth bearer {{token}}
+# @description Create a new project
+
+POST {{baseUrl}}/projects
+Content-Type: application/json
+
+{
+  "name": "hitspec-test-{{$uuid()}}",
+  "description": "Test project created by hitspec API tests"
+}
+
+>>>
+expect status 201
+expect body.data exists
+expect body.data.id exists
+expect body.data.name exists
+expect body.data.description == "Test project created by hitspec API tests"
+expect body.data.created_at exists
+expect body.data.updated_at exists
+<<<
+
+>>>capture
+projectId from body.data.id
+projectName from body.data.name
+<<<
+
+### Get Project
+# @name getProject
+# @tags projects, read
+# @depends createProject
+# @auth bearer {{token}}
+# @description Get a specific project by ID
+
+GET {{baseUrl}}/projects/{{createProject.projectId}}
+
+>>>
+expect status 200
+expect body.data exists
+expect body.data.id == {{createProject.projectId}}
+expect body.data.name == {{createProject.projectName}}
+<<<
+
+### Get Project - Not Found
+# @name getProjectNotFound
+# @tags projects, errors
+# @auth bearer {{token}}
+# @description Non-existent project should return 404
+
+GET {{baseUrl}}/projects/00000000-0000-0000-0000-000000000000
+
+>>>
+expect status 404
+expect body.error exists
+expect body.error.code == "NOT_FOUND"
+<<<
+
+### Get Project - Invalid UUID
+# @name getProjectInvalidId
+# @tags projects, errors
+# @auth bearer {{token}}
+# @description Invalid UUID should return 400
+
+GET {{baseUrl}}/projects/invalid-uuid
+
+>>>
+expect status 400
+expect body.error exists
+expect body.error.code == "INVALID_INPUT"
+<<<
+
+### Create Project - Missing Name
+# @name createProjectMissingName
+# @tags projects, errors
+# @auth bearer {{token}}
+# @description Create project without name should return 400
+
+POST {{baseUrl}}/projects
+Content-Type: application/json
+
+{
+  "description": "Missing name field"
+}
+
+>>>
+expect status 400
+expect body.error exists
+<<<
+
+### Create Project - Empty Name
+# @name createProjectEmptyName
+# @tags projects, errors
+# @auth bearer {{token}}
+# @description Create project with empty name should return 400
+
+POST {{baseUrl}}/projects
+Content-Type: application/json
+
+{
+  "name": "",
+  "description": "Empty name field"
+}
+
+>>>
+expect status 400
+expect body.error exists
+<<<
+
+### Create Project - Duplicate Name
+# @name createProjectDuplicate
+# @tags projects, errors
+# @depends createProject
+# @auth bearer {{token}}
+# @description Creating duplicate project name should return 400
+
+POST {{baseUrl}}/projects
+Content-Type: application/json
+
+{
+  "name": "{{createProject.projectName}}",
+  "description": "Duplicate name test"
+}
+
+>>>
+expect status 400
+expect body.error exists
+expect body.error.code == "DUPLICATE_NAME"
+<<<
+
+### Delete Project
+# @name deleteProject
+# @tags projects, delete
+# @depends createProject
+# @auth bearer {{token}}
+# @description Delete a project
+
+DELETE {{baseUrl}}/projects/{{createProject.projectId}}
+
+>>>
+expect status 204
+<<<
+
+### Verify Project Deleted
+# @name verifyProjectDeleted
+# @tags projects, delete
+# @depends deleteProject
+# @auth bearer {{token}}
+# @description Verify project no longer exists after deletion
+
+GET {{baseUrl}}/projects/{{createProject.projectId}}
+
+>>>
+expect status 404
+<<<
