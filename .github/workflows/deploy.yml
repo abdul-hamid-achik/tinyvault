@@ -92,6 +92,19 @@ jobs:
             docker-compose.yml Taskfile.yml \
             root@$HOST:/opt/tinyvault/
 
+      - name: Install task on server
+        env:
+          HOST: ${{ secrets.PRODUCTION_HOST }}
+        run: |
+          ssh -o StrictHostKeyChecking=no root@$HOST << 'EOF'
+          if ! command -v task &> /dev/null; then
+            echo "Installing task..."
+            sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+          else
+            echo "task already installed"
+          fi
+          EOF
+
       - name: Deploy
         env:
           HOST: ${{ secrets.PRODUCTION_HOST }}
