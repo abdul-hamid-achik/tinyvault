@@ -37,7 +37,7 @@ services:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - ${POSTGRES_DATA:-postgres_data}/pgdata:/var/lib/postgresql/data
+      - ${POSTGRES_DATA:-postgres_data}:/var/lib/postgresql/data
     environment:
       - POSTGRES_USER=tinyvault
       - POSTGRES_PASSWORD=${DB_PASSWORD:-tinyvault}
