@@ -137,7 +137,7 @@ templ SecretRow(projectID string, secret SecretInfo) {
 		<td>
 			<span class="badge-primary">v{ itoa32(secret.Version) }</span>
 		</td>
-		<td class="text-nord3">{ secret.UpdatedAt }</td>
+		<td class="text-muted">{ secret.UpdatedAt }</td>
 		<td>
 			<div class="flex items-center gap-2">
 				<button

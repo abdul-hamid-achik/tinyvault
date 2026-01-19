@@ -17,6 +17,32 @@ templ Base(title string, authenticated bool) {
 			<!-- PrismJS for syntax highlighting -->
 			<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css"/>
 			<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+			<script>
+				// Configure HTMX to include CSRF token
+				document.addEventListener('htmx:configRequest', function(e) {
+					const csrfCookie = document.cookie.split('; ').find(row => row.startsWith('csrf_token='));
+					if (csrfCookie) {
+						e.detail.headers['X-CSRF-Token'] = csrfCookie.split('=')[1];
+					}
+				});
+				// Inject CSRF token into regular forms on submit
+				document.addEventListener('submit', function(e) {
+					const form = e.target;
+					if (form.tagName === 'FORM' && form.method.toUpperCase() === 'POST') {
+						let csrfInput = form.querySelector('input[name="csrf_token"]');
+						if (!csrfInput) {
+							csrfInput = document.createElement('input');
+							csrfInput.type = 'hidden';
+							csrfInput.name = 'csrf_token';
+							form.appendChild(csrfInput);
+						}
+						const csrfCookie = document.cookie.split('; ').find(row => row.startsWith('csrf_token='));
+						if (csrfCookie) {
+							csrfInput.value = csrfCookie.split('=')[1];
+						}
+					}
+				});
+			</script>
 			<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 			<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
 		</head>

@@ -60,7 +60,7 @@ templ Dashboard(data DashboardData) {
 				</div>
 				<div class="card-body p-0">
 					if len(data.RecentLogs) == 0 {
-						<div class="p-6 text-center text-nord3">
+						<div class="p-6 text-center text-muted">
 							<p>No recent activity</p>
 						</div>
 					} else {
@@ -79,7 +79,7 @@ templ Dashboard(data DashboardData) {
 											@components.ActionBadge(log.Action)
 										</td>
 										<td>{ log.ResourceName }</td>
-										<td class="text-nord3">{ log.CreatedAt }</td>
+										<td class="text-muted">{ log.CreatedAt }</td>
 									</tr>
 								}
 							</tbody>

@@ -87,13 +87,13 @@ templ TokensPage(data TokensPageData) {
 								required
 								maxlength="100"
 							/>
-							<p class="text-sm text-nord3 mt-1">A descriptive name to identify this token.</p>
+							<p class="text-sm text-muted mt-1">A descriptive name to identify this token.</p>
 						</div>
 
 						<!-- Scopes -->
 						<div class="form-group">
 							<label class="label">Permissions</label>
-							<p class="text-sm text-nord3 mb-3">Select the permissions for this token.</p>
+							<p class="text-sm text-muted mb-3">Select the permissions for this token.</p>
 
 							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 								<!-- Projects -->
@@ -227,9 +227,9 @@ templ TokenRow(token TokenInfo) {
 				}
 			</div>
 		</td>
-		<td class="text-nord3">{ token.CreatedAt }</td>
-		<td class="text-nord3">{ token.LastUsed }</td>
-		<td class="text-nord3">{ token.ExpiresAt }</td>
+		<td class="text-muted">{ token.CreatedAt }</td>
+		<td class="text-muted">{ token.LastUsed }</td>
+		<td class="text-muted">{ token.ExpiresAt }</td>
 		<td>
 			<button
 				type="button"

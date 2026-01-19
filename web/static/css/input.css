@@ -28,6 +28,11 @@
 }
 
 @layer components {
+/* Text utilities */
+.text-muted {
+  color: #8891A0;
+}
+
 /* Button Components */
 .btn-primary {
   display: inline-flex;

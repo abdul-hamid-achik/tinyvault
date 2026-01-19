@@ -64,7 +64,7 @@ templ ProjectCard(project ProjectInfo) {
 			if project.Description != "" {
 				<p class="text-nord4 text-sm mt-1 line-clamp-2">{ project.Description }</p>
 			}
-			<div class="flex items-center gap-4 mt-4 text-sm text-nord3">
+			<div class="flex items-center gap-4 mt-4 text-sm text-muted">
 				<span class="flex items-center gap-1">
 					@components.KeyIcon(components.IconSM)
 					{ itoa(project.SecretCount) } secrets
@@ -100,7 +100,7 @@ templ NewProject() {
 							pattern="[a-z0-9-]+"
 							title="Lowercase letters, numbers, and hyphens only"
 						/>
-						<p class="text-sm text-nord3 mt-1">Lowercase letters, numbers, and hyphens only.</p>
+						<p class="text-sm text-muted mt-1">Lowercase letters, numbers, and hyphens only.</p>
 					</div>
 
 					<div class="form-group">
