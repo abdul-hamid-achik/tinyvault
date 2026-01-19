@@ -31,6 +31,20 @@ task test:crypto  # Security-critical tests
 govulncheck ./... # Check for known vulnerabilities
 ```
 
+## Local Builds
+
+**IMPORTANT:** When building binaries locally for testing, always output to `bin/` or `dist/` directories which are gitignored. Never build binaries in the project root.
+
+```bash
+# Correct - builds to ignored directory
+go build -o bin/tinyvault ./cmd/server
+go build -o bin/tvault ./cmd/tvault
+go build -o dist/server ./cmd/server
+
+# Wrong - builds to project root (will show as untracked)
+go build -o tinyvault ./cmd/server  # DON'T DO THIS
+```
+
 ## Security Rules (CRITICAL)
 
 ### Encryption
