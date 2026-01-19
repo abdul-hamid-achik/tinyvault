@@ -471,8 +471,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (method, handler) (rate(tinyvault_http_requests_total[5m]))",
-          "legendFormat": "{{method}} {{handler}}",
+          "expr": "sum by (method, path) (rate(tinyvault_http_requests_total[5m]))",
+          "legendFormat": "{{method}} {{path}}",
           "range": true,
           "refId": "A"
         }
