@@ -71,6 +71,7 @@ func NewRouter(deps *Dependencies) http.Handler {
 		deps.SecretService,
 		deps.TokenService,
 		deps.AuditService,
+		deps.UserService,
 	)
 
 	// Health checks and metrics (no auth, no rate limit)

@@ -32,6 +32,12 @@ LIMIT $1 OFFSET $2;
 -- name: CountAuditLogsByUser :one
 SELECT COUNT(*) FROM audit_logs WHERE user_id = $1;
 
+-- name: CountAuditLogsByUserSince :one
+SELECT COUNT(*) FROM audit_logs WHERE user_id = $1 AND created_at > $2;
+
+-- name: CountAuditLogsByUserActionSince :one
+SELECT COUNT(*) FROM audit_logs WHERE user_id = $1 AND action = $2 AND created_at > $3;
+
 -- name: DeleteOldAuditLogs :exec
 DELETE FROM audit_logs
 WHERE created_at < $1;

@@ -1,8 +1,8 @@
 package pages
 
 import (
-	"github.com/abdul-hamid-achik/tinyvault/internal/views/layout"
 	"github.com/abdul-hamid-achik/tinyvault/internal/views/components"
+	"github.com/abdul-hamid-achik/tinyvault/internal/views/layout"
 )
 
 templ Home() {
@@ -29,7 +29,6 @@ templ Home() {
 				</div>
 			</div>
 		</section>
-
 		<!-- CLI Demo -->
 		<section id="cli-demo" class="py-16 px-4 bg-nord1/50">
 			<div class="max-w-3xl mx-auto">
@@ -51,27 +50,26 @@ templ Home() {
 						</button>
 					</div>
 					<div class="p-6 font-mono text-sm text-nord4 space-y-1">
-							<div class="text-nord3 italic"># Install the CLI</div>
-							<div><span class="text-nord8">$</span> brew install tinyvault/tap/tvault</div>
-							<div class="h-3"></div>
-							<div class="text-nord3 italic"># Login with GitHub</div>
-							<div><span class="text-nord8">$</span> tvault login</div>
-							<div class="h-3"></div>
-							<div class="text-nord3 italic"># Create a project</div>
-							<div><span class="text-nord8">$</span> tvault projects create my-app</div>
-							<div><span class="text-nord8">$</span> tvault use my-app</div>
-							<div class="h-3"></div>
-							<div class="text-nord3 italic"># Set some secrets</div>
-							<div><span class="text-nord8">$</span> tvault set DATABASE_URL <span class="text-nord14">"postgres://..."</span></div>
-							<div><span class="text-nord8">$</span> tvault set STRIPE_KEY <span class="text-nord14">"sk_live_..."</span></div>
-							<div class="h-3"></div>
-							<div class="text-nord3 italic"># Run your app with secrets injected</div>
-							<div><span class="text-nord8">$</span> tvault run npm start</div>
+						<div class="text-nord3 italic"># Install the CLI</div>
+						<div><span class="text-nord8">$</span> brew install tinyvault/tap/tvault</div>
+						<div class="h-3"></div>
+						<div class="text-nord3 italic"># Login with GitHub</div>
+						<div><span class="text-nord8">$</span> tvault login</div>
+						<div class="h-3"></div>
+						<div class="text-nord3 italic"># Create a project</div>
+						<div><span class="text-nord8">$</span> tvault projects create my-app</div>
+						<div><span class="text-nord8">$</span> tvault use my-app</div>
+						<div class="h-3"></div>
+						<div class="text-nord3 italic"># Set some secrets</div>
+						<div><span class="text-nord8">$</span> tvault set DATABASE_URL <span class="text-nord14">"postgres://..."</span></div>
+						<div><span class="text-nord8">$</span> tvault set STRIPE_KEY <span class="text-nord14">"sk_live_..."</span></div>
+						<div class="h-3"></div>
+						<div class="text-nord3 italic"># Run your app with secrets injected</div>
+						<div><span class="text-nord8">$</span> tvault run npm start</div>
 					</div>
 				</div>
 			</div>
 		</section>
-
 		<!-- Features Section -->
 		<section id="features" class="py-20 px-4">
 			<div class="max-w-6xl mx-auto">
@@ -83,7 +81,6 @@ templ Home() {
 				</div>
 			</div>
 		</section>
-
 		<!-- Pricing Section -->
 		<section id="pricing" class="py-20 px-4 bg-nord1/30">
 			<div class="max-w-4xl mx-auto">
@@ -95,7 +92,6 @@ templ Home() {
 				</div>
 			</div>
 		</section>
-
 	}
 }
 
@@ -103,7 +99,7 @@ templ FeatureCard(title, description, iconPath string) {
 	<div class="bg-nord1 border border-nord2 rounded-xl p-6">
 		<div class="w-12 h-12 bg-nord10/20 rounded-lg flex items-center justify-center mb-4">
 			<svg class="w-6 h-6 text-nord8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={ iconPath }/>
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={ iconPath }></path>
 			</svg>
 		</div>
 		<h3 class="text-lg font-semibold text-nord6 mb-2">{ title }</h3>
@@ -127,7 +123,7 @@ templ PricingCard(name, price, period string, features []string, highlighted boo
 			for _, feature := range features {
 				<li class="flex items-center gap-2 text-nord4 text-sm">
 					<svg class="w-4 h-4 text-nord14 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
 					</svg>
 					{ feature }
 				</li>

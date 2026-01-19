@@ -19,6 +19,8 @@ type Querier interface {
 	CountActiveAPITokensByUser(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountActiveSessionsByUser(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountAuditLogsByUser(ctx context.Context, userID pgtype.UUID) (int64, error)
+	CountAuditLogsByUserActionSince(ctx context.Context, arg CountAuditLogsByUserActionSinceParams) (int64, error)
+	CountAuditLogsByUserSince(ctx context.Context, arg CountAuditLogsByUserSinceParams) (int64, error)
 	CountProjectsByOwner(ctx context.Context, ownerID uuid.UUID) (int64, error)
 	CountRecentFailedAttempts(ctx context.Context, arg CountRecentFailedAttemptsParams) (int64, error)
 	CountSecretsByProject(ctx context.Context, projectID uuid.UUID) (int64, error)
@@ -64,6 +66,8 @@ type Querier interface {
 	GetUserByGitHubID(ctx context.Context, githubID *int64) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	HardDeleteProject(ctx context.Context, id uuid.UUID) error
+	// Link GitHub account to existing user (only if not already linked)
+	LinkGitHubAccount(ctx context.Context, arg LinkGitHubAccountParams) error
 	ListAPITokensByUser(ctx context.Context, arg ListAPITokensByUserParams) ([]ApiToken, error)
 	ListActiveAPITokensByUser(ctx context.Context, userID uuid.UUID) ([]ApiToken, error)
 	ListActiveSessionsByUser(ctx context.Context, userID uuid.UUID) ([]Session, error)
@@ -80,6 +84,8 @@ type Querier interface {
 	RevokeAPIToken(ctx context.Context, arg RevokeAPITokenParams) error
 	RevokeAllAPITokensByUser(ctx context.Context, userID uuid.UUID) error
 	SoftDeleteProject(ctx context.Context, id uuid.UUID) error
+	// Unlink GitHub account (only if user has a password set)
+	UnlinkGitHubAccount(ctx context.Context, id uuid.UUID) error
 	UpdateAPITokenLastUsed(ctx context.Context, id uuid.UUID) error
 	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
 	UpdateProjectDEK(ctx context.Context, arg UpdateProjectDEKParams) error
@@ -88,6 +94,8 @@ type Querier interface {
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 	UpdateUserEmailVerified(ctx context.Context, id uuid.UUID) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
+	// Update user profile (email, username)
+	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error)
 	UpsertSecret(ctx context.Context, arg UpsertSecretParams) (Secret, error)
 	// Upsert for GitHub users (uses github_id as conflict key)
 	UpsertUser(ctx context.Context, arg UpsertUserParams) (User, error)

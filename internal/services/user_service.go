@@ -198,3 +198,110 @@ func (s *UserService) GetByEmail(ctx context.Context, email string) (*User, erro
 
 	return dbUserToUser(dbUser), nil
 }
+
+// UpdateProfile updates a user's profile information.
+func (s *UserService) UpdateProfile(ctx context.Context, id uuid.UUID, email, username string) (*User, error) {
+	log := logging.Logger(ctx)
+
+	// Check if email is already in use by another user
+	existingUser, err := s.queries.GetUserByEmail(ctx, email)
+	if err == nil && existingUser.ID != id {
+		log.Debug("email_already_in_use", "email", email, "existing_user_id", existingUser.ID)
+		return nil, ErrEmailExists
+	}
+
+	dbUser, err := s.queries.UpdateUserProfile(ctx, db.UpdateUserProfileParams{
+		ID:       id,
+		Email:    email,
+		Username: username,
+	})
+	if err != nil {
+		log.Error("profile_update_failed", "user_id", id, "error", err)
+		return nil, fmt.Errorf("failed to update profile: %w", err)
+	}
+
+	log.Debug("profile_updated", "user_id", id)
+	return dbUserToUser(dbUser), nil
+}
+
+// UpdatePassword updates a user's password.
+func (s *UserService) UpdatePassword(ctx context.Context, id uuid.UUID, currentPass, newPass string) error {
+	log := logging.Logger(ctx)
+
+	// Get user to verify current password
+	dbUser, err := s.queries.GetUserByID(ctx, id)
+	if err != nil {
+		return ErrUserNotFound
+	}
+
+	// If user has a password, verify the current password
+	if dbUser.PasswordHash != nil {
+		if !crypto.VerifyPassword(currentPass, *dbUser.PasswordHash) {
+			log.Debug("password_update_wrong_current", "user_id", id)
+			return ErrInvalidCredentials
+		}
+	}
+
+	// Hash new password
+	newHash, err := crypto.HashPassword(newPass)
+	if err != nil {
+		log.Error("password_hash_failed", "error", err)
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	if err := s.queries.UpdateUserPassword(ctx, db.UpdateUserPasswordParams{
+		ID:           id,
+		PasswordHash: &newHash,
+	}); err != nil {
+		log.Error("password_update_failed", "user_id", id, "error", err)
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+
+	log.Debug("password_updated", "user_id", id)
+	return nil
+}
+
+// LinkGitHub links a GitHub account to an existing user.
+func (s *UserService) LinkGitHub(ctx context.Context, id uuid.UUID, githubID int64) error {
+	log := logging.Logger(ctx)
+
+	if err := s.queries.LinkGitHubAccount(ctx, db.LinkGitHubAccountParams{
+		ID:       id,
+		GithubID: &githubID,
+	}); err != nil {
+		log.Error("github_link_failed", "user_id", id, "github_id", githubID, "error", err)
+		return fmt.Errorf("failed to link GitHub account: %w", err)
+	}
+
+	log.Debug("github_linked", "user_id", id, "github_id", githubID)
+	return nil
+}
+
+// UnlinkGitHub removes GitHub account from a user (only if they have a password).
+func (s *UserService) UnlinkGitHub(ctx context.Context, id uuid.UUID) error {
+	log := logging.Logger(ctx)
+
+	if err := s.queries.UnlinkGitHubAccount(ctx, id); err != nil {
+		log.Error("github_unlink_failed", "user_id", id, "error", err)
+		return fmt.Errorf("failed to unlink GitHub account: %w", err)
+	}
+
+	log.Debug("github_unlinked", "user_id", id)
+	return nil
+}
+
+// CanUnlinkGitHub checks if a user can unlink their GitHub account.
+// Returns false if no password is set (would lock them out).
+func (s *UserService) CanUnlinkGitHub(user *User) bool {
+	return user.PasswordHash != nil
+}
+
+// HasPassword checks if a user has a password set.
+func (s *UserService) HasPassword(user *User) bool {
+	return user.PasswordHash != nil
+}
+
+// HasGitHub checks if a user has GitHub linked.
+func (s *UserService) HasGitHub(user *User) bool {
+	return user.GitHubID != nil
+}

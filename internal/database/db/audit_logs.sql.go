@@ -25,6 +25,39 @@ func (q *Queries) CountAuditLogsByUser(ctx context.Context, userID pgtype.UUID) 
 	return count, err
 }
 
+const countAuditLogsByUserActionSince = `-- name: CountAuditLogsByUserActionSince :one
+SELECT COUNT(*) FROM audit_logs WHERE user_id = $1 AND action = $2 AND created_at > $3
+`
+
+type CountAuditLogsByUserActionSinceParams struct {
+	UserID    pgtype.UUID `db:"user_id" json:"user_id"`
+	Action    string      `db:"action" json:"action"`
+	CreatedAt time.Time   `db:"created_at" json:"created_at"`
+}
+
+func (q *Queries) CountAuditLogsByUserActionSince(ctx context.Context, arg CountAuditLogsByUserActionSinceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countAuditLogsByUserActionSince, arg.UserID, arg.Action, arg.CreatedAt)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countAuditLogsByUserSince = `-- name: CountAuditLogsByUserSince :one
+SELECT COUNT(*) FROM audit_logs WHERE user_id = $1 AND created_at > $2
+`
+
+type CountAuditLogsByUserSinceParams struct {
+	UserID    pgtype.UUID `db:"user_id" json:"user_id"`
+	CreatedAt time.Time   `db:"created_at" json:"created_at"`
+}
+
+func (q *Queries) CountAuditLogsByUserSince(ctx context.Context, arg CountAuditLogsByUserSinceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countAuditLogsByUserSince, arg.UserID, arg.CreatedAt)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createAuditLog = `-- name: CreateAuditLog :one
 INSERT INTO audit_logs (user_id, action, resource_type, resource_id, resource_name, ip_address, user_agent, metadata)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

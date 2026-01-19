@@ -1,8 +1,8 @@
 package pages
 
 import (
-	"github.com/abdul-hamid-achik/tinyvault/internal/views/layout"
 	"github.com/abdul-hamid-achik/tinyvault/internal/views/components"
+	"github.com/abdul-hamid-achik/tinyvault/internal/views/layout"
 )
 
 templ Login(errorMessage string, githubEnabled bool) {
@@ -17,13 +17,11 @@ templ Login(errorMessage string, githubEnabled bool) {
 						<h1 class="text-2xl font-bold text-nord6">Welcome back</h1>
 						<p class="text-nord4 mt-2">Sign in to your account</p>
 					</div>
-
 					if errorMessage != "" {
 						<div class="bg-nord11/20 border border-nord11/40 text-nord11 px-4 py-3 rounded-lg mb-6">
 							{ errorMessage }
 						</div>
 					}
-
 					<form method="POST" action="/auth/login" class="space-y-4">
 						<div>
 							<label for="email" class="block text-sm font-medium text-nord4 mb-2">Email</label>
@@ -37,7 +35,6 @@ templ Login(errorMessage string, githubEnabled bool) {
 								autocomplete="email"
 							/>
 						</div>
-
 						<div>
 							<label for="password" class="block text-sm font-medium text-nord4 mb-2">Password</label>
 							<input
@@ -50,17 +47,14 @@ templ Login(errorMessage string, githubEnabled bool) {
 								autocomplete="current-password"
 							/>
 						</div>
-
 						<button type="submit" class="w-full px-4 py-2 font-medium rounded-lg bg-nord10 text-nord6 hover:bg-nord9 transition-colors">
 							Sign In
 						</button>
 					</form>
-
 					<p class="text-center text-nord4 mt-6">
 						Don't have an account?
 						<a href="/auth/register" class="text-nord8 hover:text-nord7 font-medium">Create one</a>
 					</p>
-
 					if githubEnabled {
 						<div class="relative my-6">
 							<div class="absolute inset-0 flex items-center">
@@ -70,7 +64,6 @@ templ Login(errorMessage string, githubEnabled bool) {
 								<span class="px-4 bg-nord1 text-muted">or continue with</span>
 							</div>
 						</div>
-
 						<a href="/auth/github" hx-boost="false" class="w-full flex items-center justify-center gap-2 px-4 py-2 font-medium rounded-lg bg-nord2 text-nord4 hover:bg-nord3 transition-colors">
 							@components.GitHubIcon(components.IconMD)
 							<span>GitHub</span>

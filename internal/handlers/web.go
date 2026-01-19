@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/middleware"
 	"github.com/abdul-hamid-achik/tinyvault/internal/services"
+	"github.com/abdul-hamid-achik/tinyvault/internal/validation"
 	"github.com/abdul-hamid-achik/tinyvault/internal/views/pages"
 )
 
@@ -22,6 +25,7 @@ type WebHandler struct {
 	secretService  *services.SecretService
 	tokenService   *services.TokenService
 	auditService   *services.AuditService
+	userService    *services.UserService
 }
 
 // NewWebHandler creates a new WebHandler.
@@ -30,12 +34,14 @@ func NewWebHandler(
 	secretService *services.SecretService,
 	tokenService *services.TokenService,
 	auditService *services.AuditService,
+	userService *services.UserService,
 ) *WebHandler {
 	return &WebHandler{
 		projectService: projectService,
 		secretService:  secretService,
 		tokenService:   tokenService,
 		auditService:   auditService,
+		userService:    userService,
 	}
 }
 
@@ -60,6 +66,13 @@ func (h *WebHandler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handl
 		r.Get("/projects/{id}/secrets/{key}/reveal", h.RevealSecret)
 		r.Put("/projects/{id}/secrets/{key}", h.UpdateSecret)
 		r.Delete("/projects/{id}/secrets/{key}", h.DeleteSecret)
+
+		// Settings
+		r.Get("/settings", h.SettingsPage)
+		r.Post("/settings/profile", h.UpdateProfile)
+		r.Post("/settings/password", h.UpdatePassword)
+		r.Get("/settings/link-github", h.LinkGitHubRedirect)
+		r.Post("/settings/unlink-github", h.UnlinkGitHub)
 
 		// Settings - API Tokens
 		r.Get("/settings/tokens", h.TokensPage)
@@ -128,6 +141,41 @@ func (h *WebHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		secretCount += len(secrets)
 	}
 
+	// Get API call counts for last 24 hours
+	since := time.Now().Add(-24 * time.Hour)
+	apiCallCount, err := h.auditService.CountByUserSince(r.Context(), user.ID, since)
+	if err != nil {
+		slog.Error("failed to count api calls for dashboard", "user_id", user.ID, "error", err)
+		apiCallCount = 0
+	}
+
+	// Get secret reads count
+	secretReads, err := h.auditService.CountByUserActionSince(r.Context(), user.ID, services.ActionSecretRead, since)
+	if err != nil {
+		slog.Error("failed to count secret reads for dashboard", "user_id", user.ID, "error", err)
+		secretReads = 0
+	}
+
+	// Get secret writes count (create + update)
+	secretCreates, err := h.auditService.CountByUserActionSince(r.Context(), user.ID, services.ActionSecretCreate, since)
+	if err != nil {
+		slog.Error("failed to count secret creates for dashboard", "user_id", user.ID, "error", err)
+		secretCreates = 0
+	}
+	secretUpdates, err := h.auditService.CountByUserActionSince(r.Context(), user.ID, services.ActionSecretUpdate, since)
+	if err != nil {
+		slog.Error("failed to count secret updates for dashboard", "user_id", user.ID, "error", err)
+		secretUpdates = 0
+	}
+	secretWrites := secretCreates + secretUpdates
+
+	// Get active tokens count
+	activeTokens, err := h.tokenService.ListActive(r.Context(), user.ID)
+	if err != nil {
+		slog.Error("failed to count active tokens for dashboard", "user_id", user.ID, "error", err)
+		activeTokens = nil
+	}
+
 	// Get recent audit logs
 	logs, err := h.auditService.ListByUser(r.Context(), user.ID, 10, 0)
 	if err != nil {
@@ -151,6 +199,10 @@ func (h *WebHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		Username:     user.Username,
 		ProjectCount: len(projects),
 		SecretCount:  secretCount,
+		APICallCount: apiCallCount,
+		SecretReads:  secretReads,
+		SecretWrites: secretWrites,
+		ActiveTokens: len(activeTokens),
 		RecentLogs:   recentLogs,
 	}
 
@@ -626,4 +678,157 @@ func (h *WebHandler) RevokeToken(w http.ResponseWriter, r *http.Request) {
 
 	// Return empty response to remove the row (HTMX)
 	w.WriteHeader(http.StatusOK)
+}
+
+// SettingsPage renders the settings page.
+func (h *WebHandler) SettingsPage(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r.Context())
+	if user == nil {
+		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+		return
+	}
+
+	// Get the active tab
+	tab := r.URL.Query().Get("tab")
+	if tab == "" {
+		tab = "profile"
+	}
+
+	// Get message from query params (for redirects with messages)
+	message := r.URL.Query().Get("message")
+	messageType := r.URL.Query().Get("type")
+
+	// Get the user's GitHub login if linked
+	githubLogin := ""
+	if user.GitHubID != nil {
+		githubLogin = user.Username // For now, use the username
+	}
+
+	data := pages.SettingsData{
+		Username:    user.Username,
+		Email:       user.Email,
+		HasPassword: h.userService.HasPassword(user),
+		HasGitHub:   h.userService.HasGitHub(user),
+		GitHubLogin: githubLogin,
+		ActiveTab:   tab,
+		Message:     message,
+		MessageType: messageType,
+		CSRFToken:   middleware.GetCSRFToken(r),
+	}
+
+	render(w, r, pages.Settings(data))
+}
+
+// UpdateProfile handles profile updates.
+func (h *WebHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r.Context())
+	if user == nil {
+		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/settings?tab=profile&message=Invalid+form+data&type=error", http.StatusSeeOther)
+		return
+	}
+
+	username := strings.TrimSpace(r.FormValue("username"))
+	email := strings.TrimSpace(r.FormValue("email"))
+
+	// Validate
+	if err := validation.Username(username); err != nil {
+		http.Redirect(w, r, "/settings?tab=profile&message="+url.QueryEscape(err.Error())+"&type=error", http.StatusSeeOther)
+		return
+	}
+
+	if err := validation.Email(email); err != nil {
+		http.Redirect(w, r, "/settings?tab=profile&message="+url.QueryEscape(err.Error())+"&type=error", http.StatusSeeOther)
+		return
+	}
+
+	// Update profile
+	if _, err := h.userService.UpdateProfile(r.Context(), user.ID, email, username); err != nil {
+		slog.Error("failed to update profile", "user_id", user.ID, "error", err)
+		if errors.Is(err, services.ErrEmailExists) {
+			http.Redirect(w, r, "/settings?tab=profile&message=Email+is+already+in+use+by+another+account&type=error", http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, "/settings?tab=profile&message=Failed+to+update+profile&type=error", http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, "/settings?tab=profile&message=Profile+updated+successfully&type=success", http.StatusSeeOther)
+}
+
+// UpdatePassword handles password changes.
+func (h *WebHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r.Context())
+	if user == nil {
+		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Redirect(w, r, "/settings?tab=security&message=Invalid+form+data&type=error", http.StatusSeeOther)
+		return
+	}
+
+	currentPassword := r.FormValue("current_password")
+	newPassword := r.FormValue("new_password")
+	confirmPassword := r.FormValue("confirm_password")
+
+	// Validate new password
+	if len(newPassword) < 12 {
+		http.Redirect(w, r, "/settings?tab=security&message=Password+must+be+at+least+12+characters&type=error", http.StatusSeeOther)
+		return
+	}
+
+	if newPassword != confirmPassword {
+		http.Redirect(w, r, "/settings?tab=security&message=Passwords+do+not+match&type=error", http.StatusSeeOther)
+		return
+	}
+
+	// Update password
+	if err := h.userService.UpdatePassword(r.Context(), user.ID, currentPassword, newPassword); err != nil {
+		slog.Error("failed to update password", "user_id", user.ID, "error", err)
+		if errors.Is(err, services.ErrInvalidCredentials) {
+			http.Redirect(w, r, "/settings?tab=security&message=Current+password+is+incorrect&type=error", http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, "/settings?tab=security&message=Failed+to+update+password&type=error", http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, "/settings?tab=security&message=Password+updated+successfully&type=success", http.StatusSeeOther)
+}
+
+// LinkGitHubRedirect redirects to GitHub OAuth for account linking.
+func (h *WebHandler) LinkGitHubRedirect(w http.ResponseWriter, r *http.Request) {
+	// This will be handled by the AuthHandler with special state
+	// Redirect to the GitHub OAuth flow with a "link" indicator
+	http.Redirect(w, r, "/auth/github?link=true", http.StatusSeeOther)
+}
+
+// UnlinkGitHub removes GitHub account from user.
+func (h *WebHandler) UnlinkGitHub(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r.Context())
+	if user == nil {
+		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+		return
+	}
+
+	// Check if user can unlink (has password)
+	if !h.userService.CanUnlinkGitHub(user) {
+		http.Redirect(w, r, "/settings?tab=connected&message=Cannot+unlink+GitHub+without+a+password&type=error", http.StatusSeeOther)
+		return
+	}
+
+	// Unlink GitHub
+	if err := h.userService.UnlinkGitHub(r.Context(), user.ID); err != nil {
+		slog.Error("failed to unlink github", "user_id", user.ID, "error", err)
+		http.Redirect(w, r, "/settings?tab=connected&message=Failed+to+unlink+GitHub&type=error", http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, "/settings?tab=connected&message=GitHub+account+unlinked+successfully&type=success", http.StatusSeeOther)
 }

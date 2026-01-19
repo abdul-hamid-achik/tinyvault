@@ -1,5 +1,6 @@
 # Binaries
 bin/
+server
 *.exe
 *.exe~
 *.dll
@@ -73,3 +74,6 @@ credentials/
 
 # Claude Code
 .claude/
+
+# Task runner
+.task/

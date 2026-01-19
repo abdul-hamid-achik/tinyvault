@@ -61,3 +61,22 @@ SELECT COUNT(*) FROM users;
 -- name: CheckEmailExists :one
 -- Check if email exists for a given auth provider
 SELECT EXISTS(SELECT 1 FROM users WHERE email = $1 AND auth_provider = $2) AS exists;
+
+-- name: UpdateUserProfile :one
+-- Update user profile (email, username)
+UPDATE users
+SET email = $2, username = $3, updated_at = NOW()
+WHERE id = $1
+RETURNING *;
+
+-- name: LinkGitHubAccount :exec
+-- Link GitHub account to existing user (only if not already linked)
+UPDATE users
+SET github_id = $2, updated_at = NOW()
+WHERE id = $1 AND github_id IS NULL;
+
+-- name: UnlinkGitHubAccount :exec
+-- Unlink GitHub account (only if user has a password set)
+UPDATE users
+SET github_id = NULL, updated_at = NOW()
+WHERE id = $1 AND password_hash IS NOT NULL;

@@ -1,10 +1,9 @@
 package pages
 
 import (
-	"github.com/abdul-hamid-achik/tinyvault/internal/views/layout"
 	"github.com/abdul-hamid-achik/tinyvault/internal/views/components"
+	"github.com/abdul-hamid-achik/tinyvault/internal/views/layout"
 )
-
 
 type ProjectDetailData struct {
 	ID          string
@@ -44,8 +43,10 @@ templ ProjectDetail(data ProjectDetailData) {
 							hx-swap="innerHTML"
 							hx-indicator="#add-secret-spinner"
 						>
-							<span id="add-secret-spinner" class="htmx-indicator">@components.Spinner(components.IconMD)</span>
-							<span class="htmx-hide-on-request">@components.PlusIcon(components.IconMD)</span>
+							<span id="add-secret-spinner" class="htmx-indicator">@components.Spinner(components.IconMD)
+</span>
+							<span class="htmx-hide-on-request">@components.PlusIcon(components.IconMD)
+</span>
 							<span>Add Secret</span>
 						</button>
 						<button type="button" class="btn-ghost">
@@ -54,15 +55,14 @@ templ ProjectDetail(data ProjectDetailData) {
 					</div>
 				</div>
 			</div>
-
 			<!-- CLI Usage -->
 			<div class="alert-info mb-8">
 				<p class="font-mono text-sm">
-					<span class="text-nord3"># Use this project in CLI:</span><br/>
+					<span class="text-nord3"># Use this project in CLI:</span>
+					<br/>
 					tvault use { data.Name }
 				</p>
 			</div>
-
 			<!-- Secrets List -->
 			<div class="card">
 				<div class="card-header flex items-center justify-between">
@@ -107,7 +107,6 @@ templ ProjectDetail(data ProjectDetailData) {
 					}
 				</div>
 			</div>
-
 			<!-- Modal Container -->
 			<div id="modal-container"></div>
 		</div>
@@ -129,8 +128,10 @@ templ SecretRow(projectID string, secret SecretInfo) {
 					hx-target="closest td"
 					hx-swap="innerHTML"
 				>
-					<span class="htmx-indicator">@components.Spinner(components.IconSM)</span>
-					<span class="htmx-hide-on-request">@components.EyeIcon(components.IconSM)</span>
+					<span class="htmx-indicator">@components.Spinner(components.IconSM)
+</span>
+					<span class="htmx-hide-on-request">@components.EyeIcon(components.IconSM)
+</span>
 				</button>
 			</div>
 		</td>
@@ -147,8 +148,10 @@ templ SecretRow(projectID string, secret SecretInfo) {
 					hx-target="#modal-container"
 					hx-swap="innerHTML"
 				>
-					<span class="htmx-indicator">@components.Spinner(components.IconSM)</span>
-					<span class="htmx-hide-on-request">@components.EditIcon(components.IconSM)</span>
+					<span class="htmx-indicator">@components.Spinner(components.IconSM)
+</span>
+					<span class="htmx-hide-on-request">@components.EditIcon(components.IconSM)
+</span>
 				</button>
 				<button
 					type="button"
@@ -158,8 +161,10 @@ templ SecretRow(projectID string, secret SecretInfo) {
 					hx-target="closest tr"
 					hx-swap="outerHTML"
 				>
-					<span class="htmx-indicator">@components.Spinner(components.IconSM)</span>
-					<span class="htmx-hide-on-request">@components.TrashIcon(components.IconSM)</span>
+					<span class="htmx-indicator">@components.Spinner(components.IconSM)
+</span>
+					<span class="htmx-hide-on-request">@components.TrashIcon(components.IconSM)
+</span>
 				</button>
 			</div>
 		</td>

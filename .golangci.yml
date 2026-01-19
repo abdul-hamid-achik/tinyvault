@@ -216,10 +216,11 @@ linters:
           - errcheck
         text: "os\\.Stdin\\.Stat"
 
-      # High cognitive complexity is acceptable for certain handlers
+      # High complexity is acceptable for certain handlers (OAuth flows, etc.)
       - path: internal/handlers/
         linters:
           - gocognit
+          - gocyclo
 
       - path: internal/middleware/
         linters:

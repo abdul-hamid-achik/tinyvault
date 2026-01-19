@@ -1,8 +1,8 @@
 package pages
 
 import (
-	"github.com/abdul-hamid-achik/tinyvault/internal/views/layout"
 	"github.com/abdul-hamid-achik/tinyvault/internal/views/components"
+	"github.com/abdul-hamid-achik/tinyvault/internal/views/layout"
 )
 
 type ProjectInfo struct {
@@ -27,7 +27,6 @@ templ Projects(projects []ProjectInfo) {
 					<span>New Project</span>
 				</a>
 			</div>
-
 			<!-- Projects Grid -->
 			if len(projects) == 0 {
 				<div class="card p-12 text-center">
@@ -85,7 +84,6 @@ templ NewProject() {
 				<h1 class="text-2xl font-bold text-nord6">Create Project</h1>
 				<p class="text-nord4">Create a new vault for your secrets.</p>
 			</div>
-
 			<div class="card">
 				<form action="/projects" method="POST" class="card-body space-y-6">
 					<div class="form-group">
@@ -102,7 +100,6 @@ templ NewProject() {
 						/>
 						<p class="text-sm text-muted mt-1">Lowercase letters, numbers, and hyphens only.</p>
 					</div>
-
 					<div class="form-group">
 						<label for="description" class="label">Description (optional)</label>
 						<textarea
@@ -113,7 +110,6 @@ templ NewProject() {
 							placeholder="What is this project for?"
 						></textarea>
 					</div>
-
 					<div class="flex items-center justify-end gap-4">
 						<a href="/projects" class="btn-ghost">Cancel</a>
 						<button type="submit" class="btn-primary">Create Project</button>
@@ -123,4 +119,3 @@ templ NewProject() {
 		</div>
 	}
 }
-

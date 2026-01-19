@@ -213,6 +213,23 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 	return i, err
 }
 
+const linkGitHubAccount = `-- name: LinkGitHubAccount :exec
+UPDATE users
+SET github_id = $2, updated_at = NOW()
+WHERE id = $1 AND github_id IS NULL
+`
+
+type LinkGitHubAccountParams struct {
+	ID       uuid.UUID `db:"id" json:"id"`
+	GithubID *int64    `db:"github_id" json:"github_id"`
+}
+
+// Link GitHub account to existing user (only if not already linked)
+func (q *Queries) LinkGitHubAccount(ctx context.Context, arg LinkGitHubAccountParams) error {
+	_, err := q.db.Exec(ctx, linkGitHubAccount, arg.ID, arg.GithubID)
+	return err
+}
+
 const listUsers = `-- name: ListUsers :many
 SELECT id, github_id, email, username, name, avatar_url, created_at, updated_at, password_hash, auth_provider, email_verified FROM users
 ORDER BY created_at DESC
@@ -254,6 +271,18 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 		return nil, err
 	}
 	return items, nil
+}
+
+const unlinkGitHubAccount = `-- name: UnlinkGitHubAccount :exec
+UPDATE users
+SET github_id = NULL, updated_at = NOW()
+WHERE id = $1 AND password_hash IS NOT NULL
+`
+
+// Unlink GitHub account (only if user has a password set)
+func (q *Queries) UnlinkGitHubAccount(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, unlinkGitHubAccount, id)
+	return err
 }
 
 const updateUser = `-- name: UpdateUser :one
@@ -317,6 +346,39 @@ type UpdateUserPasswordParams struct {
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
 	_, err := q.db.Exec(ctx, updateUserPassword, arg.ID, arg.PasswordHash)
 	return err
+}
+
+const updateUserProfile = `-- name: UpdateUserProfile :one
+UPDATE users
+SET email = $2, username = $3, updated_at = NOW()
+WHERE id = $1
+RETURNING id, github_id, email, username, name, avatar_url, created_at, updated_at, password_hash, auth_provider, email_verified
+`
+
+type UpdateUserProfileParams struct {
+	ID       uuid.UUID `db:"id" json:"id"`
+	Email    string    `db:"email" json:"email"`
+	Username string    `db:"username" json:"username"`
+}
+
+// Update user profile (email, username)
+func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserProfile, arg.ID, arg.Email, arg.Username)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.GithubID,
+		&i.Email,
+		&i.Username,
+		&i.Name,
+		&i.AvatarUrl,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PasswordHash,
+		&i.AuthProvider,
+		&i.EmailVerified,
+	)
+	return i, err
 }
 
 const upsertUser = `-- name: UpsertUser :one

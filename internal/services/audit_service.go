@@ -277,3 +277,30 @@ func (s *AuditService) Cleanup(ctx context.Context, olderThan time.Duration) err
 	}
 	return nil
 }
+
+// CountByUserSince counts audit logs for a user since a given time.
+func (s *AuditService) CountByUserSince(ctx context.Context, userID uuid.UUID, since time.Time) (int64, error) {
+	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
+	count, err := s.queries.CountAuditLogsByUserSince(ctx, db.CountAuditLogsByUserSinceParams{
+		UserID:    pgUserID,
+		CreatedAt: since,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to count audit logs: %w", err)
+	}
+	return count, nil
+}
+
+// CountByUserActionSince counts audit logs for a user and specific action since a given time.
+func (s *AuditService) CountByUserActionSince(ctx context.Context, userID uuid.UUID, action AuditAction, since time.Time) (int64, error) {
+	pgUserID := pgtype.UUID{Bytes: userID, Valid: true}
+	count, err := s.queries.CountAuditLogsByUserActionSince(ctx, db.CountAuditLogsByUserActionSinceParams{
+		UserID:    pgUserID,
+		Action:    string(action),
+		CreatedAt: since,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to count audit logs: %w", err)
+	}
+	return count, nil
+}

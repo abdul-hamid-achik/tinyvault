@@ -71,7 +71,19 @@ func (h *AuthHandler) GitHubLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Debug("oauth_flow_started", "provider", "github")
+	// Check if this is a link request (linking to existing account)
+	isLink := r.URL.Query().Get("link") == "true"
+	if isLink {
+		// Verify user is logged in
+		user := middleware.GetUser(r.Context())
+		if user == nil {
+			http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+			return
+		}
+		log.Debug("oauth_flow_started", "provider", "github", "mode", "link")
+	} else {
+		log.Debug("oauth_flow_started", "provider", "github", "mode", "login")
+	}
 
 	// Generate cryptographically secure state for CSRF protection
 	state, err := crypto.GenerateTokenString(32)
@@ -79,6 +91,12 @@ func (h *AuthHandler) GitHubLogin(w http.ResponseWriter, r *http.Request) {
 		log.Error("oauth_state_generation_failed", "error", err)
 		http.Error(w, "Failed to generate state", http.StatusInternalServerError)
 		return
+	}
+
+	// If linking, prefix state with "link:<user_id>:" to indicate mode and bind to user
+	if isLink {
+		user := middleware.GetUser(r.Context())
+		state = "link:" + user.ID.String() + ":" + state
 	}
 
 	// Store state in cookie
@@ -114,6 +132,17 @@ func (h *AuthHandler) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if this is a link request and extract user ID from state
+	// State format for link: "link:<user_id>:<random_token>"
+	isLink := strings.HasPrefix(stateCookie.Value, "link:")
+	var linkUserID string
+	if isLink {
+		parts := strings.SplitN(stateCookie.Value, ":", 3)
+		if len(parts) >= 2 {
+			linkUserID = parts[1]
+		}
+	}
+
 	// Clear state cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "oauth_state",
@@ -143,7 +172,53 @@ func (h *AuthHandler) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Debug("github_user_fetched", "github_id", githubUser.ID)
 
-	// Create or update user
+	// Handle link mode: link GitHub to existing logged-in user
+	if isLink {
+		user := middleware.GetUser(r.Context())
+		if user == nil {
+			http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+			return
+		}
+
+		// Validate that the user ID in the state matches the logged-in user
+		if linkUserID != user.ID.String() {
+			log.Warn("oauth_state_user_mismatch", "state_user_id", linkUserID, "session_user_id", user.ID)
+			http.Redirect(w, r, "/settings?tab=connected&message=Invalid+link+request&type=error", http.StatusSeeOther)
+			return
+		}
+
+		// Check if this GitHub account is already linked to another user
+		existingUser, err := h.userService.GetByGitHubID(r.Context(), githubUser.ID)
+		if err == nil && existingUser != nil && existingUser.ID != user.ID {
+			log.Warn("github_already_linked", "github_id", githubUser.ID, "linked_to", existingUser.ID)
+			http.Redirect(w, r, "/settings?tab=connected&message=This+GitHub+account+is+already+linked+to+another+user&type=error", http.StatusSeeOther)
+			return
+		}
+
+		// Link GitHub to current user
+		if err := h.userService.LinkGitHub(r.Context(), user.ID, githubUser.ID); err != nil {
+			log.Error("github_link_failed", "user_id", user.ID, "github_id", githubUser.ID, "error", err)
+			http.Redirect(w, r, "/settings?tab=connected&message=Failed+to+link+GitHub+account&type=error", http.StatusSeeOther)
+			return
+		}
+
+		// Audit log for GitHub linking
+		h.auditService.LogAsync(services.LogParams{
+			UserID:       &user.ID,
+			Action:       services.ActionUserLogin,
+			ResourceType: services.ResourceUser,
+			ResourceID:   &user.ID,
+			IPAddress:    r.RemoteAddr,
+			UserAgent:    r.UserAgent(),
+			Metadata:     map[string]any{"github_id": githubUser.ID, "action": "github_linked"},
+		})
+
+		log.Info("github_linked", "user_id", user.ID, "github_id", githubUser.ID)
+		http.Redirect(w, r, "/settings?tab=connected&message=GitHub+account+linked+successfully&type=success", http.StatusSeeOther)
+		return
+	}
+
+	// Normal login flow: Create or update user
 	user, err := h.userService.CreateOrUpdate(r.Context(), githubUser)
 	if err != nil {
 		log.Error("user_creation_failed", "github_id", githubUser.ID, "error", err)

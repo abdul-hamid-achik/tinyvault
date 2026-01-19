@@ -11,7 +11,23 @@ templ StatCard(label string, value int, iconPath string) {
 			</div>
 			<div class="w-12 h-12 bg-nord10/20 rounded-lg flex items-center justify-center">
 				<svg class="w-6 h-6 text-nord8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={ iconPath }/>
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={ iconPath }></path>
+				</svg>
+			</div>
+		</div>
+	</div>
+}
+
+templ StatCardInt64(label string, value int64, iconPath string) {
+	<div class="card p-6">
+		<div class="flex items-center justify-between">
+			<div>
+				<p class="text-muted text-sm">{ label }</p>
+				<p class="text-3xl font-bold text-nord6 mt-1">{ fmt.Sprintf("%d", value) }</p>
+			</div>
+			<div class="w-12 h-12 bg-nord10/20 rounded-lg flex items-center justify-center">
+				<svg class="w-6 h-6 text-nord8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={ iconPath }></path>
 				</svg>
 			</div>
 		</div>
