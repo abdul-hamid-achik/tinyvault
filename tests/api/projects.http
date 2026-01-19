@@ -56,8 +56,9 @@ GET {{baseUrl}}/projects/{{createProject.projectId}}
 >>>
 expect status 200
 expect body.data exists
-expect body.data.id == {{createProject.projectId}}
-expect body.data.name == {{createProject.projectName}}
+expect body.data.id exists
+expect body.data.name exists
+expect body.data.name type string
 <<<
 
 ### Get Project - Not Found

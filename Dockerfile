@@ -14,6 +14,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
+RUN npm install tailwindcss@4.1.8
 RUN templ generate
 RUN tailwindcss -i web/static/css/input.css -o web/static/css/output.css --minify
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /bin/server ./cmd/server
