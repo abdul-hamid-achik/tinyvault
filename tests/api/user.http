@@ -1,0 +1,45 @@
+# TinyVault User API Tests
+# These tests verify user endpoint operations
+
+### Get Current User
+# @name getCurrentUser
+# @tags user, read
+# @auth bearer {{token}}
+# @description Get the currently authenticated user's info
+
+GET {{baseUrl}}/me
+
+>>>
+expect status 200
+expect body.data exists
+expect body.data.id exists
+expect body.data.email exists
+expect duration < 500
+<<<
+
+### Get Current User - Unauthorized
+# @name getCurrentUserUnauthorized
+# @tags user, auth, errors
+# @description Accessing user endpoint without auth should return 401
+
+GET {{baseUrl}}/me
+
+>>>
+expect status 401
+expect body.error exists
+expect body.error.code == "UNAUTHORIZED"
+<<<
+
+### Get Current User - Invalid Token
+# @name getCurrentUserInvalidToken
+# @tags user, auth, errors
+# @description Invalid token should return 401
+
+GET {{baseUrl}}/me
+Authorization: Bearer invalid-token-12345
+
+>>>
+expect status 401
+expect body.error exists
+expect body.error.code == "UNAUTHORIZED"
+<<<

@@ -1,0 +1,419 @@
+# TinyVault Stress & Performance Tests
+# Run with: hitspec run tests/api/stress.http --env prod --env-file .env --parallel --concurrency 10
+
+### Health Check Performance
+# @name healthCheckPerf
+# @tags performance, health
+# @auth bearer {{token}}
+# @description Health check should respond quickly
+
+GET {{baseUrl}}/me
+
+>>>
+expect status 200
+expect duration < 500
+<<<
+
+### Get Current User Performance
+# @name userPerf
+# @tags performance, user
+# @auth bearer {{token}}
+# @description User endpoint should respond quickly
+
+GET {{baseUrl}}/me
+
+>>>
+expect status 200
+expect body.data exists
+expect duration < 500
+<<<
+
+### List Projects Performance
+# @name listProjectsPerf
+# @tags performance, projects
+# @auth bearer {{token}}
+# @description List projects should respond within 1 second
+
+GET {{baseUrl}}/projects
+
+>>>
+expect status 200
+expect body.data exists
+expect duration < 1000
+<<<
+
+### Create Project Performance
+# @name createProjectPerf
+# @tags performance, projects, write
+# @auth bearer {{token}}
+# @description Create project should complete within 1 second
+
+POST {{baseUrl}}/projects
+Content-Type: application/json
+
+{
+  "name": "stress-test-{{$uuid()}}",
+  "description": "Performance test project"
+}
+
+>>>
+expect status 201
+expect body.data.id exists
+expect duration < 1000
+<<<
+
+>>>capture
+projectId from body.data.id
+<<<
+
+### Get Project Performance
+# @name getProjectPerf
+# @tags performance, projects
+# @depends createProjectPerf
+# @auth bearer {{token}}
+# @description Get project by ID should respond within 500ms
+
+GET {{baseUrl}}/projects/{{createProjectPerf.projectId}}
+
+>>>
+expect status 200
+expect body.data exists
+expect duration < 500
+<<<
+
+### Create Secret Performance
+# @name createSecretPerf
+# @tags performance, secrets, write
+# @depends createProjectPerf
+# @auth bearer {{token}}
+# @description Create secret should complete within 1 second
+
+PUT {{baseUrl}}/projects/{{createProjectPerf.projectId}}/secrets/PERF_TEST_KEY
+Content-Type: application/json
+
+{
+  "value": "performance-test-value-{{$uuid()}}"
+}
+
+>>>
+expect status 200
+expect body.data exists
+expect duration < 1000
+<<<
+
+### Get Secret Performance
+# @name getSecretPerf
+# @tags performance, secrets
+# @depends createSecretPerf
+# @auth bearer {{token}}
+# @description Get secret should respond within 500ms
+
+GET {{baseUrl}}/projects/{{createProjectPerf.projectId}}/secrets/PERF_TEST_KEY
+
+>>>
+expect status 200
+expect body.data exists
+expect duration < 500
+<<<
+
+### List Secrets Performance
+# @name listSecretsPerf
+# @tags performance, secrets
+# @depends createSecretPerf
+# @auth bearer {{token}}
+# @description List secrets should respond within 1 second
+
+GET {{baseUrl}}/projects/{{createProjectPerf.projectId}}/secrets
+
+>>>
+expect status 200
+expect body.data exists
+expect duration < 1000
+<<<
+
+### Export Secrets Performance
+# @name exportSecretsPerf
+# @tags performance, secrets
+# @depends createSecretPerf
+# @auth bearer {{token}}
+# @description Export secrets should respond within 1 second
+
+GET {{baseUrl}}/projects/{{createProjectPerf.projectId}}/secrets/export
+
+>>>
+expect status 200
+expect body.data exists
+expect duration < 1000
+<<<
+
+### Large Secret Value - 10KB Payload
+# @name largeSecretPerf
+# @tags performance, secrets, stress
+# @depends createProjectPerf
+# @auth bearer {{token}}
+# @description Large secret values should be handled within 2 seconds
+
+PUT {{baseUrl}}/projects/{{createProjectPerf.projectId}}/secrets/LARGE_SECRET
+Content-Type: application/json
+
+{
+  "value": "{{$randomString(10000)}}"
+}
+
+>>>
+expect status 200
+expect body.data exists
+expect body.data.key == "LARGE_SECRET"
+expect duration < 2000
+<<<
+
+### Retrieve Large Secret
+# @name getLargeSecretPerf
+# @tags performance, secrets, stress
+# @depends largeSecretPerf
+# @auth bearer {{token}}
+# @description Retrieving large secrets should be handled within 1 second
+
+GET {{baseUrl}}/projects/{{createProjectPerf.projectId}}/secrets/LARGE_SECRET
+
+>>>
+expect status 200
+expect body.data exists
+expect body.data.key == "LARGE_SECRET"
+expect duration < 1000
+<<<
+
+### Rapid Secret Updates - Update 1
+# @name rapidUpdate1
+# @tags performance, secrets, stress
+# @depends createSecretPerf
+# @auth bearer {{token}}
+# @description Rapid sequential updates should be handled
+
+PUT {{baseUrl}}/projects/{{createProjectPerf.projectId}}/secrets/RAPID_KEY
+Content-Type: application/json
+
+{
+  "value": "rapid-value-1-{{$uuid()}}"
+}
+
+>>>
+expect status 200
+expect body.data.version >= 1
+expect duration < 1000
+<<<
+
+### Rapid Secret Updates - Update 2
+# @name rapidUpdate2
+# @tags performance, secrets, stress
+# @depends rapidUpdate1
+# @auth bearer {{token}}
+# @description Rapid sequential updates should increment version
+
+PUT {{baseUrl}}/projects/{{createProjectPerf.projectId}}/secrets/RAPID_KEY
+Content-Type: application/json
+
+{
+  "value": "rapid-value-2-{{$uuid()}}"
+}
+
+>>>
+expect status 200
+expect body.data.version >= 2
+expect duration < 1000
+<<<
+
+### Rapid Secret Updates - Update 3
+# @name rapidUpdate3
+# @tags performance, secrets, stress
+# @depends rapidUpdate2
+# @auth bearer {{token}}
+# @description Rapid sequential updates should continue working
+
+PUT {{baseUrl}}/projects/{{createProjectPerf.projectId}}/secrets/RAPID_KEY
+Content-Type: application/json
+
+{
+  "value": "rapid-value-3-{{$uuid()}}"
+}
+
+>>>
+expect status 200
+expect body.data.version >= 3
+expect duration < 1000
+<<<
+
+### Multiple Secrets Creation - Secret 1
+# @name multiSecret1
+# @tags performance, secrets, stress
+# @depends createProjectPerf
+# @auth bearer {{token}}
+# @description Multiple secret creation test
+
+PUT {{baseUrl}}/projects/{{createProjectPerf.projectId}}/secrets/MULTI_KEY_1
+Content-Type: application/json
+
+{
+  "value": "multi-value-1"
+}
+
+>>>
+expect status 200
+expect duration < 1000
+<<<
+
+### Multiple Secrets Creation - Secret 2
+# @name multiSecret2
+# @tags performance, secrets, stress
+# @depends multiSecret1
+# @auth bearer {{token}}
+# @description Multiple secret creation test
+
+PUT {{baseUrl}}/projects/{{createProjectPerf.projectId}}/secrets/MULTI_KEY_2
+Content-Type: application/json
+
+{
+  "value": "multi-value-2"
+}
+
+>>>
+expect status 200
+expect duration < 1000
+<<<
+
+### Multiple Secrets Creation - Secret 3
+# @name multiSecret3
+# @tags performance, secrets, stress
+# @depends multiSecret2
+# @auth bearer {{token}}
+# @description Multiple secret creation test
+
+PUT {{baseUrl}}/projects/{{createProjectPerf.projectId}}/secrets/MULTI_KEY_3
+Content-Type: application/json
+
+{
+  "value": "multi-value-3"
+}
+
+>>>
+expect status 200
+expect duration < 1000
+<<<
+
+### Export After Multiple Creations
+# @name exportAfterMultiPerf
+# @tags performance, secrets, stress
+# @depends multiSecret3
+# @auth bearer {{token}}
+# @description Export with multiple secrets should still be fast
+
+GET {{baseUrl}}/projects/{{createProjectPerf.projectId}}/secrets/export
+
+>>>
+expect status 200
+expect body.data exists
+expect body.data.MULTI_KEY_1 exists
+expect body.data.MULTI_KEY_2 exists
+expect body.data.MULTI_KEY_3 exists
+expect duration < 1500
+<<<
+
+### Full CRUD Cycle - Create
+# @name crudCreate
+# @tags performance, stress, crud
+# @auth bearer {{token}}
+# @description Full CRUD cycle - create project
+
+POST {{baseUrl}}/projects
+Content-Type: application/json
+
+{
+  "name": "crud-cycle-{{$uuid()}}",
+  "description": "CRUD cycle test"
+}
+
+>>>
+expect status 201
+expect body.data.id exists
+expect duration < 1000
+<<<
+
+>>>capture
+crudProjectId from body.data.id
+<<<
+
+### Full CRUD Cycle - Read
+# @name crudRead
+# @tags performance, stress, crud
+# @depends crudCreate
+# @auth bearer {{token}}
+# @description Full CRUD cycle - read project
+
+GET {{baseUrl}}/projects/{{crudCreate.crudProjectId}}
+
+>>>
+expect status 200
+expect body.data exists
+expect duration < 500
+<<<
+
+### Full CRUD Cycle - Add Secret
+# @name crudAddSecret
+# @tags performance, stress, crud
+# @depends crudRead
+# @auth bearer {{token}}
+# @description Full CRUD cycle - add secret
+
+PUT {{baseUrl}}/projects/{{crudCreate.crudProjectId}}/secrets/CRUD_SECRET
+Content-Type: application/json
+
+{
+  "value": "crud-secret-value"
+}
+
+>>>
+expect status 200
+expect body.data exists
+expect duration < 1000
+<<<
+
+### Full CRUD Cycle - Delete Secret
+# @name crudDeleteSecret
+# @tags performance, stress, crud
+# @depends crudAddSecret
+# @auth bearer {{token}}
+# @description Full CRUD cycle - delete secret
+
+DELETE {{baseUrl}}/projects/{{crudCreate.crudProjectId}}/secrets/CRUD_SECRET
+
+>>>
+expect status 204
+expect duration < 500
+<<<
+
+### Full CRUD Cycle - Delete Project
+# @name crudDelete
+# @tags performance, stress, crud
+# @depends crudDeleteSecret
+# @auth bearer {{token}}
+# @description Full CRUD cycle - delete project
+
+DELETE {{baseUrl}}/projects/{{crudCreate.crudProjectId}}
+
+>>>
+expect status 204
+expect duration < 500
+<<<
+
+### Cleanup - Delete Performance Test Project
+# @name cleanupPerfProject
+# @tags performance, cleanup
+# @depends exportAfterMultiPerf
+# @auth bearer {{token}}
+# @description Clean up performance test project
+
+DELETE {{baseUrl}}/projects/{{createProjectPerf.projectId}}
+
+>>>
+expect status 204
+<<<

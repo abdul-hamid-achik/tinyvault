@@ -9,10 +9,11 @@
 
 GET {{baseUrl}}/projects
 
->>>
+>>>>
 expect status 200
 expect body.data exists
 expect body.data type array
+expect duration < 1000
 <<<
 
 ### Create Project
@@ -37,6 +38,7 @@ expect body.data.name exists
 expect body.data.description == "Test project created by hitspec API tests"
 expect body.data.created_at exists
 expect body.data.updated_at exists
+expect duration < 1000
 <<<
 
 >>>capture
@@ -59,6 +61,7 @@ expect body.data exists
 expect body.data.id exists
 expect body.data.name exists
 expect body.data.name type string
+expect duration < 500
 <<<
 
 ### Get Project - Not Found
@@ -158,6 +161,7 @@ DELETE {{baseUrl}}/projects/{{createProject.projectId}}
 
 >>>
 expect status 204
+expect duration < 500
 <<<
 
 ### Verify Project Deleted

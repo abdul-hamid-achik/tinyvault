@@ -1,0 +1,31 @@
+# TinyVault Load Tests
+# These are simple, stateless tests designed for hitspec stress command
+#
+# Usage:
+#   hitspec stress tests/api/load.http --env prod -d 30s -r 5
+#   hitspec stress tests/api/load.http --env prod -d 1m -r 10 --threshold "p95<500ms,errors<5%"
+#   hitspec stress tests/api/load.http --env prod -d 2m --vus 10 --think-time 100ms
+
+### Get Current User
+# @name getUser
+# @tags load, read
+# @auth bearer {{token}}
+
+GET {{baseUrl}}/me
+
+>>>
+expect status 200
+expect body.data exists
+<<<
+
+### List Projects
+# @name listProjects
+# @tags load, read
+# @auth bearer {{token}}
+
+GET {{baseUrl}}/projects
+
+>>>
+expect status 200
+expect body.data exists
+<<<
