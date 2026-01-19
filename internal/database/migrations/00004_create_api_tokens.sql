@@ -15,7 +15,7 @@ CREATE TABLE api_tokens (
 CREATE INDEX idx_api_tokens_user_id ON api_tokens(user_id);
 CREATE INDEX idx_api_tokens_token_hash ON api_tokens(token_hash);
 CREATE INDEX idx_api_tokens_active ON api_tokens(user_id)
-    WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > NOW());
+    WHERE revoked_at IS NULL;
 -- +goose StatementEnd
 
 -- +goose Down

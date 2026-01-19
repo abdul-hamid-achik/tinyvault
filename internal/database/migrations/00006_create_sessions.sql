@@ -15,8 +15,8 @@ CREATE INDEX idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX idx_sessions_token_hash ON sessions(token_hash);
 CREATE INDEX idx_sessions_expires_at ON sessions(expires_at);
 
--- Cleanup job can use this to delete expired sessions
-CREATE INDEX idx_sessions_expired ON sessions(expires_at) WHERE expires_at < NOW();
+-- Index for cleanup queries to find expired sessions
+-- Note: expires_at column already indexed above for efficient range queries
 -- +goose StatementEnd
 
 -- +goose Down
