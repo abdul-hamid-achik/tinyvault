@@ -1202,7 +1202,7 @@
             "uid": "loki"
           },
           "editorMode": "code",
-          "expr": "{container=\"tinyvault\", level=\"error\"} or {container=\"tinyvault\"} |~ \"(?i)error|fail|panic\"",
+          "expr": "{container=\"tinyvault\"} |~ \"(?i)error|fail|panic|level.*error\"",
           "queryType": "range",
           "refId": "A"
         }
