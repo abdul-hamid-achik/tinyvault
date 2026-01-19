@@ -59,6 +59,7 @@ func (h *WebHandler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handl
 		r.Get("/projects/new", h.NewProject)
 		r.Post("/projects", h.CreateProject)
 		r.Get("/projects/{id}", h.ProjectDetail)
+		r.Delete("/projects/{id}", h.DeleteProject)
 
 		// HTMX partials for secrets
 		r.Get("/projects/{id}/secrets/new", h.NewSecretModal)
@@ -123,22 +124,18 @@ func (h *WebHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get projects for count
-	projects, err := h.projectService.List(r.Context(), user.ID, 100, 0)
+	// Get project count
+	projectCount, err := h.projectService.Count(r.Context(), user.ID)
 	if err != nil {
-		slog.Error("failed to list projects for dashboard", "user_id", user.ID, "error", err)
-		projects = nil // Continue with empty list
+		slog.Error("failed to count projects for dashboard", "user_id", user.ID, "error", err)
+		projectCount = 0
 	}
 
-	// Count total secrets across all projects
-	secretCount := 0
-	for _, p := range projects {
-		secrets, err := h.secretService.List(r.Context(), p.ID, 1000, 0)
-		if err != nil {
-			slog.Error("failed to list secrets for project", "project_id", p.ID, "error", err)
-			continue
-		}
-		secretCount += len(secrets)
+	// Count total secrets across all projects (optimized single query)
+	secretCount, err := h.secretService.CountByOwner(r.Context(), user.ID)
+	if err != nil {
+		slog.Error("failed to count secrets for dashboard", "user_id", user.ID, "error", err)
+		secretCount = 0
 	}
 
 	// Get API call counts for last 24 hours
@@ -197,8 +194,8 @@ func (h *WebHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 
 	data := pages.DashboardData{
 		Username:     user.Username,
-		ProjectCount: len(projects),
-		SecretCount:  secretCount,
+		ProjectCount: int(projectCount),
+		SecretCount:  int(secretCount),
 		APICallCount: apiCallCount,
 		SecretReads:  secretReads,
 		SecretWrites: secretWrites,
@@ -344,6 +341,49 @@ func (h *WebHandler) ProjectDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	render(w, r, pages.ProjectDetail(data))
+}
+
+// DeleteProject handles project deletion.
+func (h *WebHandler) DeleteProject(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r.Context())
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	projectIDStr := chi.URLParam(r, "id")
+	projectID, err := uuid.Parse(projectIDStr)
+	if err != nil {
+		http.Error(w, "Invalid project ID", http.StatusBadRequest)
+		return
+	}
+
+	project := h.verifyProjectOwnership(w, r, projectID)
+	if project == nil {
+		return
+	}
+
+	// Delete the project (soft delete)
+	if err := h.projectService.Delete(r.Context(), projectID); err != nil {
+		slog.Error("failed to delete project", "project_id", projectID, "user_id", user.ID, "error", err)
+		http.Error(w, "Failed to delete project", http.StatusInternalServerError)
+		return
+	}
+
+	// Audit log
+	h.auditService.LogAsync(services.LogParams{
+		UserID:       &user.ID,
+		Action:       services.ActionProjectDelete,
+		ResourceType: services.ResourceProject,
+		ResourceID:   &projectID,
+		ResourceName: project.Name,
+		IPAddress:    r.RemoteAddr,
+		UserAgent:    r.UserAgent(),
+	})
+
+	// Redirect to projects list
+	w.Header().Set("HX-Redirect", "/projects")
+	w.WriteHeader(http.StatusOK)
 }
 
 // NewSecretModal renders the new secret modal.
@@ -533,8 +573,10 @@ func (h *WebHandler) TokensPage(w http.ResponseWriter, r *http.Request) {
 			lastUsed = t.LastUsedAt.Format("Jan 2, 15:04")
 		}
 		expires := "Never"
+		isExpired := false
 		if t.ExpiresAt != nil {
 			expires = t.ExpiresAt.Format("Jan 2, 2006")
+			isExpired = t.ExpiresAt.Before(time.Now())
 		}
 		tokenInfos[i] = pages.TokenInfo{
 			ID:        t.ID.String(),
@@ -543,12 +585,14 @@ func (h *WebHandler) TokensPage(w http.ResponseWriter, r *http.Request) {
 			LastUsed:  lastUsed,
 			ExpiresAt: expires,
 			CreatedAt: t.CreatedAt.Format("Jan 2, 2006"),
+			IsExpired: isExpired,
 		}
 	}
 
 	data := pages.TokensPageData{
-		Tokens:   tokenInfos,
-		NewToken: "",
+		Tokens:    tokenInfos,
+		NewToken:  "",
+		CSRFToken: middleware.GetCSRFToken(r),
 	}
 
 	render(w, r, pages.TokensPage(data))
@@ -624,8 +668,10 @@ func (h *WebHandler) CreateToken(w http.ResponseWriter, r *http.Request) {
 			lastUsed = t.LastUsedAt.Format("Jan 2, 15:04")
 		}
 		expires := "Never"
+		isExpired := false
 		if t.ExpiresAt != nil {
 			expires = t.ExpiresAt.Format("Jan 2, 2006")
+			isExpired = t.ExpiresAt.Before(time.Now())
 		}
 		tokenInfos[i] = pages.TokenInfo{
 			ID:        t.ID.String(),
@@ -634,12 +680,14 @@ func (h *WebHandler) CreateToken(w http.ResponseWriter, r *http.Request) {
 			LastUsed:  lastUsed,
 			ExpiresAt: expires,
 			CreatedAt: t.CreatedAt.Format("Jan 2, 2006"),
+			IsExpired: isExpired,
 		}
 	}
 
 	data := pages.TokensPageData{
-		Tokens:   tokenInfos,
-		NewToken: token.Token, // Show the token once
+		Tokens:    tokenInfos,
+		NewToken:  token.Token, // Show the token once
+		CSRFToken: middleware.GetCSRFToken(r),
 	}
 
 	render(w, r, pages.TokensPage(data))
@@ -753,9 +801,24 @@ func (h *WebHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/settings?tab=profile&message=Email+is+already+in+use+by+another+account&type=error", http.StatusSeeOther)
 			return
 		}
+		if errors.Is(err, services.ErrUsernameExists) {
+			http.Redirect(w, r, "/settings?tab=profile&message=Username+is+already+taken&type=error", http.StatusSeeOther)
+			return
+		}
 		http.Redirect(w, r, "/settings?tab=profile&message=Failed+to+update+profile&type=error", http.StatusSeeOther)
 		return
 	}
+
+	// Audit log
+	h.auditService.LogAsync(services.LogParams{
+		UserID:       &user.ID,
+		Action:       services.ActionProfileUpdate,
+		ResourceType: services.ResourceUser,
+		ResourceID:   &user.ID,
+		ResourceName: username,
+		IPAddress:    r.RemoteAddr,
+		UserAgent:    r.UserAgent(),
+	})
 
 	http.Redirect(w, r, "/settings?tab=profile&message=Profile+updated+successfully&type=success", http.StatusSeeOther)
 }
@@ -799,6 +862,16 @@ func (h *WebHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Audit log
+	h.auditService.LogAsync(services.LogParams{
+		UserID:       &user.ID,
+		Action:       services.ActionPasswordChange,
+		ResourceType: services.ResourceUser,
+		ResourceID:   &user.ID,
+		IPAddress:    r.RemoteAddr,
+		UserAgent:    r.UserAgent(),
+	})
+
 	http.Redirect(w, r, "/settings?tab=security&message=Password+updated+successfully&type=success", http.StatusSeeOther)
 }
 
@@ -829,6 +902,16 @@ func (h *WebHandler) UnlinkGitHub(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/settings?tab=connected&message=Failed+to+unlink+GitHub&type=error", http.StatusSeeOther)
 		return
 	}
+
+	// Audit log
+	h.auditService.LogAsync(services.LogParams{
+		UserID:       &user.ID,
+		Action:       services.ActionGitHubUnlink,
+		ResourceType: services.ResourceUser,
+		ResourceID:   &user.ID,
+		IPAddress:    r.RemoteAddr,
+		UserAgent:    r.UserAgent(),
+	})
 
 	http.Redirect(w, r, "/settings?tab=connected&message=GitHub+account+unlinked+successfully&type=success", http.StatusSeeOther)
 }

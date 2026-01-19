@@ -19,18 +19,21 @@ import (
 type AuditAction string
 
 const (
-	ActionSecretRead    AuditAction = "secret.read"
-	ActionSecretCreate  AuditAction = "secret.create"
-	ActionSecretUpdate  AuditAction = "secret.update"
-	ActionSecretDelete  AuditAction = "secret.delete"
-	ActionProjectCreate AuditAction = "project.create"
-	ActionProjectUpdate AuditAction = "project.update"
-	ActionProjectDelete AuditAction = "project.delete"
-	ActionTokenCreate   AuditAction = "token.create"
-	ActionTokenRevoke   AuditAction = "token.revoke"
-	ActionUserLogin     AuditAction = "user.login"
-	ActionUserLogout    AuditAction = "user.logout"
-	ActionUserCreate    AuditAction = "user.create"
+	ActionSecretRead     AuditAction = "secret.read"
+	ActionSecretCreate   AuditAction = "secret.create"
+	ActionSecretUpdate   AuditAction = "secret.update"
+	ActionSecretDelete   AuditAction = "secret.delete"
+	ActionProjectCreate  AuditAction = "project.create"
+	ActionProjectUpdate  AuditAction = "project.update"
+	ActionProjectDelete  AuditAction = "project.delete"
+	ActionTokenCreate    AuditAction = "token.create"
+	ActionTokenRevoke    AuditAction = "token.revoke"
+	ActionUserLogin      AuditAction = "user.login"
+	ActionUserLogout     AuditAction = "user.logout"
+	ActionUserCreate     AuditAction = "user.create"
+	ActionProfileUpdate  AuditAction = "user.profile_update"
+	ActionPasswordChange AuditAction = "user.password_change"
+	ActionGitHubUnlink   AuditAction = "user.github_unlink"
 )
 
 // AuditResourceType defines the types of resources that can be audited.

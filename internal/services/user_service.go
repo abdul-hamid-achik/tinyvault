@@ -59,6 +59,7 @@ const (
 // Errors
 var (
 	ErrEmailExists        = errors.New("email already registered")
+	ErrUsernameExists     = errors.New("username already taken")
 	ErrInvalidCredentials = errors.New("invalid email or password")
 	ErrUserNotFound       = errors.New("user not found")
 )
@@ -208,6 +209,20 @@ func (s *UserService) UpdateProfile(ctx context.Context, id uuid.UUID, email, us
 	if err == nil && existingUser.ID != id {
 		log.Debug("email_already_in_use", "email", email, "existing_user_id", existingUser.ID)
 		return nil, ErrEmailExists
+	}
+
+	// Check if username is already in use by another user
+	usernameExists, err := s.queries.CheckUsernameExists(ctx, db.CheckUsernameExistsParams{
+		Username: username,
+		ID:       id,
+	})
+	if err != nil {
+		log.Error("username_check_failed", "username", username, "error", err)
+		return nil, fmt.Errorf("failed to check username: %w", err)
+	}
+	if usernameExists {
+		log.Debug("username_already_in_use", "username", username)
+		return nil, ErrUsernameExists
 	}
 
 	dbUser, err := s.queries.UpdateUserProfile(ctx, db.UpdateUserProfileParams{

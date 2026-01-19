@@ -15,6 +15,8 @@ import (
 type Querier interface {
 	// Check if email exists for a given auth provider
 	CheckEmailExists(ctx context.Context, arg CheckEmailExistsParams) (bool, error)
+	// Check if username exists for another user (excluding the given user ID)
+	CheckUsernameExists(ctx context.Context, arg CheckUsernameExistsParams) (bool, error)
 	CleanupOldLoginAttempts(ctx context.Context, createdAt time.Time) error
 	CountActiveAPITokensByUser(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountActiveSessionsByUser(ctx context.Context, userID uuid.UUID) (int64, error)
@@ -23,6 +25,8 @@ type Querier interface {
 	CountAuditLogsByUserSince(ctx context.Context, arg CountAuditLogsByUserSinceParams) (int64, error)
 	CountProjectsByOwner(ctx context.Context, ownerID uuid.UUID) (int64, error)
 	CountRecentFailedAttempts(ctx context.Context, arg CountRecentFailedAttemptsParams) (int64, error)
+	// Count all secrets for projects owned by a user
+	CountSecretsByOwner(ctx context.Context, ownerID uuid.UUID) (int64, error)
 	CountSecretsByProject(ctx context.Context, projectID uuid.UUID) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
 	CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) (ApiToken, error)
@@ -65,6 +69,7 @@ type Querier interface {
 	GetUserByEmailForAuth(ctx context.Context, email string) (User, error)
 	GetUserByGitHubID(ctx context.Context, githubID *int64) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
+	GetUserByUsername(ctx context.Context, username string) (User, error)
 	HardDeleteProject(ctx context.Context, id uuid.UUID) error
 	// Link GitHub account to existing user (only if not already linked)
 	LinkGitHubAccount(ctx context.Context, arg LinkGitHubAccountParams) error

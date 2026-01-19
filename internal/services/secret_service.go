@@ -241,6 +241,15 @@ func (s *SecretService) Count(ctx context.Context, projectID uuid.UUID) (int64, 
 	return count, nil
 }
 
+// CountByOwner returns the total number of secrets across all projects owned by a user.
+func (s *SecretService) CountByOwner(ctx context.Context, ownerID uuid.UUID) (int64, error) {
+	count, err := s.queries.CountSecretsByOwner(ctx, ownerID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count secrets by owner: %w", err)
+	}
+	return count, nil
+}
+
 // GetAll retrieves all secrets with decrypted values for a project.
 // Use with caution - only for CLI 'env' command.
 func (s *SecretService) GetAll(ctx context.Context, projectID uuid.UUID) (map[string][]byte, error) {

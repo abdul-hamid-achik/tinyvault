@@ -28,6 +28,23 @@ func (q *Queries) CheckEmailExists(ctx context.Context, arg CheckEmailExistsPara
 	return exists, err
 }
 
+const checkUsernameExists = `-- name: CheckUsernameExists :one
+SELECT EXISTS(SELECT 1 FROM users WHERE username = $1 AND id != $2) AS exists
+`
+
+type CheckUsernameExistsParams struct {
+	Username string    `db:"username" json:"username"`
+	ID       uuid.UUID `db:"id" json:"id"`
+}
+
+// Check if username exists for another user (excluding the given user ID)
+func (q *Queries) CheckUsernameExists(ctx context.Context, arg CheckUsernameExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, checkUsernameExists, arg.Username, arg.ID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const countUsers = `-- name: CountUsers :one
 SELECT COUNT(*) FROM users
 `
@@ -196,6 +213,29 @@ SELECT id, github_id, email, username, name, avatar_url, created_at, updated_at,
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 	row := q.db.QueryRow(ctx, getUserByID, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.GithubID,
+		&i.Email,
+		&i.Username,
+		&i.Name,
+		&i.AvatarUrl,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PasswordHash,
+		&i.AuthProvider,
+		&i.EmailVerified,
+	)
+	return i, err
+}
+
+const getUserByUsername = `-- name: GetUserByUsername :one
+SELECT id, github_id, email, username, name, avatar_url, created_at, updated_at, password_hash, auth_provider, email_verified FROM users WHERE username = $1
+`
+
+func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByUsername, username)
 	var i User
 	err := row.Scan(
 		&i.ID,

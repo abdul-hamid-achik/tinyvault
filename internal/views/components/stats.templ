@@ -34,20 +34,61 @@ templ StatCardInt64(label string, value int64, iconPath string) {
 	</div>
 }
 
+templ StatCardInt64WithTooltip(label string, value int64, iconPath string, tooltip string) {
+	<div class="card p-6">
+		<div class="flex items-center justify-between">
+			<div>
+				<p class="text-muted text-sm flex items-center gap-1">
+					{ label }
+					<span class="cursor-help" title={ tooltip }>
+						<svg class="w-4 h-4 text-nord4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+						</svg>
+					</span>
+				</p>
+				<p class="text-3xl font-bold text-nord6 mt-1">{ fmt.Sprintf("%d", value) }</p>
+			</div>
+			<div class="w-12 h-12 bg-nord10/20 rounded-lg flex items-center justify-center">
+				<svg class="w-6 h-6 text-nord8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={ iconPath }></path>
+				</svg>
+			</div>
+		</div>
+	</div>
+}
+
 templ ActionBadge(action string) {
 	switch action {
 		case "secret.read":
-			<span class="badge-primary">Read</span>
+			<span class="badge-primary">Secret Read</span>
 		case "secret.create":
-			<span class="badge-success">Created</span>
+			<span class="badge-success">Secret Created</span>
 		case "secret.update":
-			<span class="badge-warning">Updated</span>
+			<span class="badge-warning">Secret Updated</span>
 		case "secret.delete":
-			<span class="badge-error">Deleted</span>
+			<span class="badge-error">Secret Deleted</span>
 		case "project.create":
 			<span class="badge-success">Project Created</span>
+		case "project.update":
+			<span class="badge-warning">Project Updated</span>
 		case "project.delete":
 			<span class="badge-error">Project Deleted</span>
+		case "token.create":
+			<span class="badge-success">Token Created</span>
+		case "token.revoke":
+			<span class="badge-error">Token Revoked</span>
+		case "user.login":
+			<span class="badge-primary">Login</span>
+		case "user.logout":
+			<span class="badge-primary">Logout</span>
+		case "user.create":
+			<span class="badge-success">Account Created</span>
+		case "user.profile_update":
+			<span class="badge-warning">Profile Updated</span>
+		case "user.password_change":
+			<span class="badge-warning">Password Changed</span>
+		case "user.github_unlink":
+			<span class="badge-warning">GitHub Unlinked</span>
 		default:
 			<span class="badge-primary">{ action }</span>
 	}

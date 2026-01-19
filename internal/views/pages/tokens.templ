@@ -7,8 +7,9 @@ import (
 )
 
 type TokensPageData struct {
-	Tokens   []TokenInfo
-	NewToken string // Only set immediately after creation
+	Tokens    []TokenInfo
+	NewToken  string // Only set immediately after creation
+	CSRFToken string
 }
 
 type TokenInfo struct {
@@ -18,6 +19,7 @@ type TokenInfo struct {
 	LastUsed  string
 	ExpiresAt string
 	CreatedAt string
+	IsExpired bool
 }
 
 templ TokensPage(data TokensPageData) {
@@ -73,6 +75,7 @@ templ TokensPage(data TokensPageData) {
 				</div>
 				<div class="card-body">
 					<form method="POST" action="/settings/tokens" class="space-y-6">
+						<input type="hidden" name="csrf_token" value={ data.CSRFToken }/>
 						<!-- Token Name -->
 						<div class="form-group">
 							<label for="name" class="label">Token Name</label>
@@ -213,12 +216,19 @@ templ TokensPage(data TokensPageData) {
 templ TokenRow(token TokenInfo) {
 	<tr id={ "token-" + token.ID }>
 		<td>
-			<span class="font-medium text-nord6">{ token.Name }</span>
+			<div class="flex items-center gap-2">
+				<span class="font-medium text-nord6">{ token.Name }</span>
+				if token.IsExpired {
+					<span class="badge-error text-xs">Expired</span>
+				} else {
+					<span class="badge-success text-xs">Active</span>
+				}
+			</div>
 		</td>
 		<td>
 			<div class="flex flex-wrap gap-1">
 				for _, scope := range token.Scopes {
-					<span class="badge-primary text-xs">{ formatScope(scope) }</span>
+					<span class="badge-primary text-xs">{ formatScopeWithResource(scope) }</span>
 				}
 			</div>
 		</td>
@@ -249,4 +259,22 @@ func formatScope(scope string) string {
 		return scope
 	}
 	return parts[1]
+}
+
+// formatScopeWithResource formats scope as "Resource: Action"
+func formatScopeWithResource(scope string) string {
+	parts := strings.Split(scope, ":")
+	if len(parts) != 2 {
+		return scope
+	}
+	resource := parts[0]
+	action := parts[1]
+	// Capitalize first letter
+	if len(resource) > 0 {
+		resource = strings.ToUpper(resource[:1]) + resource[1:]
+	}
+	if len(action) > 0 {
+		action = strings.ToUpper(action[:1]) + action[1:]
+	}
+	return resource + ": " + action
 }

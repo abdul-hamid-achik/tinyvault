@@ -51,3 +51,9 @@ SELECT COUNT(*) FROM secrets WHERE project_id = $1;
 -- name: GetSecretWithValue :one
 SELECT * FROM secrets
 WHERE project_id = $1 AND key = $2;
+
+-- name: CountSecretsByOwner :one
+-- Count all secrets for projects owned by a user
+SELECT COUNT(*) FROM secrets s
+INNER JOIN projects p ON s.project_id = p.id
+WHERE p.owner_id = $1 AND p.deleted_at IS NULL;

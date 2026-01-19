@@ -80,3 +80,10 @@ WHERE id = $1 AND github_id IS NULL;
 UPDATE users
 SET github_id = NULL, updated_at = NOW()
 WHERE id = $1 AND password_hash IS NOT NULL;
+
+-- name: CheckUsernameExists :one
+-- Check if username exists for another user (excluding the given user ID)
+SELECT EXISTS(SELECT 1 FROM users WHERE username = $1 AND id != $2) AS exists;
+
+-- name: GetUserByUsername :one
+SELECT * FROM users WHERE username = $1;

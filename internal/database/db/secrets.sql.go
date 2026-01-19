@@ -12,6 +12,20 @@ import (
 	"github.com/google/uuid"
 )
 
+const countSecretsByOwner = `-- name: CountSecretsByOwner :one
+SELECT COUNT(*) FROM secrets s
+INNER JOIN projects p ON s.project_id = p.id
+WHERE p.owner_id = $1 AND p.deleted_at IS NULL
+`
+
+// Count all secrets for projects owned by a user
+func (q *Queries) CountSecretsByOwner(ctx context.Context, ownerID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countSecretsByOwner, ownerID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countSecretsByProject = `-- name: CountSecretsByProject :one
 SELECT COUNT(*) FROM secrets WHERE project_id = $1
 `

@@ -49,8 +49,17 @@ templ ProjectDetail(data ProjectDetailData) {
 </span>
 							<span>Add Secret</span>
 						</button>
-						<button type="button" class="btn-ghost">
-							@components.SettingsIcon(components.IconMD)
+						<button
+							type="button"
+							class="btn-ghost text-nord11 hover:bg-nord11/10"
+							hx-delete={ "/projects/" + data.ID }
+							hx-confirm="Are you sure you want to delete this project? This will permanently remove all secrets and cannot be undone."
+							hx-indicator="#delete-project-spinner"
+						>
+							<span id="delete-project-spinner" class="htmx-indicator">@components.Spinner(components.IconMD)
+</span>
+							<span class="htmx-hide-on-request">@components.TrashIcon(components.IconMD)
+</span>
 						</button>
 					</div>
 				</div>
@@ -92,7 +101,7 @@ templ ProjectDetail(data ProjectDetailData) {
 							<thead>
 								<tr>
 									<th>Key</th>
-									<th>Value</th>
+									<th>Value (Hidden)</th>
 									<th>Version</th>
 									<th>Updated</th>
 									<th></th>
