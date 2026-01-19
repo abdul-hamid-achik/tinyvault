@@ -84,57 +84,21 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Copy docker-compose.yml
+      - name: Copy files to server
         env:
           HOST: ${{ secrets.PRODUCTION_HOST }}
         run: |
-          scp -o StrictHostKeyChecking=no docker-compose.yml root@$HOST:/opt/tinyvault/docker-compose.yml
+          scp -o StrictHostKeyChecking=no \
+            docker-compose.yml Taskfile.yml \
+            root@$HOST:/opt/tinyvault/
 
-      - name: Deploy to server
+      - name: Deploy
         env:
           HOST: ${{ secrets.PRODUCTION_HOST }}
           IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
         run: |
-          ssh -o StrictHostKeyChecking=no root@$HOST << 'ENDSSH'
-            set -e
-
-            cd /opt/tinyvault
-
-            # Update image tag in .env
-            sed -i "s/IMAGE_TAG=.*/IMAGE_TAG=${{ env.IMAGE_TAG }}/" .env 2>/dev/null || echo "IMAGE_TAG=${{ env.IMAGE_TAG }}" >> .env
-
-            # Pull latest images
-            docker compose pull app
-
-            # Run migrations from the new image before starting
-            echo "Running database migrations..."
-            DB_PASS=$(grep DB_PASSWORD .env | cut -d= -f2)
-            docker compose run --rm --entrypoint "" app /usr/local/bin/goose -dir /app/migrations postgres "postgres://tinyvault:${DB_PASS}@postgres:5432/tinyvault?sslmode=disable" up < /dev/null
-
-            # Stop and remove old container, then start with new image
-            echo "Stopping old container..."
-            docker compose stop app || true
-            echo "Removing old container..."
-            docker compose rm -f app || true
-            echo "Starting new container..."
-            docker compose up -d --no-deps app
-            echo "Container started, waiting for health..."
-
-            # Wait for health check
-            echo "Waiting for app to be healthy..."
-            for i in {1..30}; do
-              if curl -sf http://localhost:8080/health > /dev/null; then
-                echo "App is healthy!"
-                exit 0
-              fi
-              echo "Attempt $i/30 - waiting..."
-              sleep 5
-            done
-
-            echo "Health check failed!"
-            docker compose logs app --tail 50
-            exit 1
-          ENDSSH
+          ssh -o StrictHostKeyChecking=no root@$HOST \
+            "cd /opt/tinyvault && task deploy IMAGE_TAG=$IMAGE_TAG"
 
       - name: Verify deployment
         env:

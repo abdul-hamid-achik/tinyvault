@@ -382,14 +382,42 @@ tasks:
   # ============================================================================
 
   deploy:
-    desc: "Deploy to production"
+    desc: "Deploy to production (run on server)"
+    vars:
+      IMAGE_TAG: '{{.IMAGE_TAG | default "latest"}}'
     cmds:
-      - ansible-playbook -i infrastructure/ansible/inventory/production.yml infrastructure/ansible/playbooks/deploy.yml
+      - echo "=== Deploying IMAGE_TAG={{.IMAGE_TAG}} ==="
+      - |
+        # Update .env with image tag
+        sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG={{.IMAGE_TAG}}/" .env 2>/dev/null || echo "IMAGE_TAG={{.IMAGE_TAG}}" >> .env
+      - echo "Pulling image..."
+      - docker compose pull app
+      - echo "Running migrations..."
+      - |
+        DB_PASS=$(grep DB_PASSWORD .env | cut -d= -f2)
+        docker compose run --rm --entrypoint "" app \
+          /usr/local/bin/goose -dir /app/migrations postgres \
+          "postgres://tinyvault:${DB_PASS}@postgres:5432/tinyvault?sslmode=disable" up
+      - echo "Restarting app..."
+      - docker compose up -d --force-recreate --no-deps app
+      - task: _deploy:wait-healthy
 
-  deploy:dry-run:
-    desc: "Dry-run deployment (check mode)"
+  _deploy:wait-healthy:
+    internal: true
     cmds:
-      - ansible-playbook -i infrastructure/ansible/inventory/production.yml infrastructure/ansible/playbooks/deploy.yml --check --diff
+      - |
+        echo "Waiting for health..."
+        for i in {1..30}; do
+          if curl -sf http://localhost:8080/health > /dev/null; then
+            echo "=== Deployment successful! ==="
+            exit 0
+          fi
+          echo "  Attempt $i/30..."
+          sleep 2
+        done
+        echo "=== Health check timeout ==="
+        docker compose logs app --tail 50
+        exit 1
 
   infra:plan:
     desc: "Terraform plan"
