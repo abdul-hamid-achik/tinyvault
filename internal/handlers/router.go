@@ -42,6 +42,10 @@ func NewRouter(deps *Dependencies) http.Handler {
 	r.Use(chimiddleware.Timeout(deps.Config.Server.RequestTimeout))
 	r.Use(middleware.SecurityHeaders(deps.Config.IsProduction()))
 
+	// Custom error pages
+	r.NotFound(NotFoundHandler)
+	r.MethodNotAllowed(MethodNotAllowedHandler)
+
 	// Rate limiter
 	rateLimiter := middleware.NewRateLimiter(
 		deps.Redis,
@@ -72,6 +76,7 @@ func NewRouter(deps *Dependencies) http.Handler {
 		deps.TokenService,
 		deps.AuditService,
 		deps.UserService,
+		deps.AuthService,
 	)
 
 	// Health checks and metrics (no auth, no rate limit)
@@ -110,6 +115,7 @@ func NewRouter(deps *Dependencies) http.Handler {
 
 			r.Route("/{id}", func(r chi.Router) {
 				r.With(middleware.RequireScope("projects:read")).Get("/", apiHandler.GetProject)
+				r.With(middleware.RequireScope("projects:write")).Patch("/", apiHandler.UpdateProject)
 				r.With(middleware.RequireScope("projects:delete")).Delete("/", apiHandler.DeleteProject)
 
 				// Secrets

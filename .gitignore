@@ -80,3 +80,6 @@ credentials/
 
 # Task runner
 .task/
+
+# Vecgrep semantic search index
+.vecgrep/

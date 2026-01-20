@@ -36,7 +36,7 @@ func withChiParams(r *http.Request, params map[string]string) *http.Request {
 
 // Test Home handler
 func TestHome(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
@@ -54,7 +54,7 @@ func TestHome(t *testing.T) {
 
 // Test Dashboard handler - unauthenticated redirect
 func TestDashboard_Unauthenticated(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
 	w := httptest.NewRecorder()
@@ -73,7 +73,7 @@ func TestDashboard_Unauthenticated(t *testing.T) {
 
 // Test Projects handler - unauthenticated redirect
 func TestProjects_Unauthenticated(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/projects", nil)
 	w := httptest.NewRecorder()
@@ -87,7 +87,7 @@ func TestProjects_Unauthenticated(t *testing.T) {
 
 // Test CreateProject - unauthenticated redirect
 func TestCreateProject_Unauthenticated(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	form := url.Values{}
 	form.Add("name", "test-project")
@@ -106,7 +106,7 @@ func TestCreateProject_Unauthenticated(t *testing.T) {
 
 // Test ProjectDetail - unauthenticated redirect
 func TestProjectDetail_Unauthenticated(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	projectID := uuid.New()
 	req := httptest.NewRequest(http.MethodGet, "/projects/"+projectID.String(), nil)
@@ -122,7 +122,7 @@ func TestProjectDetail_Unauthenticated(t *testing.T) {
 
 // Test ProjectDetail - invalid project ID
 func TestProjectDetail_InvalidProjectID(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	user := &services.User{ID: uuid.New(), Username: "testuser", Email: "test@example.com"}
 	req := httptest.NewRequest(http.MethodGet, "/projects/invalid-uuid", nil)
@@ -139,7 +139,7 @@ func TestProjectDetail_InvalidProjectID(t *testing.T) {
 
 // Test DeleteProject - unauthenticated
 func TestDeleteProject_Unauthenticated(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	projectID := uuid.New()
 	req := httptest.NewRequest(http.MethodDelete, "/projects/"+projectID.String(), nil)
@@ -155,7 +155,7 @@ func TestDeleteProject_Unauthenticated(t *testing.T) {
 
 // Test DeleteProject - invalid project ID
 func TestDeleteProject_InvalidProjectID(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	user := &services.User{ID: uuid.New(), Username: "testuser", Email: "test@example.com"}
 	req := httptest.NewRequest(http.MethodDelete, "/projects/invalid-uuid", nil)
@@ -172,7 +172,7 @@ func TestDeleteProject_InvalidProjectID(t *testing.T) {
 
 // Test TokensPage - unauthenticated redirect
 func TestTokensPage_Unauthenticated(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/settings/tokens", nil)
 	w := httptest.NewRecorder()
@@ -186,7 +186,7 @@ func TestTokensPage_Unauthenticated(t *testing.T) {
 
 // Test CreateToken - unauthenticated redirect
 func TestCreateToken_Unauthenticated(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	form := url.Values{}
 	form.Add("name", "test-token")
@@ -206,7 +206,7 @@ func TestCreateToken_Unauthenticated(t *testing.T) {
 
 // Test CreateToken - missing name
 func TestCreateToken_MissingName(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	user := &services.User{ID: uuid.New(), Username: "testuser", Email: "test@example.com"}
 	form := url.Values{}
@@ -227,7 +227,7 @@ func TestCreateToken_MissingName(t *testing.T) {
 
 // Test CreateToken - missing scopes
 func TestCreateToken_MissingScopes(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	user := &services.User{ID: uuid.New(), Username: "testuser", Email: "test@example.com"}
 	form := url.Values{}
@@ -247,7 +247,7 @@ func TestCreateToken_MissingScopes(t *testing.T) {
 
 // Test RevokeToken - unauthenticated
 func TestRevokeToken_Unauthenticated(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	tokenID := uuid.New()
 	req := httptest.NewRequest(http.MethodDelete, "/settings/tokens/"+tokenID.String(), nil)
@@ -263,7 +263,7 @@ func TestRevokeToken_Unauthenticated(t *testing.T) {
 
 // Test RevokeToken - invalid token ID
 func TestRevokeToken_InvalidTokenID(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	user := &services.User{ID: uuid.New(), Username: "testuser", Email: "test@example.com"}
 	req := httptest.NewRequest(http.MethodDelete, "/settings/tokens/invalid-uuid", nil)
@@ -280,7 +280,7 @@ func TestRevokeToken_InvalidTokenID(t *testing.T) {
 
 // Test SettingsPage - unauthenticated redirect
 func TestSettingsPage_Unauthenticated(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/settings", nil)
 	w := httptest.NewRecorder()
@@ -294,7 +294,7 @@ func TestSettingsPage_Unauthenticated(t *testing.T) {
 
 // Test UpdateProfile - unauthenticated redirect
 func TestUpdateProfile_Unauthenticated(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	form := url.Values{}
 	form.Add("username", "newusername")
@@ -313,7 +313,7 @@ func TestUpdateProfile_Unauthenticated(t *testing.T) {
 
 // Test UpdatePassword - unauthenticated redirect
 func TestUpdatePassword_Unauthenticated(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	form := url.Values{}
 	form.Add("current_password", "oldpassword123")
@@ -333,7 +333,7 @@ func TestUpdatePassword_Unauthenticated(t *testing.T) {
 
 // Test UpdatePassword - password too short
 func TestUpdatePassword_PasswordTooShort(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	user := &services.User{ID: uuid.New(), Username: "testuser", Email: "test@example.com"}
 	form := url.Values{}
@@ -360,7 +360,7 @@ func TestUpdatePassword_PasswordTooShort(t *testing.T) {
 
 // Test UpdatePassword - passwords don't match
 func TestUpdatePassword_PasswordsMismatch(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	user := &services.User{ID: uuid.New(), Username: "testuser", Email: "test@example.com"}
 	form := url.Values{}
@@ -387,7 +387,7 @@ func TestUpdatePassword_PasswordsMismatch(t *testing.T) {
 
 // Test UnlinkGitHub - unauthenticated redirect
 func TestUnlinkGitHub_Unauthenticated(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/settings/unlink-github", nil)
 	w := httptest.NewRecorder()
@@ -401,7 +401,7 @@ func TestUnlinkGitHub_Unauthenticated(t *testing.T) {
 
 // Test NewSecretModal - invalid project ID
 func TestNewSecretModal_InvalidProjectID(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/projects/invalid-uuid/secrets/new", nil)
 	req = withChiParams(req, map[string]string{"id": "invalid-uuid"})
@@ -416,7 +416,7 @@ func TestNewSecretModal_InvalidProjectID(t *testing.T) {
 
 // Test EditSecretModal - invalid project ID
 func TestEditSecretModal_InvalidProjectID(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/projects/invalid-uuid/secrets/TEST_KEY/edit", nil)
 	req = withChiParams(req, map[string]string{"id": "invalid-uuid", "key": "TEST_KEY"})
@@ -431,7 +431,7 @@ func TestEditSecretModal_InvalidProjectID(t *testing.T) {
 
 // Test RevealSecret - invalid project ID
 func TestRevealSecret_InvalidProjectID(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/projects/invalid-uuid/secrets/TEST_KEY/reveal", nil)
 	req = withChiParams(req, map[string]string{"id": "invalid-uuid", "key": "TEST_KEY"})
@@ -446,7 +446,7 @@ func TestRevealSecret_InvalidProjectID(t *testing.T) {
 
 // Test UpdateSecret - invalid project ID
 func TestUpdateSecret_InvalidProjectID(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	form := url.Values{}
 	form.Add("key", "TEST_KEY")
@@ -466,7 +466,7 @@ func TestUpdateSecret_InvalidProjectID(t *testing.T) {
 
 // Test DeleteSecret - invalid project ID
 func TestDeleteSecret_InvalidProjectID(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodDelete, "/projects/invalid-uuid/secrets/TEST_KEY", nil)
 	req = withChiParams(req, map[string]string{"id": "invalid-uuid", "key": "TEST_KEY"})
@@ -481,7 +481,7 @@ func TestDeleteSecret_InvalidProjectID(t *testing.T) {
 
 // Test verifyProjectOwnership - unauthorized when no user
 func TestVerifyProjectOwnership_NoUser(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	projectID := uuid.New()
 	req := httptest.NewRequest(http.MethodGet, "/projects/"+projectID.String(), nil)
@@ -500,7 +500,7 @@ func TestVerifyProjectOwnership_NoUser(t *testing.T) {
 
 // Test LinkGitHubRedirect
 func TestLinkGitHubRedirect(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/settings/link-github", nil)
 	w := httptest.NewRecorder()
@@ -519,7 +519,7 @@ func TestLinkGitHubRedirect(t *testing.T) {
 
 // Test NewProject renders form
 func TestNewProject(t *testing.T) {
-	handler := NewWebHandler(nil, nil, nil, nil, nil)
+	handler := NewWebHandler(nil, nil, nil, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/projects/new", nil)
 	w := httptest.NewRecorder()

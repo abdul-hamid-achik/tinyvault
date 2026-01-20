@@ -240,6 +240,24 @@ func (s *AuthService) ListActiveSessions(ctx context.Context, userID uuid.UUID) 
 	return sessions, nil
 }
 
+// DeleteSessionByID deletes a session by ID if it belongs to the user.
+func (s *AuthService) DeleteSessionByID(ctx context.Context, sessionID, userID uuid.UUID) error {
+	// First verify the session belongs to the user
+	session, err := s.queries.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		return fmt.Errorf("session not found: %w", err)
+	}
+
+	if session.UserID != userID {
+		return fmt.Errorf("session does not belong to user")
+	}
+
+	if err := s.queries.DeleteSession(ctx, sessionID); err != nil {
+		return fmt.Errorf("failed to delete session: %w", err)
+	}
+	return nil
+}
+
 // ErrAccountLocked is returned when an account is temporarily locked due to too many failed login attempts.
 var ErrAccountLocked = fmt.Errorf("account temporarily locked due to too many failed login attempts")
 

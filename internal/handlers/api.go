@@ -213,6 +213,87 @@ func (h *APIHandler) DeleteProject(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// UpdateProject handles PATCH /api/v1/projects/{id}
+func (h *APIHandler) UpdateProject(w http.ResponseWriter, r *http.Request) {
+	log := logging.Logger(r.Context())
+
+	user := middleware.GetUser(r.Context())
+	if user == nil {
+		jsonError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Authentication required")
+		return
+	}
+
+	projectID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "INVALID_INPUT", "Invalid project ID")
+		return
+	}
+
+	// Verify ownership
+	existingProject, err := h.projectService.GetByIDWithOwner(r.Context(), projectID, user.ID)
+	if err != nil {
+		jsonError(w, http.StatusNotFound, "NOT_FOUND", "Project not found")
+		return
+	}
+
+	var req struct {
+		Name        *string `json:"name"`
+		Description *string `json:"description"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, h.maxRequestBodySize)).Decode(&req); err != nil {
+		jsonError(w, http.StatusBadRequest, "INVALID_INPUT", "Invalid request body")
+		return
+	}
+
+	// Use existing values if not provided
+	name := existingProject.Name
+	description := ""
+	if existingProject.Description != nil {
+		description = *existingProject.Description
+	}
+
+	if req.Name != nil {
+		if err := validation.ProjectName(*req.Name); err != nil {
+			jsonError(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+			return
+		}
+		name = *req.Name
+	}
+	if req.Description != nil {
+		if err := validation.ProjectDescription(*req.Description); err != nil {
+			jsonError(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+			return
+		}
+		description = *req.Description
+	}
+
+	project, err := h.projectService.Update(r.Context(), projectID, name, description)
+	if err != nil {
+		if errors.Is(err, services.ErrDuplicateProjectName) {
+			jsonError(w, http.StatusBadRequest, "DUPLICATE_NAME", "A project with this name already exists")
+			return
+		}
+		log.Error("project_update_failed", "project_id", projectID, "user_id", user.ID, "error", err)
+		jsonError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to update project")
+		return
+	}
+
+	// Audit log
+	h.auditService.LogAsync(services.LogParams{
+		UserID:       &user.ID,
+		Action:       services.ActionProjectUpdate,
+		ResourceType: services.ResourceProject,
+		ResourceID:   &project.ID,
+		ResourceName: project.Name,
+		IPAddress:    r.RemoteAddr,
+		UserAgent:    r.UserAgent(),
+	})
+
+	log.Info("project_updated", "project_id", project.ID, "user_id", user.ID, "name", project.Name)
+
+	jsonResponse(w, http.StatusOK, project)
+}
+
 // Secrets
 
 // ListSecrets handles GET /api/v1/projects/{id}/secrets

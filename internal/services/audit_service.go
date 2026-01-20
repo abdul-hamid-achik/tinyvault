@@ -34,6 +34,7 @@ const (
 	ActionProfileUpdate  AuditAction = "user.profile_update"
 	ActionPasswordChange AuditAction = "user.password_change"
 	ActionGitHubUnlink   AuditAction = "user.github_unlink"
+	ActionSessionRevoke  AuditAction = "session.revoke"
 )
 
 // AuditResourceType defines the types of resources that can be audited.

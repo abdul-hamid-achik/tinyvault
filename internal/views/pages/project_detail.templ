@@ -80,8 +80,25 @@ templ ProjectDetail(data ProjectDetailData) {
 			<div class="card">
 				<div class="card-header flex items-center justify-between">
 					<h2 class="text-lg font-semibold text-nord6">Secrets</h2>
-					<span class="badge-primary">{ itoa(len(data.Secrets)) } secrets</span>
+					<span class="badge-primary" id="secret-count">{ itoa(len(data.Secrets)) } secrets</span>
 				</div>
+				if len(data.Secrets) > 0 {
+					<!-- Search Input -->
+					<div class="px-6 py-3 border-b border-nord2">
+						<div class="relative">
+							<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-nord4">
+								@components.SearchIcon(components.IconSM)
+							</div>
+							<input
+								type="text"
+								id="secret-search"
+								class="input pl-10 w-full max-w-md"
+								placeholder="Search secrets by key..."
+								autocomplete="off"
+							/>
+						</div>
+					</div>
+				}
 				<div class="card-body p-0">
 					if len(data.Secrets) == 0 {
 						<div class="p-12 text-center">
@@ -101,7 +118,15 @@ templ ProjectDetail(data ProjectDetailData) {
 							</button>
 						</div>
 					} else {
-						<table class="table">
+						<!-- No results message (hidden by default) -->
+						<div id="no-search-results" class="hidden p-12 text-center">
+							<div class="w-16 h-16 bg-nord2 rounded-full flex items-center justify-center mx-auto mb-4 text-nord4">
+								@components.SearchIcon(components.IconXL)
+							</div>
+							<h3 class="text-lg font-semibold text-nord6 mb-2">No secrets found</h3>
+							<p class="text-nord4">No secrets match your search. Try a different term.</p>
+						</div>
+						<table class="table" id="secrets-table">
 							<thead>
 								<tr>
 									<th>Key</th>
@@ -111,7 +136,7 @@ templ ProjectDetail(data ProjectDetailData) {
 									<th></th>
 								</tr>
 							</thead>
-							<tbody>
+							<tbody id="secrets-tbody">
 								for _, secret := range data.Secrets {
 									@SecretRow(data.ID, secret)
 								}
@@ -120,6 +145,54 @@ templ ProjectDetail(data ProjectDetailData) {
 					}
 				</div>
 			</div>
+			<script>
+				(function() {
+					const searchInput = document.getElementById('secret-search');
+					const tbody = document.getElementById('secrets-tbody');
+					const noResults = document.getElementById('no-search-results');
+					const table = document.getElementById('secrets-table');
+					const countBadge = document.getElementById('secret-count');
+
+					if (!searchInput || !tbody) return;
+
+					const totalCount = tbody.querySelectorAll('tr').length;
+
+					searchInput.addEventListener('input', function(e) {
+						const filter = e.target.value.toLowerCase().trim();
+						const rows = tbody.querySelectorAll('tr');
+						let visibleCount = 0;
+
+						rows.forEach(function(row) {
+							const keyCell = row.querySelector('td:first-child code');
+							if (!keyCell) return;
+
+							const key = keyCell.textContent.toLowerCase();
+							if (filter === '' || key.includes(filter)) {
+								row.style.display = '';
+								visibleCount++;
+							} else {
+								row.style.display = 'none';
+							}
+						});
+
+						// Show/hide no results message
+						if (visibleCount === 0 && filter !== '') {
+							table.classList.add('hidden');
+							noResults.classList.remove('hidden');
+						} else {
+							table.classList.remove('hidden');
+							noResults.classList.add('hidden');
+						}
+
+						// Update count badge
+						if (filter === '') {
+							countBadge.textContent = totalCount + ' secrets';
+						} else {
+							countBadge.textContent = visibleCount + ' of ' + totalCount + ' secrets';
+						}
+					});
+				})();
+			</script>
 			<!-- Modal Container -->
 			<div id="modal-container"></div>
 		</div>

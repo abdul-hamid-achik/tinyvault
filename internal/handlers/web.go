@@ -26,6 +26,7 @@ type WebHandler struct {
 	tokenService   *services.TokenService
 	auditService   *services.AuditService
 	userService    *services.UserService
+	authService    *services.AuthService
 }
 
 // NewWebHandler creates a new WebHandler.
@@ -35,6 +36,7 @@ func NewWebHandler(
 	tokenService *services.TokenService,
 	auditService *services.AuditService,
 	userService *services.UserService,
+	authService *services.AuthService,
 ) *WebHandler {
 	return &WebHandler{
 		projectService: projectService,
@@ -42,6 +44,7 @@ func NewWebHandler(
 		tokenService:   tokenService,
 		auditService:   auditService,
 		userService:    userService,
+		authService:    authService,
 	}
 }
 
@@ -79,6 +82,10 @@ func (h *WebHandler) RegisterRoutes(r chi.Router, authMiddleware func(http.Handl
 		r.Get("/settings/tokens", h.TokensPage)
 		r.Post("/settings/tokens", h.CreateToken)
 		r.Delete("/settings/tokens/{id}", h.RevokeToken)
+
+		// Settings - Sessions
+		r.Get("/settings/sessions", h.SessionsPage)
+		r.Delete("/settings/sessions/{id}", h.RevokeSession)
 	})
 }
 
@@ -93,18 +100,18 @@ func render(w http.ResponseWriter, r *http.Request, component templ.Component) {
 func (h *WebHandler) verifyProjectOwnership(w http.ResponseWriter, r *http.Request, projectID uuid.UUID) *services.Project {
 	user := middleware.GetUser(r.Context())
 	if user == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		RenderError(w, r, http.StatusUnauthorized, "Unauthorized", "Please log in to access this resource.")
 		return nil
 	}
 
 	project, err := h.projectService.GetByID(r.Context(), projectID)
 	if err != nil {
-		http.Error(w, "Project not found", http.StatusNotFound)
+		RenderNotFound(w, r, "The project you're looking for doesn't exist or has been deleted.")
 		return nil
 	}
 
 	if project.OwnerID != user.ID {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		RenderForbidden(w, r, "You don't have permission to access this project.")
 		return nil
 	}
 
@@ -216,7 +223,7 @@ func (h *WebHandler) Projects(w http.ResponseWriter, r *http.Request) {
 
 	projects, err := h.projectService.List(r.Context(), user.ID, 100, 0)
 	if err != nil {
-		http.Error(w, "Failed to load projects", http.StatusInternalServerError)
+		RenderServerError(w, r, "Failed to load projects. Please try again later.")
 		return
 	}
 
@@ -259,7 +266,7 @@ func (h *WebHandler) CreateProject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid form data", http.StatusBadRequest)
+		RenderError(w, r, http.StatusBadRequest, "Invalid Request", "The form data could not be processed.")
 		return
 	}
 
@@ -268,7 +275,7 @@ func (h *WebHandler) CreateProject(w http.ResponseWriter, r *http.Request) {
 
 	project, err := h.projectService.Create(r.Context(), user.ID, name, description)
 	if err != nil {
-		http.Error(w, "Failed to create project", http.StatusInternalServerError)
+		RenderServerError(w, r, "Failed to create project. Please try again later.")
 		return
 	}
 
@@ -297,25 +304,25 @@ func (h *WebHandler) ProjectDetail(w http.ResponseWriter, r *http.Request) {
 	projectIDStr := chi.URLParam(r, "id")
 	projectID, err := uuid.Parse(projectIDStr)
 	if err != nil {
-		http.Error(w, "Invalid project ID", http.StatusBadRequest)
+		RenderError(w, r, http.StatusBadRequest, "Invalid Request", "The project ID is invalid.")
 		return
 	}
 
 	project, err := h.projectService.GetByID(r.Context(), projectID)
 	if err != nil {
-		http.Error(w, "Project not found", http.StatusNotFound)
+		RenderNotFound(w, r, "The project you're looking for doesn't exist or has been deleted.")
 		return
 	}
 
 	// Verify ownership
 	if project.OwnerID != user.ID {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		RenderForbidden(w, r, "You don't have permission to access this project.")
 		return
 	}
 
 	secrets, err := h.secretService.List(r.Context(), project.ID, 1000, 0)
 	if err != nil {
-		http.Error(w, "Failed to load secrets", http.StatusInternalServerError)
+		RenderServerError(w, r, "Failed to load secrets. Please try again later.")
 		return
 	}
 
@@ -914,4 +921,144 @@ func (h *WebHandler) UnlinkGitHub(w http.ResponseWriter, r *http.Request) {
 	})
 
 	http.Redirect(w, r, "/settings?tab=connected&message=GitHub+account+unlinked+successfully&type=success", http.StatusSeeOther)
+}
+
+// SessionsPage renders the sessions management page.
+func (h *WebHandler) SessionsPage(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r.Context())
+	if user == nil {
+		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+		return
+	}
+
+	// Get current session ID from cookie
+	currentSessionID := ""
+	if cookie, err := r.Cookie("session"); err == nil {
+		// Validate the session to get the ID
+		if sessionWithUser, err := h.authService.ValidateSession(r.Context(), cookie.Value); err == nil {
+			currentSessionID = sessionWithUser.ID.String()
+		}
+	}
+
+	sessions, err := h.authService.ListActiveSessions(r.Context(), user.ID)
+	if err != nil {
+		slog.Error("failed to list sessions", "user_id", user.ID, "error", err)
+		http.Error(w, "Failed to load sessions", http.StatusInternalServerError)
+		return
+	}
+
+	sessionInfos := make([]pages.SessionInfo, len(sessions))
+	for i, s := range sessions {
+		isCurrentSession := s.ID.String() == currentSessionID
+
+		// Parse user agent for device info
+		deviceInfo := parseUserAgent(s.UserAgent)
+
+		sessionInfos[i] = pages.SessionInfo{
+			ID:               s.ID.String(),
+			IPAddress:        s.IPAddress,
+			UserAgent:        s.UserAgent,
+			DeviceInfo:       deviceInfo,
+			LastActiveAt:     s.LastActiveAt.Format("Jan 2, 15:04"),
+			CreatedAt:        s.CreatedAt.Format("Jan 2, 2006"),
+			IsCurrentSession: isCurrentSession,
+		}
+	}
+
+	data := pages.SessionsPageData{
+		Sessions:  sessionInfos,
+		CSRFToken: middleware.GetCSRFToken(r),
+	}
+
+	render(w, r, pages.SessionsPage(data))
+}
+
+// RevokeSession handles session revocation.
+func (h *WebHandler) RevokeSession(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r.Context())
+	if user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	sessionIDStr := chi.URLParam(r, "id")
+	sessionID, err := uuid.Parse(sessionIDStr)
+	if err != nil {
+		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		return
+	}
+
+	// Check if trying to revoke current session
+	if cookie, err := r.Cookie("session"); err == nil {
+		if sessionWithUser, err := h.authService.ValidateSession(r.Context(), cookie.Value); err == nil {
+			if sessionWithUser.ID == sessionID {
+				http.Error(w, "Cannot revoke current session", http.StatusBadRequest)
+				return
+			}
+		}
+	}
+
+	if err := h.authService.DeleteSessionByID(r.Context(), sessionID, user.ID); err != nil {
+		slog.Error("failed to revoke session", "session_id", sessionID, "user_id", user.ID, "error", err)
+		http.Error(w, "Failed to revoke session", http.StatusInternalServerError)
+		return
+	}
+
+	// Audit log
+	h.auditService.LogAsync(services.LogParams{
+		UserID:       &user.ID,
+		Action:       services.ActionSessionRevoke,
+		ResourceType: services.ResourceSession,
+		ResourceID:   &sessionID,
+		IPAddress:    r.RemoteAddr,
+		UserAgent:    r.UserAgent(),
+	})
+
+	// Return empty response to remove the row (HTMX)
+	w.WriteHeader(http.StatusOK)
+}
+
+// parseUserAgent extracts device info from user agent string.
+func parseUserAgent(ua string) string {
+	ua = strings.ToLower(ua)
+
+	// Determine OS using helper
+	os := detectOS(ua)
+
+	// Determine browser using helper
+	browser := detectBrowser(ua)
+
+	return browser + " on " + os
+}
+
+func detectOS(ua string) string {
+	switch {
+	case strings.Contains(ua, "windows"):
+		return "Windows"
+	case strings.Contains(ua, "mac os"), strings.Contains(ua, "macintosh"):
+		return "macOS"
+	case strings.Contains(ua, "android"):
+		return "Android"
+	case strings.Contains(ua, "iphone"), strings.Contains(ua, "ipad"):
+		return "iOS"
+	case strings.Contains(ua, "linux"):
+		return "Linux"
+	default:
+		return "Unknown"
+	}
+}
+
+func detectBrowser(ua string) string {
+	switch {
+	case strings.Contains(ua, "edg"):
+		return "Edge"
+	case strings.Contains(ua, "chrome"):
+		return "Chrome"
+	case strings.Contains(ua, "firefox"):
+		return "Firefox"
+	case strings.Contains(ua, "safari"):
+		return "Safari"
+	default:
+		return "Unknown"
+	}
 }

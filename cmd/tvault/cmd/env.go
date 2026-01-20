@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/base64"
 	"fmt"
 	"sort"
 	"strings"
@@ -9,28 +10,36 @@ import (
 )
 
 var (
-	envFormat string
-	envExport bool
+	envFormat  string
+	envExport  bool
+	envK8sName string
+	envK8sNs   string
 )
 
 var envCmd = &cobra.Command{
 	Use:   "env",
 	Short: "Export secrets as environment variables",
-	Long: `Export all secrets as environment variables.
+	Long: `Export all secrets as environment variables in various formats.
 
-The output can be used with shell eval or saved to an .env file.
+The output can be used with shell eval, saved to an .env file,
+or exported as YAML or Kubernetes Secret manifests.
 
 Examples:
   eval $(tvault env)
   tvault env --format=dotenv > .env
+  tvault env --format=yaml > secrets.yaml
+  tvault env --format=k8s-secret --name=my-secrets > secret.yaml
+  kubectl apply -f <(tvault env --format=k8s-secret --name=app-secrets)
   source <(tvault env)`,
 	RunE: runEnv,
 }
 
 func init() {
 	rootCmd.AddCommand(envCmd)
-	envCmd.Flags().StringVarP(&envFormat, "format", "f", "shell", "Output format: shell, dotenv, json")
+	envCmd.Flags().StringVarP(&envFormat, "format", "f", "shell", "Output format: shell, dotenv, json, yaml, k8s-secret")
 	envCmd.Flags().BoolVarP(&envExport, "export", "e", true, "Include 'export' prefix (shell format only)")
+	envCmd.Flags().StringVar(&envK8sName, "name", "", "Kubernetes Secret name (required for k8s-secret format)")
+	envCmd.Flags().StringVar(&envK8sNs, "namespace", "default", "Kubernetes namespace (k8s-secret format)")
 }
 
 func runEnv(_ *cobra.Command, _ []string) error {
@@ -90,8 +99,30 @@ func runEnv(_ *cobra.Command, _ []string) error {
 			}
 		}
 		fmt.Println("}")
+	case "yaml":
+		for _, k := range keys {
+			v := secrets[k]
+			escaped := escapeYAMLValue(v)
+			fmt.Printf("%s: %s\n", k, escaped)
+		}
+	case "k8s-secret":
+		if envK8sName == "" {
+			return fmt.Errorf("--name is required for k8s-secret format")
+		}
+		fmt.Println("apiVersion: v1")
+		fmt.Println("kind: Secret")
+		fmt.Println("metadata:")
+		fmt.Printf("  name: %s\n", envK8sName)
+		fmt.Printf("  namespace: %s\n", envK8sNs)
+		fmt.Println("type: Opaque")
+		fmt.Println("data:")
+		for _, k := range keys {
+			v := secrets[k]
+			encoded := base64.StdEncoding.EncodeToString([]byte(v))
+			fmt.Printf("  %s: %s\n", k, encoded)
+		}
 	default:
-		return fmt.Errorf("unknown format: %s", envFormat)
+		return fmt.Errorf("unknown format: %s (valid: shell, dotenv, json, yaml, k8s-secret)", envFormat)
 	}
 
 	return nil
@@ -122,4 +153,33 @@ func escapeJSONValue(s string) string {
 	escaped = strings.ReplaceAll(escaped, "\n", "\\n")
 	escaped = strings.ReplaceAll(escaped, "\t", "\\t")
 	return escaped
+}
+
+func escapeYAMLValue(s string) string {
+	// YAML needs quoting for special characters, multiline, or leading/trailing whitespace
+	needsQuoting := strings.ContainsAny(s, ":#{}[]!|>&*?-@`'\"\\\n\t") ||
+		strings.HasPrefix(s, " ") ||
+		strings.HasSuffix(s, " ") ||
+		s == "" ||
+		s == "true" || s == "false" ||
+		s == "yes" || s == "no" ||
+		s == "null" || s == "~"
+
+	if !needsQuoting {
+		// Check if it looks like a number
+		if _, err := fmt.Sscanf(s, "%f", new(float64)); err == nil {
+			needsQuoting = true
+		}
+	}
+
+	if !needsQuoting {
+		return s
+	}
+
+	// Use double quotes with escape sequences
+	escaped := strings.ReplaceAll(s, "\\", "\\\\")
+	escaped = strings.ReplaceAll(escaped, "\"", "\\\"")
+	escaped = strings.ReplaceAll(escaped, "\n", "\\n")
+	escaped = strings.ReplaceAll(escaped, "\t", "\\t")
+	return "\"" + escaped + "\""
 }

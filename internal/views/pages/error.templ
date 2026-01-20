@@ -1,0 +1,96 @@
+package pages
+
+import (
+	"github.com/abdul-hamid-achik/tinyvault/internal/views/components"
+	"github.com/abdul-hamid-achik/tinyvault/internal/views/layout"
+)
+
+type ErrorData struct {
+	StatusCode  int
+	Title       string
+	Message     string
+	ShowHomeBtn bool
+}
+
+templ Error(data ErrorData) {
+	@layout.Base(data.Title, false) {
+		<div class="min-h-[60vh] flex items-center justify-center px-4">
+			<div class="text-center">
+				<div class="mb-8">
+					if data.StatusCode == 404 {
+						@ErrorIcon404()
+					} else if data.StatusCode == 403 {
+						@ErrorIcon403()
+					} else {
+						@ErrorIcon500()
+					}
+				</div>
+				<h1 class="text-6xl font-bold text-nord8 mb-4">{ itoa(data.StatusCode) }</h1>
+				<h2 class="text-2xl font-semibold text-nord6 mb-4">{ data.Title }</h2>
+				<p class="text-nord4 mb-8 max-w-md mx-auto">{ data.Message }</p>
+				<div class="flex items-center justify-center gap-4">
+					if data.ShowHomeBtn {
+						<a href="/" class="btn-primary">
+							@components.ChevronLeftIcon(components.IconMD)
+							Back to Home
+						</a>
+					}
+					<a href="/dashboard" class="btn-secondary">
+						Go to Dashboard
+					</a>
+				</div>
+			</div>
+		</div>
+	}
+}
+
+templ Error404() {
+	@Error(ErrorData{
+		StatusCode:  404,
+		Title:       "Page Not Found",
+		Message:     "The page you're looking for doesn't exist or has been moved.",
+		ShowHomeBtn: true,
+	})
+}
+
+templ Error403() {
+	@Error(ErrorData{
+		StatusCode:  403,
+		Title:       "Access Denied",
+		Message:     "You don't have permission to access this resource.",
+		ShowHomeBtn: true,
+	})
+}
+
+templ Error500() {
+	@Error(ErrorData{
+		StatusCode:  500,
+		Title:       "Server Error",
+		Message:     "Something went wrong on our end. Please try again later.",
+		ShowHomeBtn: true,
+	})
+}
+
+templ ErrorIcon404() {
+	<div class="w-32 h-32 mx-auto text-nord3">
+		<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-full h-full">
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+		</svg>
+	</div>
+}
+
+templ ErrorIcon403() {
+	<div class="w-32 h-32 mx-auto text-nord3">
+		<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-full h-full">
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+		</svg>
+	</div>
+}
+
+templ ErrorIcon500() {
+	<div class="w-32 h-32 mx-auto text-nord3">
+		<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" class="w-full h-full">
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+		</svg>
+	</div>
+}
