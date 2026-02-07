@@ -30,10 +30,8 @@ linters:
     - errorlint
     - exhaustive
     - gocognit
-    - goconst
     - gocritic
     - gocyclo
-    - godot
     - goprintffuncname
     - gosec
     - misspell
@@ -44,12 +42,9 @@ linters:
     - prealloc
     - predeclared
     - revive
-    - rowserrcheck
-    - sqlclosecheck
     - tparallel
     - unconvert
     - unparam
-    - wastedassign
     - whitespace
 
   settings:
@@ -67,10 +62,6 @@ linters:
 
     gocognit:
       min-complexity: 20
-
-    goconst:
-      min-len: 3
-      min-occurrences: 3
 
     gocritic:
       enabled-tags:
@@ -148,27 +139,16 @@ linters:
           - gosec
           - errcheck
           - govet
-          - goconst
           - errorlint
           - revive
           - staticcheck
           - gocritic
-
-      # Exclude generated database code
-      - path: internal/database/db/
-        linters:
-          - all
 
       # Allow longer functions in cmd
       - path: cmd/
         linters:
           - gocyclo
           - gocognit
-
-      # Duplicate code in services is acceptable (Create/Update/Upsert patterns)
-      - path: internal/services/
-        linters:
-          - dupl
 
       # Crypto package name collision is intentional
       - path: internal/crypto/
@@ -181,31 +161,6 @@ linters:
           - errcheck
         text: "viper\\."
 
-      # JSON encode errors in HTTP handlers (client disconnected)
-      - linters:
-          - errcheck
-        text: "json\\.NewEncoder\\(w\\)\\.Encode"
-
-      # Template render errors are handled by the framework
-      - linters:
-          - errcheck
-        text: "component\\.Render"
-
-      # Context value type assertions are intentionally unchecked
-      - linters:
-          - errcheck
-        text: "ctx\\.Value"
-
-      # Transaction rollback errors in panic handlers
-      - linters:
-          - errcheck
-        text: "tx\\.Rollback"
-
-      # JSON unmarshal of optional metadata
-      - linters:
-          - errcheck
-        text: "json\\.Unmarshal\\(log\\.Metadata"
-
       # Signal errors during shutdown
       - linters:
           - errcheck
@@ -216,116 +171,26 @@ linters:
           - errcheck
         text: "os\\.Stdin\\.Stat"
 
-      # High complexity is acceptable for certain handlers (OAuth flows, etc.)
-      - path: internal/handlers/
-        linters:
-          - gocognit
-          - gocyclo
-
-      - path: internal/middleware/
-        linters:
-          - gocognit
-
-      # Shadow variables in handlers are acceptable
-      - path: internal/handlers/
-        linters:
-          - govet
-        text: "shadow"
-
-      - path: internal/services/
-        linters:
-          - govet
-        text: "shadow"
-
-      # Disable gocritic for range value copies (acceptable for our data sizes)
+      # Disable gocritic for range value copies
       - linters:
           - gocritic
         text: "rangeValCopy"
 
-      # Import shadowing is acceptable when parameter names are clear
+      # Import shadowing is acceptable
       - linters:
           - gocritic
         text: "importShadow"
 
-      # goconst suggestions are optional - disable globally
-      - path: ".*"
-        linters:
-          - goconst
-
-      # goprintffuncname is optional - disable globally
-      - path: ".*"
-        linters:
-          - goprintffuncname
-
-      # godot comment endings are optional - disable globally
-      - path: ".*"
-        linters:
-          - godot
-
-      # gosec warnings that are handled appropriately
-      - linters:
-          - gosec
-        text: "G404"
-
-      # gosec integer overflow is acceptable for config values
-      - linters:
-          - gosec
-        text: "G115"
-
-      # revive unused-parameter for HTTP handlers
-      - path: internal/handlers/
-        linters:
-          - revive
-        text: "unused-parameter"
-
-      # gocritic suggestions that are stylistic
+      # gocritic stylistic suggestions
       - linters:
           - gocritic
         text: "unnamedResult"
 
       - linters:
           - gocritic
-        text: "equalFold"
-
-      - linters:
-          - gocritic
-        text: "httpNoBody"
-
-      - linters:
-          - gocritic
         text: "exitAfterDefer"
 
-      # wastedassign - disable globally
-      - path: ".*"
-        linters:
-          - wastedassign
-
-      # JSON encode in health handlers
-      - path: internal/handlers/health\.go
-        linters:
-          - errcheck
-        text: "Encode"
-
-      # JSON encode in API handlers
-      - path: internal/handlers/api\.go
-        linters:
-          - errcheck
-        text: "Encode"
-
-      # JSON encode in middleware
-      - path: internal/middleware/
-        linters:
-          - errcheck
-        text: "Encode"
-
-      # Context value type assertions are intentional
-      - path: internal/middleware/auth\.go
-        linters:
-          - errcheck
-        source: "ctx\\.Value"
-
-      # JSON unmarshal of optional metadata
-      - path: internal/services/audit_service\.go
-        linters:
-          - errcheck
-        text: "json\\.Unmarshal"
+      # gosec integer overflow is acceptable for config values
+      - linters:
+          - gosec
+        text: "G115"

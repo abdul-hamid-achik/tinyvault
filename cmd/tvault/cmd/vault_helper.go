@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
 	"golang.org/x/term"
+
+	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
 )
 
 const defaultVaultDir = ".tvault"

@@ -3,8 +3,9 @@ package mcp
 import (
 	"context"
 
-	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
 )
 
 // VaultMCPServer wraps a vault and exposes it as an MCP server.

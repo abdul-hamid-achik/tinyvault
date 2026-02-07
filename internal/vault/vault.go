@@ -10,9 +10,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/abdul-hamid-achik/tinyvault/internal/crypto"
 	"github.com/abdul-hamid-achik/tinyvault/internal/store"
-	"github.com/google/uuid"
 )
 
 const (

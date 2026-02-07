@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
 )
 
 func TestDefaultPolicy(t *testing.T) {
