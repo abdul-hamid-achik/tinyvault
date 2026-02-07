@@ -10,30 +10,6 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: tinyvault_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
     steps:
       - uses: actions/checkout@v4
 
@@ -43,39 +19,7 @@ jobs:
           go-version: '1.25'
           cache: true
 
-      - name: Cache templ binary
-        id: cache-templ
-        uses: actions/cache@v4
-        with:
-          path: ~/go/bin/templ
-          key: templ-${{ runner.os }}-v0.3.977
-
-      - name: Install templ
-        if: steps.cache-templ.outputs.cache-hit != 'true'
-        run: go install github.com/a-h/templ/cmd/templ@v0.3.977
-
-      - name: Generate templ files
-        run: ~/go/bin/templ generate
-
-      - name: Cache sqlc binary
-        id: cache-sqlc
-        uses: actions/cache@v4
-        with:
-          path: ~/go/bin/sqlc
-          key: sqlc-${{ runner.os }}-v1.28.0
-
-      - name: Install sqlc
-        if: steps.cache-sqlc.outputs.cache-hit != 'true'
-        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.28.0
-
-      - name: Generate sqlc
-        run: ~/go/bin/sqlc generate
-
       - name: Run tests
-        env:
-          DATABASE_URL: postgres://test:test@localhost:5432/tinyvault_test?sslmode=disable
-          REDIS_URL: redis://localhost:6379/0
-          ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS1mb3ItY2ktdGVzdA==
         run: go test -v -race -coverprofile=coverage.out ./...
 
       - name: Upload coverage
@@ -96,34 +40,6 @@ jobs:
           go-version: '1.25'
           cache: true
 
-      - name: Cache templ binary
-        id: cache-templ
-        uses: actions/cache@v4
-        with:
-          path: ~/go/bin/templ
-          key: templ-${{ runner.os }}-v0.3.977
-
-      - name: Install templ
-        if: steps.cache-templ.outputs.cache-hit != 'true'
-        run: go install github.com/a-h/templ/cmd/templ@v0.3.977
-
-      - name: Generate templ files
-        run: ~/go/bin/templ generate
-
-      - name: Cache sqlc binary
-        id: cache-sqlc
-        uses: actions/cache@v4
-        with:
-          path: ~/go/bin/sqlc
-          key: sqlc-${{ runner.os }}-v1.28.0
-
-      - name: Install sqlc
-        if: steps.cache-sqlc.outputs.cache-hit != 'true'
-        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.28.0
-
-      - name: Generate sqlc
-        run: ~/go/bin/sqlc generate
-
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
@@ -141,36 +57,23 @@ jobs:
           go-version: '1.25'
           cache: true
 
-      - name: Cache templ binary
-        id: cache-templ
-        uses: actions/cache@v4
-        with:
-          path: ~/go/bin/templ
-          key: templ-${{ runner.os }}-v0.3.977
-
-      - name: Install templ
-        if: steps.cache-templ.outputs.cache-hit != 'true'
-        run: go install github.com/a-h/templ/cmd/templ@v0.3.977
-
-      - name: Generate templ files
-        run: ~/go/bin/templ generate
-
-      - name: Cache sqlc binary
-        id: cache-sqlc
-        uses: actions/cache@v4
-        with:
-          path: ~/go/bin/sqlc
-          key: sqlc-${{ runner.os }}-v1.28.0
-
-      - name: Install sqlc
-        if: steps.cache-sqlc.outputs.cache-hit != 'true'
-        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.28.0
-
-      - name: Generate sqlc
-        run: ~/go/bin/sqlc generate
-
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
 
       - name: Run govulncheck
         run: govulncheck ./...
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Build binary
+        run: CGO_ENABLED=0 go build -o tvault ./cmd/tvault

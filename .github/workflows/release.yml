@@ -23,20 +23,6 @@ jobs:
         with:
           go-version: '1.25'
 
-      - name: Cache templ binary
-        id: cache-templ
-        uses: actions/cache@v4
-        with:
-          path: ~/go/bin/templ
-          key: templ-${{ runner.os }}-v0.3.977
-
-      - name: Install templ
-        if: steps.cache-templ.outputs.cache-hit != 'true'
-        run: go install github.com/a-h/templ/cmd/templ@v0.3.977
-
-      - name: Generate templ files
-        run: ~/go/bin/templ generate
-
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:

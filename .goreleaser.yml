@@ -5,26 +5,8 @@ project_name: tinyvault
 before:
   hooks:
     - go mod tidy
-    - templ generate
 
 builds:
-  - id: server
-    main: ./cmd/server
-    binary: tinyvault-server
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - linux
-      - darwin
-    goarch:
-      - amd64
-      - arm64
-    ldflags:
-      - -s -w
-      - -X main.version={{.Version}}
-      - -X main.commit={{.ShortCommit}}
-      - -X main.date={{.Date}}
-
   - id: tvault
     main: ./cmd/tvault
     binary: tvault
@@ -44,19 +26,6 @@ builds:
       - -X main.date={{.Date}}
 
 archives:
-  - id: server
-    builds:
-      - server
-    name_template: "{{ .ProjectName }}-server_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    formats:
-      - tar.gz
-    format_overrides:
-      - goos: windows
-        formats:
-          - zip
-    files:
-      - README.md
-
   - id: tvault
     builds:
       - tvault
@@ -96,8 +65,8 @@ brews:
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Formula
-    homepage: "https://tinyvault.dev"
-    description: "Dead simple secrets management CLI"
+    homepage: "https://github.com/abdul-hamid-achik/tinyvault"
+    description: "Dead simple secrets management CLI and MCP server"
     license: "MIT"
     install: |
       bin.install "tvault"
@@ -109,9 +78,9 @@ nfpms:
   - id: packages
     package_name: tvault
     vendor: TinyVault
-    homepage: https://tinyvault.dev
+    homepage: https://github.com/abdul-hamid-achik/tinyvault
     maintainer: Abdul Hamid Achik <abdul.achik@gmail.com>
-    description: "Dead simple secrets management CLI"
+    description: "Dead simple secrets management CLI and MCP server"
     license: MIT
     formats:
       - deb
