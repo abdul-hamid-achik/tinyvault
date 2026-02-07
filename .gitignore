@@ -1,8 +1,8 @@
 # Binaries
 bin/
-server
-tinyvault
-tvault
+/server
+/tinyvault
+/tvault
 *.exe
 *.exe~
 *.dll
