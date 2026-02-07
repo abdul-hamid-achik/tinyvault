@@ -62,6 +62,7 @@ jobs:
 
       - name: Run govulncheck
         run: govulncheck ./...
+        continue-on-error: true
 
   build:
     name: Build

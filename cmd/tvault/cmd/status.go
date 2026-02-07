@@ -38,8 +38,8 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	}
 	defer v.Close()
 
-	currentProject, _ := v.GetCurrentProject()
-	projects, _ := v.ListProjects()
+	currentProject, _ := v.GetCurrentProject() //nolint:errcheck // empty string is fine as default
+	projects, _ := v.ListProjects()            //nolint:errcheck // nil slice is fine as default
 
 	if jsonOutput {
 		enc := json.NewEncoder(os.Stdout)

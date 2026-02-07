@@ -86,7 +86,7 @@ func (p *AccessPolicy) CanExec() bool {
 // matchesAny returns true if name matches any of the glob patterns.
 func matchesAny(name string, patterns []string) bool {
 	for _, pattern := range patterns {
-		if matched, _ := filepath.Match(pattern, name); matched {
+		if matched, _ := filepath.Match(pattern, name); matched { //nolint:errcheck // invalid patterns are silently skipped
 			return true
 		}
 	}

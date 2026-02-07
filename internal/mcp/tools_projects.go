@@ -37,7 +37,7 @@ func (s *VaultMCPServer) handleListProjects(_ context.Context, _ *sdkmcp.CallToo
 		if !s.policy.CanAccessProject(p.Name) {
 			continue
 		}
-		keys, _ := s.vault.ListSecrets(p.Name)
+		keys, _ := s.vault.ListSecrets(p.Name) //nolint:errcheck // zero count is acceptable on error
 		infos = append(infos, projectInfo{
 			Name:        p.Name,
 			Description: p.Description,

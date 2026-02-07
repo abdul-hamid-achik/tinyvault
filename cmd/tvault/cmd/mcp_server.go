@@ -38,7 +38,7 @@ func runMCPServer(cmd *cobra.Command, _ []string) error {
 	defer v.Close()
 
 	policyPath := filepath.Join(getVaultDir(), "mcp-policy.yaml")
-	policy, _ := tvmcp.LoadPolicy(policyPath)
+	policy, _ := tvmcp.LoadPolicy(policyPath) //nolint:errcheck // falls back to default policy below
 	if policy == nil {
 		policy = tvmcp.DefaultPolicy()
 	}

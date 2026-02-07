@@ -77,7 +77,7 @@ func runProjectsList(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("failed to list projects: %w", err)
 	}
 
-	currentProject, _ := v.GetCurrentProject()
+	currentProject, _ := v.GetCurrentProject() //nolint:errcheck // empty string is fine as default
 
 	if jsonOutput {
 		type projectJSON struct {

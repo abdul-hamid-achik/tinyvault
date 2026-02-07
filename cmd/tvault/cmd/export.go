@@ -81,7 +81,7 @@ func runExport(_ *cobra.Command, _ []string) error {
 			if i == len(keys)-1 {
 				comma = ""
 			}
-			lines = append(lines, fmt.Sprintf("  \"%s\": \"%s\"%s", k, escaped, comma))
+			lines = append(lines, fmt.Sprintf("  \"%s\": \"%s\"%s", k, escaped, comma)) //nolint:gocritic // sprintfQuotedString: %q would add Go escaping, not JSON escaping
 		}
 		lines = append(lines, "}")
 		output = strings.Join(lines, "\n") + "\n"
@@ -96,14 +96,15 @@ func runExport(_ *cobra.Command, _ []string) error {
 		if exportK8sName == "" {
 			return fmt.Errorf("--name is required for k8s-secret format")
 		}
-		var lines []string
-		lines = append(lines, "apiVersion: v1")
-		lines = append(lines, "kind: Secret")
-		lines = append(lines, "metadata:")
-		lines = append(lines, fmt.Sprintf("  name: %s", exportK8sName))
-		lines = append(lines, fmt.Sprintf("  namespace: %s", exportK8sNs))
-		lines = append(lines, "type: Opaque")
-		lines = append(lines, "data:")
+		lines := []string{
+			"apiVersion: v1",
+			"kind: Secret",
+			"metadata:",
+			fmt.Sprintf("  name: %s", exportK8sName),
+			fmt.Sprintf("  namespace: %s", exportK8sNs),
+			"type: Opaque",
+			"data:",
+		}
 		for _, k := range keys {
 			encoded := base64.StdEncoding.EncodeToString([]byte(secrets[k]))
 			lines = append(lines, fmt.Sprintf("  %s: %s", k, encoded))
@@ -114,7 +115,7 @@ func runExport(_ *cobra.Command, _ []string) error {
 	}
 
 	if exportOutput != "" {
-		if err := os.WriteFile(exportOutput, []byte(output), 0600); err != nil {
+		if err := os.WriteFile(exportOutput, []byte(output), 0o600); err != nil {
 			return fmt.Errorf("failed to write file: %w", err)
 		}
 		fmt.Fprintf(os.Stderr, "Exported %d secrets to %s\n", len(keys), exportOutput)

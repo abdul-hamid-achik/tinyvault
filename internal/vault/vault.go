@@ -31,7 +31,7 @@ type Vault struct {
 // Create initializes a new vault in the given directory.
 // The directory is created with 0700 permissions. A default project is
 // automatically created. The returned vault is open and unlocked.
-func Create(dir string, passphrase string) (*Vault, error) {
+func Create(dir, passphrase string) (*Vault, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, fmt.Errorf("create vault directory: %w", err)
 	}

@@ -32,6 +32,7 @@ func (s *VaultMCPServer) registerEnvTools() {
 	}, s.handleExportEnv)
 }
 
+//nolint:gocognit // sequential format handling is clearest as a single function
 func (s *VaultMCPServer) handleExportEnv(_ context.Context, _ *sdkmcp.CallToolRequest, input exportEnvInput) (*sdkmcp.CallToolResult, exportEnvOutput, error) {
 	project := s.resolveProject(input.Project)
 	if !s.policy.CanAccessProject(project) {
@@ -103,7 +104,7 @@ func (s *VaultMCPServer) handleExportEnv(_ context.Context, _ *sdkmcp.CallToolRe
 		return nil, exportEnvOutput{}, fmt.Errorf("unsupported format: %s (use dotenv, json, or shell)", format)
 	}
 
-	if err := os.WriteFile(outputPath, []byte(content), 0600); err != nil {
+	if err := os.WriteFile(outputPath, []byte(content), 0o600); err != nil {
 		return nil, exportEnvOutput{}, fmt.Errorf("write file: %w", err)
 	}
 
