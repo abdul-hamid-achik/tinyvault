@@ -247,7 +247,7 @@ func TestMCPServerIntegration(t *testing.T) {
 	defer cs.Close()
 
 	t.Run("list_tools", func(t *testing.T) {
-		var tools []*sdkmcp.Tool
+		tools := make([]*sdkmcp.Tool, 0, 8)
 		for tool, err := range cs.Tools(ctx, nil) {
 			if err != nil {
 				t.Fatalf("list tools: %v", err)

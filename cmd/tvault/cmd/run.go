@@ -31,7 +31,7 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 }
 
-func runRun(_ *cobra.Command, args []string) error {
+func runRun(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("command is required")
 	}
@@ -70,7 +70,7 @@ func runRun(_ *cobra.Command, args []string) error {
 	}
 
 	// Create the command.
-	execCmd := exec.Command(executable, args[1:]...)
+	execCmd := exec.CommandContext(cmd.Context(), executable, args[1:]...)
 	execCmd.Env = env
 	execCmd.Stdin = os.Stdin
 	execCmd.Stdout = os.Stdout

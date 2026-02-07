@@ -32,7 +32,7 @@ type Vault struct {
 // The directory is created with 0700 permissions. A default project is
 // automatically created. The returned vault is open and unlocked.
 func Create(dir, passphrase string) (*Vault, error) {
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("create vault directory: %w", err)
 	}
 
@@ -235,7 +235,8 @@ func (v *Vault) RotatePassphrase(oldPassphrase, newPassphrase string) error {
 
 	for _, p := range projects {
 		// Decrypt DEK with old KEK.
-		dek, err := crypto.Decrypt(oldKEK, p.EncryptedDEK)
+		var dek []byte
+		dek, err = crypto.Decrypt(oldKEK, p.EncryptedDEK)
 		if err != nil {
 			crypto.ZeroBytes(oldKEK)
 			crypto.ZeroBytes(newKEK)
@@ -243,7 +244,8 @@ func (v *Vault) RotatePassphrase(oldPassphrase, newPassphrase string) error {
 		}
 
 		// Re-encrypt DEK with new KEK.
-		encDEK, err := crypto.Encrypt(newKEK, dek)
+		var encDEK []byte
+		encDEK, err = crypto.Encrypt(newKEK, dek)
 		crypto.ZeroBytes(dek)
 		if err != nil {
 			crypto.ZeroBytes(oldKEK)

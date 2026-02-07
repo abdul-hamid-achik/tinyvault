@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
+
 	"github.com/spf13/cobra"
 )
 

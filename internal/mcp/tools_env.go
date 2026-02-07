@@ -32,7 +32,7 @@ func (s *VaultMCPServer) registerEnvTools() {
 	}, s.handleExportEnv)
 }
 
-//nolint:gocognit // sequential format handling is clearest as a single function
+//nolint:gocognit,gocyclo // sequential format handling is clearest as a single function
 func (s *VaultMCPServer) handleExportEnv(_ context.Context, _ *sdkmcp.CallToolRequest, input exportEnvInput) (*sdkmcp.CallToolResult, exportEnvOutput, error) {
 	project := s.resolveProject(input.Project)
 	if !s.policy.CanAccessProject(project) {

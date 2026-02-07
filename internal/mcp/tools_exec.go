@@ -76,7 +76,7 @@ func (s *VaultMCPServer) handleRunWithSecrets(ctx context.Context, _ *sdkmcp.Cal
 		env = append(env, k+"="+v)
 	}
 
-	cmd := exec.CommandContext(execCtx, "sh", "-c", input.Command)
+	cmd := exec.CommandContext(execCtx, "sh", "-c", input.Command) //nolint:gosec // MCP tool intentionally runs user commands
 	cmd.Env = env
 
 	var stdout, stderr bytes.Buffer
@@ -88,11 +88,12 @@ func (s *VaultMCPServer) handleRunWithSecrets(ctx context.Context, _ *sdkmcp.Cal
 	exitCode := 0
 	if err != nil {
 		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		switch {
+		case errors.As(err, &exitErr):
 			exitCode = exitErr.ExitCode()
-		} else if execCtx.Err() != nil {
+		case execCtx.Err() != nil:
 			return nil, runResult{}, fmt.Errorf("command timed out after %s", timeout)
-		} else {
+		default:
 			return nil, runResult{}, fmt.Errorf("run command: %w", err)
 		}
 	}

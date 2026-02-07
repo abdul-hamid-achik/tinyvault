@@ -38,13 +38,13 @@ type BoltStore struct {
 // NewBoltStore opens (or creates) a bbolt database at the given path and
 // ensures all required buckets exist. The file is created with 0600 permissions.
 func NewBoltStore(path string) (*BoltStore, error) {
-	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	db, err := bolt.Open(path, 0o600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		return nil, fmt.Errorf("open bolt db: %w", err)
 	}
 
 	// Create all buckets if they do not exist.
-	err = db.Update(func(tx *bolt.Tx) error {
+	if err = db.Update(func(tx *bolt.Tx) error {
 		for _, b := range [][]byte{
 			bucketMeta,
 			bucketConfig,
@@ -58,8 +58,7 @@ func NewBoltStore(path string) (*BoltStore, error) {
 			}
 		}
 		return nil
-	})
-	if err != nil {
+	}); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("init buckets: %w", err)
 	}
@@ -198,7 +197,7 @@ func (s *BoltStore) GetProjectByName(name string) (*Project, error) {
 func (s *BoltStore) ListProjects() ([]*Project, error) {
 	var projects []*Project
 	err := s.db.View(func(tx *bolt.Tx) error {
-		return tx.Bucket(bucketProjects).ForEach(func(k, v []byte) error {
+		return tx.Bucket(bucketProjects).ForEach(func(_, v []byte) error {
 			var p Project
 			if err := json.Unmarshal(v, &p); err != nil {
 				return err

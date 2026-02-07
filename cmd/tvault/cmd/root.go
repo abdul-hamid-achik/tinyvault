@@ -80,11 +80,3 @@ func initConfig() {
 	// Load config file if it exists.
 	_ = viper.ReadInConfig()
 }
-
-// isVerbose returns whether verbose mode is enabled.
-func isVerbose() bool {
-	if verbose {
-		return true
-	}
-	return viper.GetBool("verbose")
-}
