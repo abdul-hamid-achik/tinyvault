@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
 	"github.com/spf13/cobra"
+
+	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
 )
 
 var statusCmd = &cobra.Command{

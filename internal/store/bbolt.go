@@ -53,8 +53,8 @@ func NewBoltStore(path string) (*BoltStore, error) {
 			bucketProjectNames,
 			bucketAudit,
 		} {
-			if _, err := tx.CreateBucketIfNotExists(b); err != nil {
-				return fmt.Errorf("create bucket %s: %w", b, err)
+			if _, bErr := tx.CreateBucketIfNotExists(b); bErr != nil {
+				return fmt.Errorf("create bucket %s: %w", b, bErr)
 			}
 		}
 		return nil

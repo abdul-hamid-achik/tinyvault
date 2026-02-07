@@ -255,10 +255,10 @@ func (v *Vault) RotatePassphrase(oldPassphrase, newPassphrase string) error {
 
 		p.EncryptedDEK = encDEK
 		p.UpdatedAt = time.Now().UTC()
-		if err := v.store.UpdateProject(p); err != nil {
+		if updateErr := v.store.UpdateProject(p); updateErr != nil {
 			crypto.ZeroBytes(oldKEK)
 			crypto.ZeroBytes(newKEK)
-			return fmt.Errorf("update project %s: %w", p.Name, err)
+			return fmt.Errorf("update project %s: %w", p.Name, updateErr)
 		}
 	}
 
