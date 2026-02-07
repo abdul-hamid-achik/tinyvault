@@ -1,392 +1,187 @@
-# AGENTS.md - Claude Code Instructions for TinyVault
+# AGENTS.md -- AI Agent Instructions for TinyVault
 
-## Primary Directive
+## Project Overview
 
-**Write production-quality, secure code with comprehensive tests.**
+TinyVault is a **local-first CLI tool and MCP server** for secrets management. Single Go binary, no external services.
 
-Before marking ANY task complete:
-1. `task lint` passes
-2. `task test` passes
-3. `task build:all` compiles
-4. `govulncheck ./...` passes (no known vulnerabilities)
-5. No hardcoded secrets
-6. Security review for crypto/auth code
+- **Storage**: bbolt (pure Go key-value store) at `~/.tvault/vault.db`
+- **Encryption**: AES-256-GCM with two-tier key hierarchy (Argon2id passphrase -> KEK -> per-project DEKs)
+- **CLI**: `tvault` using cobra/viper
+- **MCP**: stdio-based server using `github.com/modelcontextprotocol/go-sdk`
 
-## Quick Reference
+## Quick Commands
 
 ```bash
-# First time
-task setup
-
-# Daily development
-task dev
-
-# Before committing
-task check
-
-# Run specific checks
-task lint
-task test
-task test:crypto  # Security-critical tests
-govulncheck ./... # Check for known vulnerabilities
-```
-
-## Local Builds
-
-**IMPORTANT:** When building binaries locally for testing, always output to `bin/` or `dist/` directories which are gitignored. Never build binaries in the project root.
-
-```bash
-# Correct - builds to ignored directory
-go build -o bin/tinyvault ./cmd/server
+# Build
 go build -o bin/tvault ./cmd/tvault
-go build -o dist/server ./cmd/server
 
-# Wrong - builds to project root (will show as untracked)
-go build -o tinyvault ./cmd/server  # DON'T DO THIS
+# Test (all packages, race detector)
+go test -race ./...
+
+# Lint
+golangci-lint run ./...
+
+# Security scan
+govulncheck ./...
+
+# Full check before committing
+go build ./... && go test -race ./... && golangci-lint run ./...
 ```
 
-## Security Rules (CRITICAL)
+## Project Structure
+
+```
+cmd/tvault/
+  main.go                    # Entry point
+  cmd/
+    root.go                  # Root command, global flags (--vault, --project, --json)
+    vault_helper.go          # Shared: getVaultDir(), openAndUnlockVault(), resolveProject()
+    init.go                  # tvault init
+    unlock.go / lock.go      # tvault unlock / lock
+    status.go                # tvault status
+    get.go / set.go          # tvault get KEY / tvault set KEY VALUE
+    list.go / delete.go      # tvault list / tvault delete KEY
+    run.go                   # tvault run -- CMD (inject secrets as env vars)
+    env.go                   # tvault env (export in shell/dotenv/json/yaml/k8s format)
+    export.go                # tvault export (write secrets to file)
+    import.go                # tvault import (read secrets from file)
+    projects.go / use.go     # tvault projects list/create / tvault use PROJECT
+    backup.go                # tvault backup / tvault backup --restore
+    rotate.go                # tvault key rotate
+    mcp_server.go            # tvault mcp-server (stdio MCP transport)
+    ci.go                    # tvault ci init (generate CI workflow files)
+    completion.go            # Shell completion
+    output.go                # Color output helpers (Success, Error, Warning, Info)
+
+internal/
+  crypto/
+    crypto.go                # AES-256-GCM encrypt/decrypt, Argon2id key derivation
+    crypto_test.go           # Comprehensive crypto tests
+  store/
+    store.go                 # Store interface
+    types.go                 # VaultMeta, Project, SecretEntry, AuditEntry
+    bbolt.go                 # BoltStore implementation
+    bbolt_test.go            # 10 store tests
+  vault/
+    vault.go                 # Create, Open, Unlock, Lock, RotatePassphrase
+    project.go               # CreateProject, ListProjects, SetCurrentProject
+    secret.go                # SetSecret, GetSecret, ListSecrets, DeleteSecret, GetAllSecrets
+    errors.go                # Sentinel errors (ErrLocked, ErrWrongPassphrase, etc.)
+    vault_test.go            # 16 vault tests
+  mcp/
+    server.go                # VaultMCPServer, tool registration, Run()
+    tools_projects.go        # vault_list_projects
+    tools_secrets.go         # vault_list/get/set/delete_secret
+    tools_exec.go            # vault_run_with_secrets (exec + output redaction)
+    tools_env.go             # vault_export_env (writes .env, returns path only)
+    config.go                # AccessPolicy, LoadPolicy, allow/deny pattern matching
+    redact.go                # redactSecrets() replaces values with [REDACTED:KEY]
+    server_test.go           # Integration tests with in-memory MCP transport
+  validation/
+    validation.go            # Input validation (keys, project names)
+```
+
+## Security Rules
 
 ### Encryption
 - **ALWAYS** use `crypto/rand` for random bytes (never `math/rand`)
-- **ALWAYS** generate unique nonces for each encryption
-- **NEVER** reuse nonces
-- **NEVER** log secret values (even in debug mode)
-- **NEVER** store plaintext secrets in database
+- **ALWAYS** generate unique nonces for each AES-GCM encryption
+- **NEVER** log or print secret values
+- **ALWAYS** zero keys from memory after use (`crypto.ZeroBytes()`)
 
-### Authentication
-- **ALWAYS** hash tokens before storage (SHA-256)
-- **ALWAYS** use constant-time comparison for tokens
-- **ALWAYS** validate and sanitize user input
-- **NEVER** expose internal errors to users
+### Key Hierarchy
+```
+User Passphrase
+  -> Argon2id(passphrase, salt) -> KEK (Key Encryption Key)
+    -> AES-GCM(KEK, DEK) -> Encrypted per-project DEK
+      -> AES-GCM(DEK, secret) -> Encrypted secret value
+```
 
-### Database
-- **ALWAYS** use SQLC parameterized queries
-- **NEVER** concatenate user input into SQL
-- **ALWAYS** use transactions for multi-step operations
+### MCP Security
+- `redactSecrets()` scans command output and replaces secret values with `[REDACTED:KEY]`
+- `vault_export_env` writes .env file to disk but only returns the file path to the AI
+- Access policy controls which projects/secrets the AI can access
+- `allow_exec: false` disables command execution entirely
 
-### Example: Secure Secret Storage
+## Code Conventions
 
+### Import Ordering (goimports with local-prefixes)
 ```go
-// CORRECT
-func (s *SecretService) Create(ctx context.Context, key string, value []byte) error {
-    // Get project's encryption key (already decrypted in memory)
-    dek, err := s.getProjectDEK(ctx, projectID)
-    if err != nil {
-        return fmt.Errorf("failed to get encryption key: %w", err)
-    }
+import (
+    // 1. Standard library
+    "fmt"
+    "os"
 
-    // Encrypt with unique nonce
-    encrypted, err := crypto.Encrypt(dek, value)
-    if err != nil {
-        return fmt.Errorf("failed to encrypt: %w", err)
-    }
+    // 2. Third-party packages
+    "github.com/spf13/cobra"
 
-    // Store encrypted value
-    return s.db.CreateSecret(ctx, db.CreateSecretParams{
-        Key:            key,
-        EncryptedValue: encrypted,
-    })
-}
-
-// WRONG - Never do this
-func (s *SecretService) CreateBad(key string, value []byte) error {
-    // WRONG: Storing plaintext
-    return s.db.CreateSecret(ctx, db.CreateSecretParams{
-        Key:   key,
-        Value: value,  // NOT ENCRYPTED!
-    })
-}
+    // 3. Internal packages (separated by blank line)
+    "github.com/abdul-hamid-achik/tinyvault/internal/vault"
+)
 ```
 
-## File Organization
+### Error Handling
+- Wrap errors with context: `fmt.Errorf("failed to X: %w", err)`
+- Use sentinel errors in `internal/vault/errors.go` for well-known conditions
+- Use `errors.As` not type assertions for wrapped errors
+- Intentionally ignored errors must have `//nolint:errcheck` with reason
 
-### When Adding a Feature
-1. `internal/database/migrations/` - Schema changes
-2. `internal/database/queries/` - SQLC queries
-3. `internal/services/` - Business logic
-4. `internal/handlers/` - HTTP handlers
-5. `internal/views/` - UI templates
-6. `*_test.go` files alongside each
+### Octal Literals
+- Use modern Go style: `0o600` not `0600`
 
-### Code Location Rules
+### Testing
+- All tests run with `-race` flag
+- Use `t.TempDir()` for test directories
+- Crypto package: test encrypt/decrypt round-trips, invalid keys, empty data
+- Vault package: test full lifecycle (create -> unlock -> set -> get -> lock)
+- MCP package: use `mcp.NewInMemoryTransports()` for integration tests
 
-| Type | Location |
-|------|----------|
-| Database queries | `internal/database/queries/*.sql` |
-| Services | `internal/services/*.go` |
-| HTTP handlers | `internal/handlers/*.go` |
-| Middleware | `internal/middleware/*.go` |
-| Encryption | `internal/crypto/*.go` |
-| Templates | `internal/views/**/*.templ` |
-| Static assets | `web/static/` |
-
-## Testing Requirements
-
-### Coverage Targets
-
-| Package | Minimum |
-|---------|---------|
-| `internal/crypto` | 100% |
-| `internal/services` | 80% |
-| `internal/handlers` | 70% |
-
-### Test Types
-
+### Local Builds
+Always output to `bin/` (gitignored):
 ```bash
-task test:unit        # Fast unit tests
-task test:integration # With real DB
-task test:crypto      # Security tests
-task test:coverage    # HTML report
+go build -o bin/tvault ./cmd/tvault    # correct
+go build -o tvault ./cmd/tvault        # wrong (root is gitignored with /tvault)
 ```
 
-## Security Scanning (CRITICAL)
+## MCP Go SDK Notes
 
-### govulncheck
+Using `github.com/modelcontextprotocol/go-sdk` v1.2.0:
 
-**ALWAYS run govulncheck before pushing changes.** This tool detects known vulnerabilities in Go dependencies and standard library.
-
-```bash
-# Install (one-time)
-go install golang.org/x/vuln/cmd/govulncheck@latest
-
-# Run before pushing
-govulncheck ./...
-```
-
-**Expected output when no issues found:**
-```
-No vulnerabilities found.
-```
-
-**If vulnerabilities are found:**
-1. Check if the vulnerable code paths are actually used in the project
-2. Update the affected dependency if a fix is available
-3. If it's a standard library vulnerability, upgrade Go version
-4. Document any false positives or accepted risks
-
-### Why This Matters
-
-govulncheck analyzes your code's call graph and only reports vulnerabilities that are actually reachable in your codebase. This avoids false positives from unused dependency code.
-
-**CI Integration:** The CI pipeline runs govulncheck automatically. The build will fail if vulnerabilities are found.
-
-### Writing Tests
-
-```go
-// Always test error cases
-func TestEncrypt_InvalidKey(t *testing.T) {
-    _, err := crypto.Encrypt([]byte("short"), []byte("data"))
-    if err == nil {
-        t.Error("expected error for short key")
-    }
-}
-
-// Table-driven tests for crypto
-func TestEncryptDecrypt(t *testing.T) {
-    tests := []struct {
-        name      string
-        plaintext []byte
-    }{
-        {"empty", []byte{}},
-        {"short", []byte("hello")},
-        {"long", bytes.Repeat([]byte("x"), 10000)},
-        {"unicode", []byte("Hello World")},
-        {"binary", []byte{0x00, 0xFF, 0x00, 0xFF}},
-    }
-
-    key, _ := crypto.GenerateKey()
-
-    for _, tt := range tests {
-        t.Run(tt.name, func(t *testing.T) {
-            encrypted, err := crypto.Encrypt(key, tt.plaintext)
-            require.NoError(t, err)
-
-            decrypted, err := crypto.Decrypt(key, encrypted)
-            require.NoError(t, err)
-
-            assert.Equal(t, tt.plaintext, decrypted)
-        })
-    }
-}
-```
-
-## Nord Theme Colors
-
-Always use these CSS variables:
-
-```css
-/* Backgrounds */
-bg-nord0    /* #2e3440 - main background */
-bg-nord1    /* #3b4252 - elevated surface */
-bg-nord2    /* #434c5e - selection */
-
-/* Text */
-text-nord4  /* #d8dee9 - primary text */
-text-nord5  /* #e5e9f0 - secondary text */
-text-nord6  /* #eceff4 - bright/headings */
-
-/* Accents */
-text-nord8  /* #88c0d0 - primary brand */
-text-nord10 /* #5e81ac - links */
-
-/* Semantic */
-text-nord11 /* #bf616a - error */
-text-nord14 /* #a3be8c - success */
-text-nord13 /* #ebcb8b - warning */
-```
+- `jsonschema` struct tags are plain description strings: `jsonschema:"Project name"`
+- Tool registration: `mcp.AddTool[In, Out](server, tool, handler)`
+- Handler signature: `func(ctx, *mcp.CallToolRequest, Input) (*mcp.CallToolResult, Output, error)`
+- Testing: `mcp.NewInMemoryTransports()` -- connect server first, then client
+- Production: `mcp.StdioTransport{}` for stdio mode
 
 ## Commit Checklist
 
 Before every commit:
 
-- [ ] `task lint` passes
-- [ ] `task test` passes
-- [ ] `govulncheck ./...` passes (no known vulnerabilities)
-- [ ] No `TODO` or `FIXME` without issue link
-- [ ] No hardcoded secrets/credentials
-- [ ] No `fmt.Println` (use `slog`)
-- [ ] Error messages don't leak internal details
-- [ ] New crypto code reviewed for security
+- [ ] `go build ./...` compiles
+- [ ] `go test -race ./...` passes
+- [ ] `golangci-lint run ./...` passes
+- [ ] No hardcoded secrets or credentials
+- [ ] New crypto code uses `crypto/rand` and zeros keys after use
 - [ ] Tests added for new functionality
+- [ ] Error messages don't leak internal details to users
 
-## Common Mistakes to Avoid
+## Environment Variables
 
-1. **Using `math/rand` for crypto** - Always use `crypto/rand`
-2. **Logging secrets** - Never log secret values
-3. **SQL concatenation** - Always use SQLC
-4. **Reusing nonces** - Generate fresh nonce for each encrypt
-5. **Missing error handling** - Always handle and wrap errors
-6. **Exposing stack traces** - Return generic errors to users
-7. **Skipping tests** - Run `task check` before every commit
+| Variable | Description |
+|----------|-------------|
+| `TVAULT_PASSPHRASE` | Vault passphrase (CI/CD, skips interactive prompt) |
+| `TVAULT_DIR` | Vault directory (default: `~/.tvault`) |
 
-## API Response Format
+## Dependencies (go.mod)
 
-### Success Response
-```json
-{
-  "data": { ... },
-  "meta": {
-    "request_id": "uuid"
-  }
-}
-```
-
-### Error Response
-```json
-{
-  "error": {
-    "code": "INVALID_INPUT",
-    "message": "Human-readable message"
-  },
-  "meta": {
-    "request_id": "uuid"
-  }
-}
-```
-
-## Logging Guidelines
-
-### Using the Logging Package
-
-TinyVault uses a dedicated `internal/logging` package for context-aware logging with automatic request ID propagation. This ensures all logs within a request can be correlated.
-
-```go
-import "github.com/abdul-hamid-achik/tinyvault/internal/logging"
-
-func MyHandler(w http.ResponseWriter, r *http.Request) {
-    log := logging.Logger(r.Context())  // Gets logger with request_id
-
-    log.Info("operation_completed", "user_id", userID)
-    // Output includes: request_id=abc-123 user_id=xyz-456 msg=operation_completed
-}
-```
-
-### Security-First Logging (CRITICAL)
-
-**NEVER log:**
-- Passwords or password hashes
-- OAuth tokens or authorization codes
-- Session tokens
-- API keys
-- Secret values
-- Encryption keys or nonces
-- Full credit card numbers
-- Social security numbers
-
-**ALWAYS safe to log:**
-- User IDs, email addresses, usernames
-- Project IDs, resource IDs
-- Secret keys (the identifier, NOT the value)
-- Timestamps, IP addresses
-- Request IDs, session IDs (the database ID, not the token)
-- Error messages (but sanitize internal details)
-
-```go
-// CORRECT - logs key but not value
-log.Info("secret_created", "project_id", projectID, "key", key, "user_id", userID)
-
-// WRONG - never log secret values!
-log.Info("secret_created", "key", key, "value", secretValue) // NEVER DO THIS
-```
-
-### Log Levels Guide
-
-| Level | When to Use | Examples |
-|-------|-------------|----------|
-| Debug | Flow tracing, development details | `session_validated`, `oauth_token_exchanged`, `user_upserted` |
-| Info | Business events, successful operations | `user_logged_in`, `project_created`, `secret_deleted` |
-| Warn | Suspicious activity, recoverable issues | `account_locked`, `oauth_state_mismatch`, `invalid_credentials` |
-| Error | Failures requiring attention | DB errors, API failures, token generation failures |
-
-### Logging Patterns by Layer
-
-**Handlers (highest level):**
-```go
-log := logging.Logger(r.Context())
-// Log business events at Info level
-log.Info("user_logged_in", "user_id", user.ID, "provider", "github")
-// Log failures at Error level
-log.Error("project_creation_failed", "user_id", user.ID, "error", err)
-```
-
-**Services (business logic):**
-```go
-log := logging.Logger(ctx)
-// Log operations at Debug level
-log.Debug("session_created", "session_id", session.ID, "user_id", userID)
-// Log security events at Warn level
-log.Warn("account_locked", "email", email, "failed_attempts", count)
-```
-
-**Database (infrastructure):**
-```go
-log := logging.Logger(ctx)
-// Only log errors at this layer
-log.Error("transaction_commit_failed", "error", err)
-```
-
-### Architecture Notes
-
-The logging package (`internal/logging`) is kept separate from middleware to avoid import cycles:
-- `internal/logging` - Core logger utilities, no dependencies
-- `internal/middleware` - HTTP middleware, imports logging
-- `internal/services` - Business logic, imports logging
-- `internal/handlers` - HTTP handlers, can import either
-
-This allows request IDs to propagate through all layers while keeping the dependency graph clean.
-
-## Environment Configuration
-
-Required environment variables:
-- `DATABASE_URL` - PostgreSQL connection string
-- `REDIS_URL` - Redis connection string
-- `ENCRYPTION_KEY` - Master encryption key (base64, 32 bytes)
-- `SESSION_SECRET` - Session signing key
-- `GITHUB_CLIENT_ID` - OAuth client ID
-- `GITHUB_CLIENT_SECRET` - OAuth client secret
-
-Optional:
-- `SERVER_HOST` - Bind address (default: 0.0.0.0)
-- `SERVER_PORT` - Port (default: 8080)
-- `LOG_LEVEL` - debug/info/warn/error (default: info)
+| Package | Purpose |
+|---------|---------|
+| `github.com/spf13/cobra` | CLI framework |
+| `github.com/spf13/viper` | Configuration |
+| `github.com/fatih/color` | Colored terminal output |
+| `github.com/google/uuid` | UUID generation for project IDs |
+| `go.etcd.io/bbolt` | Embedded key-value store |
+| `golang.org/x/crypto` | Argon2id key derivation |
+| `golang.org/x/term` | Secure passphrase input (no echo) |
+| `github.com/modelcontextprotocol/go-sdk` | MCP server SDK |
+| `go.yaml.in/yaml/v3` | YAML parsing (access policy) |
