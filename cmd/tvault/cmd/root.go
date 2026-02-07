@@ -11,32 +11,31 @@ import (
 )
 
 var (
-	cfgFile   string
-	apiURL    string
-	projectID string
-	verbose   bool
+	cfgFile     string
+	vaultDir    string
+	projectName string
+	jsonOutput  bool
+	verbose     bool
 )
 
 // rootCmd represents the base command.
 var rootCmd = &cobra.Command{
 	Use:   "tvault",
-	Short: "TinyVault CLI - Dead simple secrets management",
-	Long: `TinyVault CLI (tvault) helps you manage secrets securely.
+	Short: "TinyVault CLI - Dead simple local secrets management",
+	Long: `TinyVault CLI (tvault) helps you manage secrets securely on your local machine.
 
 Get started:
-  tvault login        Authenticate with GitHub
-  tvault projects     List your projects
-  tvault get KEY      Get a secret value
-  tvault set KEY VAL  Set a secret value
-  tvault run CMD      Run command with secrets as env vars
+  tvault init              Initialize a new vault
+  tvault set KEY VALUE     Set a secret
+  tvault get KEY           Get a secret value
+  tvault run -- CMD        Run command with secrets as env vars
 
 Examples:
-  tvault login
-  tvault projects create my-app
-  tvault use my-app
+  tvault init
   tvault set DATABASE_URL "postgres://..."
   tvault get DATABASE_URL
-  tvault run npm start`,
+  tvault run -- npm start
+  tvault env --format dotenv > .env`,
 	SilenceUsage: true,
 }
 
@@ -48,12 +47,13 @@ func Execute() error {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default $HOME/.tvault.yaml)")
-	rootCmd.PersistentFlags().StringVar(&apiURL, "api-url", "https://tinyvault.dev", "TinyVault API URL")
-	rootCmd.PersistentFlags().StringVarP(&projectID, "project", "p", "", "Project ID or name")
-	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose output for debugging")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default ~/.tvault/config.yaml)")
+	rootCmd.PersistentFlags().StringVar(&vaultDir, "vault", "", "vault directory (default ~/.tvault)")
+	rootCmd.PersistentFlags().StringVarP(&projectName, "project", "p", "", "project name")
+	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "output in JSON format")
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
 
-	viper.BindPFlag("api_url", rootCmd.PersistentFlags().Lookup("api-url"))
+	viper.BindPFlag("vault", rootCmd.PersistentFlags().Lookup("vault"))
 	viper.BindPFlag("project", rootCmd.PersistentFlags().Lookup("project"))
 	viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
 }
@@ -68,52 +68,20 @@ func initConfig() {
 			os.Exit(1)
 		}
 
-		viper.AddConfigPath(home)
+		configDir := filepath.Join(home, ".tvault")
+		viper.AddConfigPath(configDir)
 		viper.SetConfigType("yaml")
-		viper.SetConfigName(".tvault")
+		viper.SetConfigName("config")
 	}
 
 	viper.SetEnvPrefix("TVAULT")
 	viper.AutomaticEnv()
 
-	// Load config file if it exists
+	// Load config file if it exists.
 	_ = viper.ReadInConfig()
 }
 
-// getConfigPath returns the path to the config file.
-func getConfigPath() string {
-	if cfgFile != "" {
-		return cfgFile
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ".tvault.yaml"
-	}
-	return filepath.Join(home, ".tvault.yaml")
-}
-
-// getAPIURL returns the API URL.
-func getAPIURL() string {
-	if url := viper.GetString("api_url"); url != "" {
-		return url
-	}
-	return "https://tinyvault.dev"
-}
-
-// getToken returns the stored API token.
-func getToken() string {
-	return viper.GetString("token")
-}
-
-// getProject returns the current project.
-func getProject() string {
-	if projectID != "" {
-		return projectID
-	}
-	return viper.GetString("project")
-}
-
-// isVerbose returns whether verbose mode is enabled
+// isVerbose returns whether verbose mode is enabled.
 func isVerbose() bool {
 	if verbose {
 		return true

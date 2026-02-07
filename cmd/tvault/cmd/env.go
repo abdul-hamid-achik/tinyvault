@@ -29,7 +29,6 @@ Examples:
   tvault env --format=dotenv > .env
   tvault env --format=yaml > secrets.yaml
   tvault env --format=k8s-secret --name=my-secrets > secret.yaml
-  kubectl apply -f <(tvault env --format=k8s-secret --name=app-secrets)
   source <(tvault env)`,
 	RunE: runEnv,
 }
@@ -43,27 +42,24 @@ func init() {
 }
 
 func runEnv(_ *cobra.Command, _ []string) error {
-	token := getToken()
-	if token == "" {
-		return fmt.Errorf("not logged in. Run 'tvault login' first")
-	}
-
-	project := getProject()
-	if project == "" {
-		return fmt.Errorf("no project selected. Run 'tvault use <project>' first")
-	}
-
-	client := NewClient(getAPIURL(), token)
-	secrets, err := client.ExportSecrets(project)
+	v, err := openAndUnlockVault()
 	if err != nil {
-		return fmt.Errorf("failed to export secrets: %w", err)
+		return err
+	}
+	defer v.Close()
+
+	project := resolveProject(v, projectName)
+
+	secrets, err := v.GetAllSecrets(project)
+	if err != nil {
+		return fmt.Errorf("failed to get secrets: %w", err)
 	}
 
 	if len(secrets) == 0 {
 		return nil
 	}
 
-	// Sort keys for consistent output
+	// Sort keys for consistent output.
 	keys := make([]string, 0, len(secrets))
 	for k := range secrets {
 		keys = append(keys, k)
@@ -129,7 +125,6 @@ func runEnv(_ *cobra.Command, _ []string) error {
 }
 
 func escapeShellValue(s string) string {
-	// Use single quotes and escape single quotes within
 	if !strings.ContainsAny(s, "'\"\\$`\n\t ") {
 		return s
 	}
@@ -137,7 +132,6 @@ func escapeShellValue(s string) string {
 }
 
 func escapeDotenvValue(s string) string {
-	// Use double quotes if value contains special characters
 	if !strings.ContainsAny(s, "\"\\$\n\t #") {
 		return s
 	}
@@ -156,7 +150,6 @@ func escapeJSONValue(s string) string {
 }
 
 func escapeYAMLValue(s string) string {
-	// YAML needs quoting for special characters, multiline, or leading/trailing whitespace
 	needsQuoting := strings.ContainsAny(s, ":#{}[]!|>&*?-@`'\"\\\n\t") ||
 		strings.HasPrefix(s, " ") ||
 		strings.HasSuffix(s, " ") ||
@@ -166,7 +159,6 @@ func escapeYAMLValue(s string) string {
 		s == "null" || s == "~"
 
 	if !needsQuoting {
-		// Check if it looks like a number
 		if _, err := fmt.Sscanf(s, "%f", new(float64)); err == nil {
 			needsQuoting = true
 		}
@@ -176,7 +168,6 @@ func escapeYAMLValue(s string) string {
 		return s
 	}
 
-	// Use double quotes with escape sequences
 	escaped := strings.ReplaceAll(s, "\\", "\\\\")
 	escaped = strings.ReplaceAll(escaped, "\"", "\\\"")
 	escaped = strings.ReplaceAll(escaped, "\n", "\\n")

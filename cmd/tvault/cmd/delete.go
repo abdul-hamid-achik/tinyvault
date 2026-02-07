@@ -24,24 +24,19 @@ Use --yes or -y to skip the confirmation prompt.`,
 
 func init() {
 	rootCmd.AddCommand(deleteCmd)
-
 	deleteCmd.Flags().BoolVarP(&deleteForce, "yes", "y", false, "Skip confirmation prompt")
 }
 
 func runDelete(_ *cobra.Command, args []string) error {
-	token := getToken()
-	if token == "" {
-		return fmt.Errorf("not logged in. Run 'tvault login' first")
+	v, err := openAndUnlockVault()
+	if err != nil {
+		return err
 	}
+	defer v.Close()
 
-	project := getProject()
-	if project == "" {
-		return fmt.Errorf("no project selected. Run 'tvault use <project>' first")
-	}
-
+	project := resolveProject(v, projectName)
 	key := args[0]
 
-	// Prompt for confirmation unless --yes flag is set
 	if !deleteForce {
 		if !PromptConfirm(fmt.Sprintf("Delete secret '%s'?", key)) {
 			Info("Canceled")
@@ -49,12 +44,10 @@ func runDelete(_ *cobra.Command, args []string) error {
 		}
 	}
 
-	client := NewClient(getAPIURL(), token)
-	if err := client.DeleteSecret(project, key); err != nil {
+	if err := v.DeleteSecret(project, key); err != nil {
 		return fmt.Errorf("failed to delete secret: %w", err)
 	}
 
 	Success("Secret '%s' deleted", key)
-
 	return nil
 }

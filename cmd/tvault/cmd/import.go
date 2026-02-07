@@ -34,25 +34,13 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(importCmd)
-
 	importCmd.Flags().BoolVar(&importOverwrite, "overwrite", false, "Overwrite existing secrets")
 	importCmd.Flags().BoolVar(&importDryRun, "dry-run", false, "Show what would be imported without making changes")
 }
 
 func runImport(_ *cobra.Command, args []string) error {
-	token := getToken()
-	if token == "" {
-		return fmt.Errorf("not logged in. Run 'tvault login' first")
-	}
-
-	project := getProject()
-	if project == "" {
-		return fmt.Errorf("no project selected. Run 'tvault use <project>' first")
-	}
-
 	filePath := args[0]
 
-	// Parse the .env file
 	secrets, err := parseEnvFile(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to parse file: %w", err)
@@ -63,20 +51,25 @@ func runImport(_ *cobra.Command, args []string) error {
 		return nil
 	}
 
-	client := NewClient(getAPIURL(), token)
+	v, err := openAndUnlockVault()
+	if err != nil {
+		return err
+	}
+	defer v.Close()
 
-	// Get existing secrets to check for conflicts
-	existingSecrets, err := client.ListSecrets(project)
+	project := resolveProject(v, projectName)
+
+	// Get existing secrets to check for conflicts.
+	existingKeys, err := v.ListSecrets(project)
 	if err != nil {
 		return fmt.Errorf("failed to list existing secrets: %w", err)
 	}
 
-	existingKeys := make(map[string]bool)
-	for _, s := range existingSecrets {
-		existingKeys[s.Key] = true
+	existingSet := make(map[string]bool, len(existingKeys))
+	for _, k := range existingKeys {
+		existingSet[k] = true
 	}
 
-	// Process each secret
 	var imported, skipped, overwritten int
 
 	if importDryRun {
@@ -85,7 +78,7 @@ func runImport(_ *cobra.Command, args []string) error {
 	}
 
 	for key, value := range secrets {
-		exists := existingKeys[key]
+		exists := existingSet[key]
 
 		if exists && !importOverwrite {
 			if importDryRun {
@@ -104,7 +97,7 @@ func runImport(_ *cobra.Command, args []string) error {
 				fmt.Printf("  %s %s (would create)\n", SuccessIcon(), key)
 			}
 		} else {
-			if err := client.SetSecret(project, key, value); err != nil {
+			if err := v.SetSecret(project, key, value); err != nil {
 				Error("Failed to set %s: %v", key, err)
 				continue
 			}
@@ -151,12 +144,12 @@ func parseEnvFile(filePath string) (map[string]string, error) {
 		lineNum++
 		line := strings.TrimSpace(scanner.Text())
 
-		// Skip empty lines and comments
+		// Skip empty lines and comments.
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 
-		// Parse KEY=VALUE format
+		// Parse KEY=VALUE format.
 		idx := strings.Index(line, "=")
 		if idx == -1 {
 			Warning("Line %d: Invalid format (missing '='): %s", lineNum, line)
@@ -166,7 +159,7 @@ func parseEnvFile(filePath string) (map[string]string, error) {
 		key := strings.TrimSpace(line[:idx])
 		value := strings.TrimSpace(line[idx+1:])
 
-		// Remove surrounding quotes if present
+		// Remove surrounding quotes if present.
 		if len(value) >= 2 {
 			if (value[0] == '"' && value[len(value)-1] == '"') ||
 				(value[0] == '\'' && value[len(value)-1] == '\'') {
@@ -174,7 +167,7 @@ func parseEnvFile(filePath string) (map[string]string, error) {
 			}
 		}
 
-		// Handle escape sequences in double-quoted values
+		// Handle escape sequences in double-quoted values.
 		value = strings.ReplaceAll(value, "\\n", "\n")
 		value = strings.ReplaceAll(value, "\\t", "\t")
 		value = strings.ReplaceAll(value, "\\\"", "\"")

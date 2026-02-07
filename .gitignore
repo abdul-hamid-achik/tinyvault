@@ -35,12 +35,6 @@ go.work.sum
 # Build artifacts
 tmp/
 dist/
-web/static/dist/
-web/static/css/output.css
-
-# Generated files
-*_templ.go
-# Note: internal/database/db/ is committed (sqlc generated code)
 
 # Dependencies
 vendor/
@@ -54,19 +48,8 @@ Thumbs.db
 *.log
 logs/
 
-# Terraform
-.terraform/
-*.tfstate
-*.tfstate.*
-*.tfvars
-!*.tfvars.example
-
-# Ansible
-*.retry
-infrastructure/ansible/vars/production.yml
-
-# Docker
-.docker/
+# TinyVault local vault
+.tvault/
 
 # Secrets (never commit these!)
 *.pem

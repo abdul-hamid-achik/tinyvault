@@ -1,9 +1,10 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
-	"text/tabwriter"
+	"sort"
 
 	"github.com/spf13/cobra"
 )
@@ -13,7 +14,6 @@ var listCmd = &cobra.Command{
 	Short: "List all secrets in the current project",
 	Long: `List all secret keys in the current project.
 
-Secret values are not displayed for security.
 Use 'tvault get <key>' to retrieve a specific value.`,
 	Aliases: []string{"ls"},
 	RunE:    runList,
@@ -24,35 +24,37 @@ func init() {
 }
 
 func runList(_ *cobra.Command, _ []string) error {
-	token := getToken()
-	if token == "" {
-		return fmt.Errorf("not logged in. Run 'tvault login' first")
+	v, err := openAndUnlockVault()
+	if err != nil {
+		return err
 	}
+	defer v.Close()
 
-	project := getProject()
-	if project == "" {
-		return fmt.Errorf("no project selected. Run 'tvault use <project>' first")
-	}
+	project := resolveProject(v, projectName)
 
-	client := NewClient(getAPIURL(), token)
-	secrets, err := client.ListSecrets(project)
+	keys, err := v.ListSecrets(project)
 	if err != nil {
 		return fmt.Errorf("failed to list secrets: %w", err)
 	}
 
-	if len(secrets) == 0 {
-		fmt.Println("No secrets found.")
-		fmt.Println()
-		fmt.Println("Add one with: tvault set KEY VALUE")
+	sort.Strings(keys)
+
+	if jsonOutput {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(keys)
+	}
+
+	if len(keys) == 0 {
+		fmt.Fprintln(os.Stderr, "No secrets found.")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "Add one with: tvault set KEY VALUE")
 		return nil
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "KEY\tVERSION\tUPDATED")
-	for _, s := range secrets {
-		_, _ = fmt.Fprintf(w, "%s\t%d\t%s\n", s.Key, s.Version, s.UpdatedAt)
+	for _, k := range keys {
+		fmt.Println(k)
 	}
-	_ = w.Flush()
 
 	return nil
 }

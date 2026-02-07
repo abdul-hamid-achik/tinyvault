@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -11,9 +13,16 @@ var getCmd = &cobra.Command{
 	Short: "Get a secret value",
 	Long: `Get the value of a secret by key.
 
-The secret is decrypted on the server and returned.`,
-	Args: cobra.ExactArgs(1),
-	RunE: runGet,
+The decrypted value is printed to stdout. Messages go to stderr,
+making this command pipe-friendly.
+
+Examples:
+  tvault get DATABASE_URL
+  tvault get API_KEY --json
+  DB_URL=$(tvault get DATABASE_URL)`,
+	Aliases: []string{"g"},
+	Args:    cobra.ExactArgs(1),
+	RunE:    runGet,
 }
 
 func init() {
@@ -21,25 +30,29 @@ func init() {
 }
 
 func runGet(_ *cobra.Command, args []string) error {
-	token := getToken()
-	if token == "" {
-		return fmt.Errorf("not logged in. Run 'tvault login' first")
+	v, err := openAndUnlockVault()
+	if err != nil {
+		return err
 	}
+	defer v.Close()
 
-	project := getProject()
-	if project == "" {
-		return fmt.Errorf("no project selected. Run 'tvault use <project>' first")
-	}
-
+	project := resolveProject(v, projectName)
 	key := args[0]
 
-	client := NewClient(getAPIURL(), token)
-	secret, err := client.GetSecret(project, key)
+	value, err := v.GetSecret(project, key)
 	if err != nil {
 		return fmt.Errorf("failed to get secret: %w", err)
 	}
 
-	fmt.Print(secret.Value)
+	if jsonOutput {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(map[string]string{
+			"key":   key,
+			"value": value,
+		})
+	}
 
+	fmt.Print(value)
 	return nil
 }

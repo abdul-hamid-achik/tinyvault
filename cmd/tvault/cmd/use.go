@@ -2,9 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var useCmd = &cobra.Command{
@@ -12,7 +12,7 @@ var useCmd = &cobra.Command{
 	Short: "Select a project to use",
 	Long: `Select a project to use for subsequent commands.
 
-The project can be specified by name or ID.`,
+This is a shorthand for 'tvault projects use'.`,
 	Args: cobra.ExactArgs(1),
 	RunE: runUse,
 }
@@ -22,45 +22,25 @@ func init() {
 }
 
 func runUse(_ *cobra.Command, args []string) error {
-	token := getToken()
-	if token == "" {
-		return fmt.Errorf("not logged in. Run 'tvault login' first")
-	}
-
-	projectRef := args[0]
-
-	// Validate the project exists
-	client := NewClient(getAPIURL(), token)
-	projects, err := client.ListProjects()
+	v, err := openAndUnlockVault()
 	if err != nil {
-		return fmt.Errorf("failed to verify project: %w", err)
+		return err
+	}
+	defer v.Close()
+
+	name := args[0]
+
+	if err := v.SetCurrentProject(name); err != nil {
+		return fmt.Errorf("project '%s' not found", name)
 	}
 
-	var found *Project
-	for _, p := range projects {
-		if p.ID == projectRef || p.Name == projectRef {
-			found = &p
-			break
-		}
-	}
-
-	if found == nil {
-		return fmt.Errorf("project '%s' not found", projectRef)
-	}
-
-	// Save the project
-	viper.Set("project", found.ID)
-	if err := viper.WriteConfigAs(getConfigPath()); err != nil {
-		return fmt.Errorf("failed to save config: %w", err)
-	}
-
-	fmt.Printf("Now using project: %s (%s)\n", found.Name, found.ID)
-	fmt.Println()
-	fmt.Println("You can now manage secrets:")
-	fmt.Println("  tvault set KEY VALUE    Set a secret")
-	fmt.Println("  tvault get KEY          Get a secret")
-	fmt.Println("  tvault list             List all secrets")
-	fmt.Println("  tvault run <command>    Run with secrets as env vars")
+	fmt.Fprintf(os.Stderr, "Now using project: %s\n", name)
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "You can now manage secrets:")
+	fmt.Fprintln(os.Stderr, "  tvault set KEY VALUE    Set a secret")
+	fmt.Fprintln(os.Stderr, "  tvault get KEY          Get a secret")
+	fmt.Fprintln(os.Stderr, "  tvault list             List all secrets")
+	fmt.Fprintln(os.Stderr, "  tvault run <command>    Run with secrets as env vars")
 
 	return nil
 }

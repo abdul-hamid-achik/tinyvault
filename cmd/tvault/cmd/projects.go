@@ -1,18 +1,19 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var projectsCmd = &cobra.Command{
-	Use:   "projects",
-	Short: "Manage projects",
-	Long:  "List, create, and delete projects.",
+	Use:     "projects",
+	Aliases: []string{"project", "p"},
+	Short:   "Manage projects",
+	Long:    "List, create, and delete projects.",
 }
 
 var projectsListCmd = &cobra.Command{
@@ -29,16 +30,23 @@ var projectsCreateCmd = &cobra.Command{
 }
 
 var projectsDeleteCmd = &cobra.Command{
-	Use:   "delete <project-id>",
+	Use:   "delete <name>",
 	Short: "Delete a project",
 	Long: `Delete a project and all its secrets.
 
 By default, you will be prompted to confirm the deletion.
 Use --yes or -y to skip the confirmation prompt.
 
-WARNING: This action cannot be undone. All secrets in the project will be permanently deleted.`,
+WARNING: This action cannot be undone.`,
 	Args: cobra.ExactArgs(1),
 	RunE: runProjectsDelete,
+}
+
+var projectsUseCmd = &cobra.Command{
+	Use:   "use <name>",
+	Short: "Set the active project",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runProjectsUse,
 }
 
 var (
@@ -51,34 +59,60 @@ func init() {
 	projectsCmd.AddCommand(projectsListCmd)
 	projectsCmd.AddCommand(projectsCreateCmd)
 	projectsCmd.AddCommand(projectsDeleteCmd)
+	projectsCmd.AddCommand(projectsUseCmd)
 
 	projectsCreateCmd.Flags().StringVarP(&projectDescription, "description", "d", "", "Project description")
 	projectsDeleteCmd.Flags().BoolVarP(&projectDeleteForce, "yes", "y", false, "Skip confirmation prompt")
 }
 
 func runProjectsList(_ *cobra.Command, _ []string) error {
-	token := getToken()
-	if token == "" {
-		return fmt.Errorf("not logged in. Run 'tvault login' first")
+	v, err := openAndUnlockVault()
+	if err != nil {
+		return err
 	}
+	defer v.Close()
 
-	client := NewClient(getAPIURL(), token)
-	projects, err := client.ListProjects()
+	projects, err := v.ListProjects()
 	if err != nil {
 		return fmt.Errorf("failed to list projects: %w", err)
 	}
 
+	currentProject, _ := v.GetCurrentProject()
+
+	if jsonOutput {
+		type projectJSON struct {
+			Name        string `json:"name"`
+			Description string `json:"description,omitempty"`
+			Current     bool   `json:"current,omitempty"`
+		}
+		var list []projectJSON
+		for _, p := range projects {
+			list = append(list, projectJSON{
+				Name:        p.Name,
+				Description: p.Description,
+				Current:     p.Name == currentProject,
+			})
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(list)
+	}
+
 	if len(projects) == 0 {
-		fmt.Println("No projects found.")
-		fmt.Println()
-		fmt.Println("Create one with: tvault projects create <name>")
+		fmt.Fprintln(os.Stderr, "No projects found.")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "Create one with: tvault projects create <name>")
 		return nil
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "ID\tNAME\tDESCRIPTION\tCREATED")
+	_, _ = fmt.Fprintln(w, "NAME\tDESCRIPTION\tCURRENT")
 	for _, p := range projects {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", p.ID, p.Name, p.Description, p.CreatedAt)
+		current := ""
+		if p.Name == currentProject {
+			current = "*"
+		}
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", p.Name, p.Description, current)
 	}
 	_ = w.Flush()
 
@@ -86,56 +120,63 @@ func runProjectsList(_ *cobra.Command, _ []string) error {
 }
 
 func runProjectsCreate(_ *cobra.Command, args []string) error {
-	token := getToken()
-	if token == "" {
-		return fmt.Errorf("not logged in. Run 'tvault login' first")
+	v, err := openAndUnlockVault()
+	if err != nil {
+		return err
 	}
+	defer v.Close()
 
 	name := args[0]
-
-	client := NewClient(getAPIURL(), token)
-	project, err := client.CreateProject(name, projectDescription)
+	project, err := v.CreateProject(name, projectDescription)
 	if err != nil {
 		return fmt.Errorf("failed to create project: %w", err)
 	}
 
-	fmt.Printf("Project '%s' created successfully!\n", project.Name)
-	fmt.Printf("ID: %s\n", project.ID)
-	fmt.Println()
-	fmt.Printf("Use it with: tvault use %s\n", project.Name)
+	Success("Project '%s' created", project.Name)
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintf(os.Stderr, "Use it with: tvault use %s\n", project.Name)
 
 	return nil
 }
 
 func runProjectsDelete(_ *cobra.Command, args []string) error {
-	token := getToken()
-	if token == "" {
-		return fmt.Errorf("not logged in. Run 'tvault login' first")
+	v, err := openAndUnlockVault()
+	if err != nil {
+		return err
 	}
+	defer v.Close()
 
-	projectIDArg := args[0]
+	name := args[0]
 
-	// Prompt for confirmation unless --yes flag is set
 	if !projectDeleteForce {
 		Warning("This will permanently delete the project and all its secrets.")
-		if !PromptConfirm(fmt.Sprintf("Delete project '%s'?", projectIDArg)) {
+		if !PromptConfirm(fmt.Sprintf("Delete project '%s'?", name)) {
 			Info("Canceled")
 			return nil
 		}
 	}
 
-	client := NewClient(getAPIURL(), token)
-	if err := client.DeleteProject(projectIDArg); err != nil {
+	if err := v.DeleteProject(name); err != nil {
 		return fmt.Errorf("failed to delete project: %w", err)
 	}
 
-	Success("Project deleted")
+	Success("Project '%s' deleted", name)
+	return nil
+}
 
-	// Clear current project if it was the one deleted
-	if getProject() == projectIDArg {
-		viper.Set("project", "")
-		_ = viper.WriteConfigAs(getConfigPath())
+func runProjectsUse(_ *cobra.Command, args []string) error {
+	v, err := openAndUnlockVault()
+	if err != nil {
+		return err
+	}
+	defer v.Close()
+
+	name := args[0]
+
+	if err := v.SetCurrentProject(name); err != nil {
+		return fmt.Errorf("project '%s' not found", name)
 	}
 
+	fmt.Fprintf(os.Stderr, "Now using project: %s\n", name)
 	return nil
 }
