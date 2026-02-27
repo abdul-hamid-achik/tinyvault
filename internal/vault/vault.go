@@ -290,8 +290,8 @@ func (v *Vault) RotatePassphrase(oldPassphrase, newPassphrase string) error {
 	return nil
 }
 
-// VaultStatus holds read-only status information about the vault.
-type VaultStatus struct {
+// Status holds read-only status information about the vault.
+type Status struct {
 	Path         string `json:"path"`
 	IsUnlocked   bool   `json:"is_unlocked"`
 	ProjectCount int    `json:"project_count"`
@@ -300,11 +300,11 @@ type VaultStatus struct {
 }
 
 // Status returns current vault status metadata.
-func (v *Vault) Status() VaultStatus {
+func (v *Vault) Status() Status {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
-	status := VaultStatus{
+	status := Status{
 		Path:       v.path,
 		IsUnlocked: v.kek != nil,
 	}

@@ -9,7 +9,8 @@ import (
 // audit logs an action to the vault's audit log. Errors are silently ignored
 // because audit is best-effort and should never block operations.
 func (s *VaultMCPServer) audit(action, resourceType, resourceName string, metadata map[string]any) {
-	_ = s.vault.AppendAudit(&store.AuditEntry{
+	//nolint:errcheck // audit is best-effort, errors are intentionally ignored
+	s.vault.AppendAudit(&store.AuditEntry{
 		Action:       action,
 		ResourceType: resourceType,
 		ResourceName: resourceName,

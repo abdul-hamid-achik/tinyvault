@@ -14,7 +14,7 @@ import (
 
 type vaultStatusInput struct{}
 
-type vaultStatusOutput = vault.VaultStatus
+type vaultStatusOutput = vault.Status
 
 // --- vault_audit_log ---
 

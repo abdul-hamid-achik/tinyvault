@@ -111,10 +111,10 @@ func generateRandomString(length int, charset string) (string, error) {
 }
 
 func randomFromCharset(length int, charset string) (string, error) {
-	max := big.NewInt(int64(len(charset)))
+	charsetLen := big.NewInt(int64(len(charset)))
 	result := make([]byte, length)
 	for i := range result {
-		n, err := rand.Int(rand.Reader, max)
+		n, err := rand.Int(rand.Reader, charsetLen)
 		if err != nil {
 			return "", err
 		}
