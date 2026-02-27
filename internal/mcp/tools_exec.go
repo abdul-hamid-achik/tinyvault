@@ -101,6 +101,8 @@ func (s *VaultMCPServer) handleRunWithSecrets(ctx context.Context, _ *sdkmcp.Cal
 	outStr := stdout.String()
 	errStr := stderr.String()
 
+	s.audit("secret.exec", "command", input.Command, map[string]any{"project": project, "exit_code": exitCode})
+
 	if s.policy.RedactOutput {
 		outStr = redactSecrets(outStr, allSecrets)
 		errStr = redactSecrets(errStr, allSecrets)

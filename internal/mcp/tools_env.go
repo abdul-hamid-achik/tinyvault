@@ -108,6 +108,8 @@ func (s *VaultMCPServer) handleExportEnv(_ context.Context, _ *sdkmcp.CallToolRe
 		return nil, exportEnvOutput{}, fmt.Errorf("write file: %w", err)
 	}
 
+	s.audit("secret.export", "env", outputPath, map[string]any{"project": project, "format": format})
+
 	keys := make([]string, 0, len(filtered))
 	for k := range filtered {
 		keys = append(keys, k)

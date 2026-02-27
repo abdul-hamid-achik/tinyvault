@@ -290,6 +290,47 @@ func (v *Vault) RotatePassphrase(oldPassphrase, newPassphrase string) error {
 	return nil
 }
 
+// VaultStatus holds read-only status information about the vault.
+type VaultStatus struct {
+	Path         string `json:"path"`
+	IsUnlocked   bool   `json:"is_unlocked"`
+	ProjectCount int    `json:"project_count"`
+	VaultID      string `json:"vault_id"`
+	CreatedAt    string `json:"created_at"`
+}
+
+// Status returns current vault status metadata.
+func (v *Vault) Status() VaultStatus {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
+	status := VaultStatus{
+		Path:       v.path,
+		IsUnlocked: v.kek != nil,
+	}
+
+	if projects, err := v.store.ListProjects(); err == nil {
+		status.ProjectCount = len(projects)
+	}
+
+	if meta, err := v.store.GetMeta(); err == nil {
+		status.VaultID = meta.VaultID
+		status.CreatedAt = meta.CreatedAt.Format(time.RFC3339)
+	}
+
+	return status
+}
+
+// AppendAudit writes an audit entry to the store.
+func (v *Vault) AppendAudit(entry *store.AuditEntry) error {
+	return v.store.AppendAudit(entry)
+}
+
+// ListAudit returns the most recent audit entries, up to limit.
+func (v *Vault) ListAudit(limit int) ([]*store.AuditEntry, error) {
+	return v.store.ListAudit(limit)
+}
+
 // mapStoreError translates store-level sentinel errors to vault-level errors.
 func mapStoreError(err error) error {
 	if err == nil {

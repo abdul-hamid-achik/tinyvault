@@ -248,16 +248,16 @@ func TestMCPServerIntegration(t *testing.T) {
 	defer cs.Close()
 
 	t.Run("list_tools", func(t *testing.T) {
-		tools := make([]*sdkmcp.Tool, 0, 8)
+		tools := make([]*sdkmcp.Tool, 0, 16)
 		for tool, err := range cs.Tools(ctx, nil) {
 			if err != nil {
 				t.Fatalf("list tools: %v", err)
 			}
 			tools = append(tools, tool)
 		}
-		// We expect 6 tools: list_projects, list_secrets, get_secret, set_secret, delete_secret, run_with_secrets, export_env
-		if len(tools) < 6 {
-			t.Errorf("expected at least 6 tools, got %d", len(tools))
+		// We expect 12 tools after enhancement
+		if len(tools) != 12 {
+			t.Errorf("expected 12 tools, got %d", len(tools))
 		}
 		toolNames := make(map[string]bool)
 		for _, tool := range tools {
@@ -265,12 +265,17 @@ func TestMCPServerIntegration(t *testing.T) {
 		}
 		for _, name := range []string{
 			"vault_list_projects",
+			"vault_create_project",
+			"vault_delete_project",
 			"vault_list_secrets",
 			"vault_get_secret",
 			"vault_set_secret",
 			"vault_delete_secret",
 			"vault_run_with_secrets",
 			"vault_export_env",
+			"vault_status",
+			"vault_audit_log",
+			"vault_generate_secret",
 		} {
 			if !toolNames[name] {
 				t.Errorf("missing tool: %s", name)
@@ -421,6 +426,260 @@ func TestMCPServerIntegration(t *testing.T) {
 		}
 	})
 
+	t.Run("vault_create_project", func(t *testing.T) {
+		res, err := cs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name:      "vault_create_project",
+			Arguments: map[string]any{"name": "test-proj", "description": "A test project"},
+		})
+		if err != nil {
+			t.Fatalf("call vault_create_project: %v", err)
+		}
+		if res.IsError {
+			text := res.Content[0].(*sdkmcp.TextContent).Text
+			t.Fatalf("tool returned error: %s", text)
+		}
+		text := res.Content[0].(*sdkmcp.TextContent).Text
+		var out createProjectOutput
+		if err := json.Unmarshal([]byte(text), &out); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if !out.Created {
+			t.Error("expected created to be true")
+		}
+		if out.Name != "test-proj" {
+			t.Errorf("name = %q, want %q", out.Name, "test-proj")
+		}
+	})
+
+	t.Run("vault_delete_project", func(t *testing.T) {
+		// First create a project to delete
+		_, err := cs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name:      "vault_create_project",
+			Arguments: map[string]any{"name": "to-delete"},
+		})
+		if err != nil {
+			t.Fatalf("create project: %v", err)
+		}
+
+		res, err := cs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name:      "vault_delete_project",
+			Arguments: map[string]any{"name": "to-delete"},
+		})
+		if err != nil {
+			t.Fatalf("call vault_delete_project: %v", err)
+		}
+		if res.IsError {
+			text := res.Content[0].(*sdkmcp.TextContent).Text
+			t.Fatalf("tool returned error: %s", text)
+		}
+		text := res.Content[0].(*sdkmcp.TextContent).Text
+		var out deleteProjectOutput
+		if err := json.Unmarshal([]byte(text), &out); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if !out.Deleted {
+			t.Error("expected deleted to be true")
+		}
+	})
+
+	t.Run("vault_status", func(t *testing.T) {
+		res, err := cs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name: "vault_status",
+		})
+		if err != nil {
+			t.Fatalf("call vault_status: %v", err)
+		}
+		if res.IsError {
+			text := res.Content[0].(*sdkmcp.TextContent).Text
+			t.Fatalf("tool returned error: %s", text)
+		}
+		text := res.Content[0].(*sdkmcp.TextContent).Text
+		var out vaultStatusOutput
+		if err := json.Unmarshal([]byte(text), &out); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if !out.IsUnlocked {
+			t.Error("expected vault to be unlocked")
+		}
+		if out.ProjectCount < 1 {
+			t.Errorf("expected at least 1 project, got %d", out.ProjectCount)
+		}
+		if out.VaultID == "" {
+			t.Error("expected non-empty vault ID")
+		}
+	})
+
+	t.Run("vault_generate_secret", func(t *testing.T) {
+		res, err := cs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name: "vault_generate_secret",
+			Arguments: map[string]any{
+				"key":     "GENERATED_TOKEN",
+				"length":  float64(24),
+				"charset": "hex",
+			},
+		})
+		if err != nil {
+			t.Fatalf("call vault_generate_secret: %v", err)
+		}
+		if res.IsError {
+			text := res.Content[0].(*sdkmcp.TextContent).Text
+			t.Fatalf("tool returned error: %s", text)
+		}
+		text := res.Content[0].(*sdkmcp.TextContent).Text
+		var out generateSecretOutput
+		if err := json.Unmarshal([]byte(text), &out); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if !out.Stored {
+			t.Error("expected stored to be true")
+		}
+		if out.Key != "GENERATED_TOKEN" {
+			t.Errorf("key = %q, want %q", out.Key, "GENERATED_TOKEN")
+		}
+		if out.Length != 24 {
+			t.Errorf("length = %d, want 24", out.Length)
+		}
+		// Verify the value is NOT in the output
+		if text != "" {
+			var raw map[string]any
+			_ = json.Unmarshal([]byte(text), &raw)
+			if _, hasValue := raw["value"]; hasValue {
+				t.Error("generated value should NOT be returned to the AI")
+			}
+		}
+		// Verify it was actually stored
+		val, err := v.GetSecret("default", "GENERATED_TOKEN")
+		if err != nil {
+			t.Fatalf("verify generated: %v", err)
+		}
+		if len(val) != 24 {
+			t.Errorf("generated value length = %d, want 24", len(val))
+		}
+	})
+
+	t.Run("vault_audit_log", func(t *testing.T) {
+		// The previous operations should have created audit entries
+		res, err := cs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name:      "vault_audit_log",
+			Arguments: map[string]any{"limit": float64(50)},
+		})
+		if err != nil {
+			t.Fatalf("call vault_audit_log: %v", err)
+		}
+		if res.IsError {
+			text := res.Content[0].(*sdkmcp.TextContent).Text
+			t.Fatalf("tool returned error: %s", text)
+		}
+		text := res.Content[0].(*sdkmcp.TextContent).Text
+		var out auditLogOutput
+		if err := json.Unmarshal([]byte(text), &out); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(out.Entries) == 0 {
+			t.Error("expected at least one audit entry from previous operations")
+		}
+		// Look for known actions
+		actions := make(map[string]bool)
+		for _, e := range out.Entries {
+			actions[e.Action] = true
+		}
+		for _, expected := range []string{"secret.read", "secret.write", "secret.delete", "project.create"} {
+			if !actions[expected] {
+				t.Errorf("missing audit action: %s (found: %v)", expected, actions)
+			}
+		}
+	})
+
+	t.Run("resource_vault_status", func(t *testing.T) {
+		res, err := cs.ReadResource(ctx, &sdkmcp.ReadResourceParams{URI: "vault://status"})
+		if err != nil {
+			t.Fatalf("read resource: %v", err)
+		}
+		if len(res.Contents) != 1 {
+			t.Fatalf("expected 1 content, got %d", len(res.Contents))
+		}
+		var status vaultStatusOutput
+		if err := json.Unmarshal([]byte(res.Contents[0].Text), &status); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if !status.IsUnlocked {
+			t.Error("expected vault unlocked")
+		}
+	})
+
+	t.Run("resource_vault_projects", func(t *testing.T) {
+		res, err := cs.ReadResource(ctx, &sdkmcp.ReadResourceParams{URI: "vault://projects"})
+		if err != nil {
+			t.Fatalf("read resource: %v", err)
+		}
+		if len(res.Contents) != 1 {
+			t.Fatalf("expected 1 content, got %d", len(res.Contents))
+		}
+		var projects []projectInfo
+		if err := json.Unmarshal([]byte(res.Contents[0].Text), &projects); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(projects) < 1 {
+			t.Error("expected at least 1 project")
+		}
+	})
+
+	t.Run("resource_project_keys", func(t *testing.T) {
+		res, err := cs.ReadResource(ctx, &sdkmcp.ReadResourceParams{URI: "vault://projects/default/keys"})
+		if err != nil {
+			t.Fatalf("read resource: %v", err)
+		}
+		if len(res.Contents) != 1 {
+			t.Fatalf("expected 1 content, got %d", len(res.Contents))
+		}
+		var keys []string
+		if err := json.Unmarshal([]byte(res.Contents[0].Text), &keys); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(keys) < 2 {
+			t.Errorf("expected at least 2 keys, got %d", len(keys))
+		}
+	})
+
+	t.Run("list_prompts", func(t *testing.T) {
+		prompts := make([]*sdkmcp.Prompt, 0, 4)
+		for p, err := range cs.Prompts(ctx, nil) {
+			if err != nil {
+				t.Fatalf("list prompts: %v", err)
+			}
+			prompts = append(prompts, p)
+		}
+		if len(prompts) != 2 {
+			t.Errorf("expected 2 prompts, got %d", len(prompts))
+		}
+		promptNames := make(map[string]bool)
+		for _, p := range prompts {
+			promptNames[p.Name] = true
+		}
+		for _, name := range []string{"setup-project", "inject-secrets"} {
+			if !promptNames[name] {
+				t.Errorf("missing prompt: %s", name)
+			}
+		}
+	})
+
+	t.Run("get_prompt_setup_project", func(t *testing.T) {
+		res, err := cs.GetPrompt(ctx, &sdkmcp.GetPromptParams{
+			Name:      "setup-project",
+			Arguments: map[string]string{"name": "myapp"},
+		})
+		if err != nil {
+			t.Fatalf("get prompt: %v", err)
+		}
+		if len(res.Messages) != 1 {
+			t.Fatalf("expected 1 message, got %d", len(res.Messages))
+		}
+		text := res.Messages[0].Content.(*sdkmcp.TextContent).Text
+		if text == "" {
+			t.Error("expected non-empty prompt text")
+		}
+	})
+
 	t.Run("policy_read_only_blocks_writes", func(t *testing.T) {
 		// Create a read-only server
 		roPolicy := &AccessPolicy{
@@ -442,6 +701,7 @@ func TestMCPServerIntegration(t *testing.T) {
 		}
 		defer roCs.Close()
 
+		// Test set_secret blocked
 		res, err := roCs.CallTool(ctx, &sdkmcp.CallToolParams{
 			Name:      "vault_set_secret",
 			Arguments: map[string]any{"key": "BLOCKED", "value": "nope"},
@@ -450,7 +710,54 @@ func TestMCPServerIntegration(t *testing.T) {
 			t.Fatalf("call: %v", err)
 		}
 		if !res.IsError {
-			t.Error("expected error for write in read-only mode")
+			t.Error("expected error for set_secret in read-only mode")
+		}
+
+		// Test create_project blocked
+		res, err = roCs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name:      "vault_create_project",
+			Arguments: map[string]any{"name": "blocked-proj"},
+		})
+		if err != nil {
+			t.Fatalf("call: %v", err)
+		}
+		if !res.IsError {
+			t.Error("expected error for create_project in read-only mode")
+		}
+
+		// Test delete_project blocked
+		res, err = roCs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name:      "vault_delete_project",
+			Arguments: map[string]any{"name": "default"},
+		})
+		if err != nil {
+			t.Fatalf("call: %v", err)
+		}
+		if !res.IsError {
+			t.Error("expected error for delete_project in read-only mode")
+		}
+
+		// Test generate_secret blocked
+		res, err = roCs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name:      "vault_generate_secret",
+			Arguments: map[string]any{"key": "BLOCKED_GEN"},
+		})
+		if err != nil {
+			t.Fatalf("call: %v", err)
+		}
+		if !res.IsError {
+			t.Error("expected error for generate_secret in read-only mode")
+		}
+
+		// Test vault_status is always allowed (even read-only)
+		res, err = roCs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name: "vault_status",
+		})
+		if err != nil {
+			t.Fatalf("call: %v", err)
+		}
+		if res.IsError {
+			t.Error("vault_status should be allowed in read-only mode")
 		}
 	})
 }
