@@ -3,6 +3,9 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -229,6 +232,19 @@ func TestMCPServerIntegration(t *testing.T) {
 		t.Fatalf("set secret: %v", err)
 	}
 
+	envDir := t.TempDir()
+	for name, content := range map[string]string{
+		".env":                  "IMPORT_API=base-value\nSHARED_KEY=base-shared\nBLOCKED_KEY=blocked-base\n",
+		".env.production":       "SHARED_KEY=prod-shared\n",
+		".env.local":            "LOCAL_ONLY=local-value\n",
+		".env.production.local": "IMPORT_API=prod-local\n",
+		"secrets.env":           "UNSAFE_FILE=should-not-import\n",
+	} {
+		if err := os.WriteFile(filepath.Join(envDir, name), []byte(content), 0o600); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+
 	policy := DefaultPolicy()
 	srv := NewVaultMCPServer(v, policy)
 
@@ -255,9 +271,8 @@ func TestMCPServerIntegration(t *testing.T) {
 			}
 			tools = append(tools, tool)
 		}
-		// We expect 12 tools after enhancement
-		if len(tools) != 12 {
-			t.Errorf("expected 12 tools, got %d", len(tools))
+		if len(tools) != 15 {
+			t.Errorf("expected 15 tools, got %d", len(tools))
 		}
 		toolNames := make(map[string]bool)
 		for _, tool := range tools {
@@ -273,6 +288,9 @@ func TestMCPServerIntegration(t *testing.T) {
 			"vault_delete_secret",
 			"vault_run_with_secrets",
 			"vault_export_env",
+			"vault_list_env_files",
+			"vault_preview_env_import",
+			"vault_import_env_files",
 			"vault_status",
 			"vault_audit_log",
 			"vault_generate_secret",
@@ -423,6 +441,136 @@ func TestMCPServerIntegration(t *testing.T) {
 		}
 		if out.Stdout != "DB is [REDACTED:DB_URL]\n" {
 			t.Errorf("stdout = %q, expected redacted output", out.Stdout)
+		}
+	})
+
+	t.Run("vault_list_env_files", func(t *testing.T) {
+		res, err := cs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name:      "vault_list_env_files",
+			Arguments: map[string]any{"directory": envDir, "environment": "production"},
+		})
+		if err != nil {
+			t.Fatalf("call vault_list_env_files: %v", err)
+		}
+		text := res.Content[0].(*sdkmcp.TextContent).Text
+		var out listEnvFilesOutput
+		if err := json.Unmarshal([]byte(text), &out); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(out.Files) != 4 {
+			t.Fatalf("expected 4 dotenv files, got %d", len(out.Files))
+		}
+		if len(out.SuggestedFiles) != 4 {
+			t.Fatalf("expected 4 suggested files, got %d", len(out.SuggestedFiles))
+		}
+	})
+
+	t.Run("vault_preview_env_import", func(t *testing.T) {
+		res, err := cs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name: "vault_preview_env_import",
+			Arguments: map[string]any{
+				"directory":   envDir,
+				"environment": "production",
+				"overwrite":   true,
+			},
+		})
+		if err != nil {
+			t.Fatalf("call vault_preview_env_import: %v", err)
+		}
+		text := res.Content[0].(*sdkmcp.TextContent).Text
+		var out previewEnvImportOutput
+		if err := json.Unmarshal([]byte(text), &out); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if out.Project != "default" {
+			t.Fatalf("project = %q, want %q", out.Project, "default")
+		}
+		if out.CreateCount != 4 {
+			t.Fatalf("CreateCount = %d, want 4", out.CreateCount)
+		}
+		if out.OverwriteCount != 0 {
+			t.Fatalf("OverwriteCount = %d, want 0", out.OverwriteCount)
+		}
+		if strings.Contains(text, "prod-local") || strings.Contains(text, "base-value") {
+			t.Fatal("preview output leaked a secret value")
+		}
+	})
+
+	t.Run("vault_preview_env_import_rejects_unsafe_explicit_file", func(t *testing.T) {
+		res, err := cs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name: "vault_preview_env_import",
+			Arguments: map[string]any{
+				"files": []string{filepath.Join(envDir, "secrets.env")},
+			},
+		})
+		if err != nil {
+			t.Fatalf("call vault_preview_env_import: %v", err)
+		}
+		if !res.IsError {
+			t.Fatal("expected unsafe explicit file preview to fail")
+		}
+	})
+
+	t.Run("vault_preview_env_import_rejects_explicit_file_outside_directory", func(t *testing.T) {
+		otherDir := t.TempDir()
+		otherFile := filepath.Join(otherDir, ".env")
+		if err := os.WriteFile(otherFile, []byte("OUTSIDE_DIR=blocked\n"), 0o600); err != nil {
+			t.Fatalf("write outside dotenv file: %v", err)
+		}
+
+		res, err := cs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name: "vault_preview_env_import",
+			Arguments: map[string]any{
+				"directory": envDir,
+				"files":     []string{otherFile},
+			},
+		})
+		if err != nil {
+			t.Fatalf("call vault_preview_env_import: %v", err)
+		}
+		if !res.IsError {
+			t.Fatal("expected explicit file outside directory to fail")
+		}
+	})
+
+	t.Run("vault_import_env_files", func(t *testing.T) {
+		res, err := cs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name: "vault_import_env_files",
+			Arguments: map[string]any{
+				"directory":   envDir,
+				"environment": "production",
+				"overwrite":   true,
+			},
+		})
+		if err != nil {
+			t.Fatalf("call vault_import_env_files: %v", err)
+		}
+		text := res.Content[0].(*sdkmcp.TextContent).Text
+		var out importEnvFilesOutput
+		if err := json.Unmarshal([]byte(text), &out); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if out.CreateCount != 4 {
+			t.Fatalf("CreateCount = %d, want 4", out.CreateCount)
+		}
+		if strings.Contains(text, "prod-local") || strings.Contains(text, "base-value") {
+			t.Fatal("import output leaked a secret value")
+		}
+
+		val, err := v.GetSecret("default", "IMPORT_API")
+		if err != nil {
+			t.Fatalf("verify IMPORT_API: %v", err)
+		}
+		if val != "prod-local" {
+			t.Fatalf("IMPORT_API = %q, want %q", val, "prod-local")
+		}
+
+		val, err = v.GetSecret("default", "SHARED_KEY")
+		if err != nil {
+			t.Fatalf("verify SHARED_KEY: %v", err)
+		}
+		if val != "prod-shared" {
+			t.Fatalf("SHARED_KEY = %q, want %q", val, "prod-shared")
 		}
 	})
 
@@ -583,7 +731,7 @@ func TestMCPServerIntegration(t *testing.T) {
 		for _, e := range out.Entries {
 			actions[e.Action] = true
 		}
-		for _, expected := range []string{"secret.read", "secret.write", "secret.delete", "project.create"} {
+		for _, expected := range []string{"secret.read", "secret.write", "secret.delete", "project.create", "env.import"} {
 			if !actions[expected] {
 				t.Errorf("missing audit action: %s (found: %v)", expected, actions)
 			}
@@ -749,6 +897,21 @@ func TestMCPServerIntegration(t *testing.T) {
 			t.Error("expected error for generate_secret in read-only mode")
 		}
 
+		// Test dotenv import blocked
+		res, err = roCs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name: "vault_import_env_files",
+			Arguments: map[string]any{
+				"directory":   envDir,
+				"environment": "production",
+			},
+		})
+		if err != nil {
+			t.Fatalf("call: %v", err)
+		}
+		if !res.IsError {
+			t.Error("expected error for vault_import_env_files in read-only mode")
+		}
+
 		// Test vault_status is always allowed (even read-only)
 		res, err = roCs.CallTool(ctx, &sdkmcp.CallToolParams{
 			Name: "vault_status",
@@ -758,6 +921,51 @@ func TestMCPServerIntegration(t *testing.T) {
 		}
 		if res.IsError {
 			t.Error("vault_status should be allowed in read-only mode")
+		}
+	})
+
+	t.Run("policy_filters_env_import_keys", func(t *testing.T) {
+		restrictedPolicy := &AccessPolicy{
+			AccessMode:    "full",
+			ProjectsAllow: []string{"*"},
+			SecretsAllow:  []string{"IMPORT_*"},
+			AllowExec:     true,
+		}
+		restrictedSrv := NewVaultMCPServer(v, restrictedPolicy)
+
+		rt1, rt2 := sdkmcp.NewInMemoryTransports()
+		_, err = restrictedSrv.server.Connect(ctx, rt1, nil)
+		if err != nil {
+			t.Fatalf("server connect: %v", err)
+		}
+		restrictedClient := sdkmcp.NewClient(&sdkmcp.Implementation{Name: "restricted-client", Version: "v0.0.1"}, nil)
+		restrictedCs, err := restrictedClient.Connect(ctx, rt2, nil)
+		if err != nil {
+			t.Fatalf("client connect: %v", err)
+		}
+		defer restrictedCs.Close()
+
+		res, err := restrictedCs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name: "vault_preview_env_import",
+			Arguments: map[string]any{
+				"directory":   envDir,
+				"environment": "production",
+				"overwrite":   true,
+			},
+		})
+		if err != nil {
+			t.Fatalf("call vault_preview_env_import: %v", err)
+		}
+		text := res.Content[0].(*sdkmcp.TextContent).Text
+		var out previewEnvImportOutput
+		if err := json.Unmarshal([]byte(text), &out); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if out.BlockedCount != 3 {
+			t.Fatalf("BlockedCount = %d, want 3", out.BlockedCount)
+		}
+		if len(out.Keys) != 1 || out.Keys[0].Key != "IMPORT_API" {
+			t.Fatalf("allowed keys = %+v, want only IMPORT_API", out.Keys)
 		}
 	})
 }

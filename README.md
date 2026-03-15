@@ -54,6 +54,11 @@ tvault run -- npm start
 tvault env                     # shell format (eval-able)
 tvault env --format dotenv     # .env file format
 tvault env --format json       # JSON format
+
+# Import dotenv files safely
+tvault import .env
+tvault import --env production
+tvault import --interactive --env production
 ```
 
 ## Projects
@@ -108,6 +113,30 @@ Add to `.claude/settings.local.json`:
 | `vault_delete_secret` | Delete a secret |
 | `vault_run_with_secrets` | Run a command with secrets as env vars (output redacted) |
 | `vault_export_env` | Write a .env file and return the path (values never sent to AI) |
+| `vault_list_env_files` | Discover safe dotenv files without returning any values |
+| `vault_preview_env_import` | Preview a dotenv import with key names, counts, and diagnostics only |
+| `vault_import_env_files` | Import dotenv files into the vault without exposing values |
+
+### Safe Dotenv Imports
+
+TinyVault can safely read dotenv-family files like `.env`, `.env.local`,
+`.env.production`, and `.env.production.local` without executing shell syntax or
+expanding variables.
+
+```bash
+# Import an explicit file
+tvault import .env.local
+
+# Use the default chain for an environment:
+# .env -> .env.production -> .env.local -> .env.production.local
+tvault import --env production
+
+# Interactively choose files, preview key-level changes, then confirm
+tvault import --interactive --env production
+
+# Explicit multi-file import in a custom order
+tvault import --file .env --file .env.local --overwrite
+```
 
 ### Access Policy
 
