@@ -16,6 +16,14 @@ import (
 type Client struct {
 	dir     string
 	timeout time.Duration
+	token   string
+}
+
+// WithToken sets the capability token (TVAULT_AGENT_TOKEN) sent with each
+// request, for agents started with --require-token.
+func (c *Client) WithToken(token string) *Client {
+	c.token = token
+	return c
 }
 
 func dialUnix(path string, timeout time.Duration) (net.Conn, error) {
@@ -45,6 +53,7 @@ func (c *Client) roundTrip(req Request) (Response, error) {
 	}
 
 	req.V = ProtocolVersion
+	req.Token = c.token
 	data, err := json.Marshal(req)
 	if err != nil {
 		return Response{}, err

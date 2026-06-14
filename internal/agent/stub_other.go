@@ -23,6 +23,8 @@ type Client struct{}
 // Dial always fails on non-unix platforms.
 func Dial(_ string, _ time.Duration) (*Client, error) { return nil, ErrUnsupportedPlatform }
 
+func (c *Client) WithToken(_ string) *Client { return c }
+
 func (c *Client) Get(_, _ string) (string, error) { return "", ErrUnsupportedPlatform }
 func (c *Client) GetAll(_ string) (map[string]string, string, error) {
 	return nil, "", ErrUnsupportedPlatform

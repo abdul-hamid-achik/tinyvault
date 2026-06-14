@@ -105,6 +105,7 @@ internal/
     protocol.go              # wire types + Options (no build tag)
     agent.go / server.go     # listener, lifecycle, idle, per-request vault open
     socket_unix.go           # socket perms, flock single-instance, path-length guard
+    tokens_unix.go           # --require-token: out-of-band token file, hash-only store, scope
     peercred_{darwin,linux,other}.go  # SO_PEERCRED / LOCAL_PEERCRED (fail-closed)
     client.go / stub_other.go # client + !unix stub (ErrUnsupportedPlatform)
   store/
@@ -284,6 +285,7 @@ Before every commit:
 |------------------------|----------------------------------------------------------------------------|
 | `TVAULT_PASSPHRASE`    | Vault passphrase (CI/CD, scripts, MCP server — skips interactive prompt).  |
 | `TVAULT_NO_AGENT`      | Bypass a running `tvault agent` and unlock the vault directly.             |
+| `TVAULT_AGENT_TOKEN`   | Capability token for a `--require-token` agent (privilege separation; same-uid is NOT a threat it defends — see SPEC §5.5). |
 | `TVAULT_IDENTITY_KEY`  | Private identity (`tvault-key1…`) for passphrase-free decrypt in CI/ssh/agents (`resolveIdentity`); a local key file takes precedence + warns. Never echoed in errors. |
 | `TVAULT_IDENTITY`      | Default identity name for git filters / recipient reads (default: `default`). |
 | `TVAULT_DIR`           | Vault directory (default: `~/.tvault`).                                    |

@@ -3,6 +3,7 @@
 package agent
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"os/signal"
@@ -30,6 +31,11 @@ type agentState struct {
 	idleMu    sync.Mutex // guards idleTimer + idleAt
 	idleTimer *time.Timer
 	idleAt    time.Time
+
+	requireToken bool
+	tokenFile    string
+	tokMu        sync.RWMutex
+	tokens       map[string]tokenScope
 }
 
 // Start runs the agent in the FOREGROUND, blocking until shutdown (a signal,
@@ -53,18 +59,37 @@ func Start(opts Options) (err error) {
 		return serr
 	}
 
-	a := &agentState{opts: opts, kek: opts.KEK, listener: l, started: time.Now()}
+	a := &agentState{
+		opts: opts, kek: opts.KEK, listener: l, started: time.Now(),
+		requireToken: opts.RequireToken, tokenFile: opts.TokenFile,
+	}
+	if opts.RequireToken {
+		toks, terr := loadTokens(opts.TokenFile)
+		if terr != nil {
+			_ = l.Close()
+			return fmt.Errorf("--require-token: %w", terr)
+		}
+		a.tokens = toks
+	}
 
 	//nolint:errcheck // pidfile is diagnostics-only; flock is the real singleton
 	os.WriteFile(pidPath(opts.Dir), []byte(strconv.Itoa(os.Getpid())), 0o600)
 	defer os.Remove(pidPath(opts.Dir))
 
+	// SIGHUP reloads the token file (revoke without restart); INT/TERM shut down.
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	defer signal.Stop(sigCh)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+	// Stop (no more sends) then close so the handler's range loop unblocks even
+	// on a non-signal shutdown (idle/stop) — no leaked goroutine.
+	defer func() { signal.Stop(sigCh); close(sigCh) }()
 	go func() {
-		if _, ok := <-sigCh; ok {
+		for s := range sigCh {
+			if s == syscall.SIGHUP {
+				a.reloadTokens()
+				continue
+			}
 			a.triggerShutdown()
+			return
 		}
 	}()
 

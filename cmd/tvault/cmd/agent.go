@@ -13,7 +13,11 @@ import (
 	"github.com/abdul-hamid-achik/tinyvault/internal/agent"
 )
 
-var agentIdle time.Duration
+var (
+	agentIdle         time.Duration
+	agentRequireToken bool
+	agentTokenFile    string
+)
 
 var agentCmd = &cobra.Command{
 	Use:   "agent",
@@ -61,11 +65,18 @@ func init() {
 	rootCmd.AddCommand(agentCmd)
 	agentCmd.AddCommand(agentStartCmd, agentStatusCmd, agentStopCmd)
 	agentStartCmd.Flags().DurationVar(&agentIdle, "idle", 15*time.Minute, "Auto-lock after this idle duration (0 = never)")
+	agentStartCmd.Flags().BoolVar(&agentRequireToken, "require-token", false,
+		"Deny socket requests without a valid capability token from --token-file (privilege separation for OS-confined delegates)")
+	agentStartCmd.Flags().StringVar(&agentTokenFile, "token-file", "",
+		"0600 file of `token[:project]` lines for --require-token (SIGHUP reloads it)")
 }
 
 func runAgentStart(_ *cobra.Command, _ []string) error {
 	if !agent.Supported() {
 		return agent.ErrUnsupportedPlatform
+	}
+	if agentRequireToken && agentTokenFile == "" {
+		return fmt.Errorf("--require-token needs --token-file")
 	}
 	if !term.IsTerminal(int(os.Stdin.Fd())) && os.Getenv("TVAULT_PASSPHRASE") == "" {
 		return fmt.Errorf("agent start needs a TTY or TVAULT_PASSPHRASE to unlock the vault")
@@ -84,10 +95,12 @@ func runAgentStart(_ *cobra.Command, _ []string) error {
 	_ = v.Close() // release the bbolt lock; the agent reopens per request
 
 	return agent.Start(agent.Options{
-		Dir:     getVaultDir(),
-		KEK:     kek,
-		Project: project,
-		Idle:    agentIdle,
+		Dir:          getVaultDir(),
+		KEK:          kek,
+		Project:      project,
+		Idle:         agentIdle,
+		RequireToken: agentRequireToken,
+		TokenFile:    agentTokenFile,
 		OnReady: func(socket string, pid int) {
 			idle := "disabled"
 			if agentIdle > 0 {

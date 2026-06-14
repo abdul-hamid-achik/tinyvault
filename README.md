@@ -168,6 +168,15 @@ access keeps working between requests, and it **auto-locks after 15m idle**
 `--no-agent` or `TVAULT_NO_AGENT=1`. Not available on Windows (use the direct
 CLI or `mcp-server`). See `tvault docs agent`.
 
+For an OS-confined delegate (a different uid, a container with the socket
+bind-mounted, a sandbox) you can run the agent with `--require-token
+--token-file <f>`: it then denies any socket request without a valid token, and
+a `token[:project]` line scopes a token to one project (set `TVAULT_AGENT_TOKEN`
+in the delegate). This is privilege separation, **not** a defense against a
+same-uid process — for untrusted/CI/container delegation, prefer a scoped
+**identity** (`tvault identity new` + `projects share`), which is cryptographic
+and atomically revocable. See `tvault docs agent` and SPEC §5.5.
+
 ## Secret history & rollback
 
 Every time you overwrite a secret, the prior value is archived as a version —
@@ -457,6 +466,7 @@ tvault (single binary)
 |----------|-------------|
 | `TVAULT_PASSPHRASE` | Vault passphrase (for CI/CD, skips interactive prompt) |
 | `TVAULT_NO_AGENT` | Set to bypass a running `tvault agent` and unlock the vault directly |
+| `TVAULT_AGENT_TOKEN` | Capability token sent to a `--require-token` agent (privilege separation for confined delegates) |
 | `TVAULT_IDENTITY_KEY` | A private identity (`tvault-key1…`) for passphrase-free decrypt in CI/ssh/agents; a local identity file takes precedence |
 | `TVAULT_IDENTITY` | Default identity name for git filters / recipient reads (default: `default`) |
 | `TVAULT_DIR` | Vault directory (default: `~/.tvault`) |
