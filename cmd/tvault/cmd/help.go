@@ -224,7 +224,10 @@ func helpContent() HelpContent {
 			ExitCodes: []string{
 				"0   success",
 				"1   generic failure (see stderr for the message)",
-				"64  usage error (cobra's standard EX_USAGE)",
+				"3   vault is locked",
+				"4   secret or project not found",
+				"5   vault not initialized (run 'tvault init')",
+				"6   unlock failed (wrong passphrase)",
 			},
 			Filesystem: []string{
 				"~/.tvault/vault.db                 encrypted bbolt vault (0600)",

@@ -33,7 +33,9 @@ func openAndUnlockVault() (*vault.Vault, error) {
 	dir := getVaultDir()
 	v, err := vault.Open(dir)
 	if err != nil {
-		return nil, fmt.Errorf("vault not found at %s, run 'tvault init' first", dir)
+		// Wrap the original (vault.ErrNotInitialized) so callers and the
+		// exit-code mapper can detect "not initialized" (exit 5).
+		return nil, fmt.Errorf("vault not found at %s, run 'tvault init' first: %w", dir, err)
 	}
 
 	passphrase := os.Getenv("TVAULT_PASSPHRASE")

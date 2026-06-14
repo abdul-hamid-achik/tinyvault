@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"os"
 	"testing"
 
@@ -65,12 +66,28 @@ func TestEscapeJSONValue(t *testing.T) {
 		{"with\\back", `with\\back`},
 		{"with\nnewline", `with\nnewline`},
 		{"with\ttab", `with\ttab`},
+		{"with\rcarriage", `with\rcarriage`}, // control byte: must be escaped (was a bug)
+		{"amp&lt<gt>", "amp&lt<gt>"},         // & < > kept literal (no HTML escaping)
 	}
 	for _, tt := range tests {
 		got := escapeJSONValue(tt.in)
 		if got != tt.want {
 			t.Errorf("escapeJSONValue(%q) = %q, want %q", tt.in, got, tt.want)
 		}
+	}
+}
+
+// TestEnvJSONValidForControlBytes guards that `tvault env --format json`
+// emits VALID JSON even when a value contains control bytes.
+func TestEnvJSONValidForControlBytes(t *testing.T) {
+	frag := escapeJSONValue("line1\r\nline2\tend")
+	doc := []byte(`{"K":"` + frag + `"}`)
+	var m map[string]string
+	if err := json.Unmarshal(doc, &m); err != nil {
+		t.Fatalf("env json fragment produced invalid JSON: %v (%s)", err, doc)
+	}
+	if m["K"] != "line1\r\nline2\tend" {
+		t.Errorf("round-trip mismatch: %q", m["K"])
 	}
 }
 

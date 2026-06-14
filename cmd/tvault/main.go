@@ -18,6 +18,9 @@ var (
 func main() {
 	cmd.SetVersionInfo(version, commit, date)
 	if err := cmd.Execute(); err != nil {
-		os.Exit(1)
+		// Deterministic, meaningful exit codes (see cmd/exit.go) so
+		// scripts/agents can branch on the failure kind. cobra has already
+		// printed the error to stderr.
+		os.Exit(cmd.ExitCode(err))
 	}
 }

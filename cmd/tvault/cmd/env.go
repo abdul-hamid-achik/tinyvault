@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -141,12 +143,23 @@ func escapeDotenvValue(s string) string {
 	return "\"" + escaped + "\""
 }
 
+// escapeJSONValue returns s escaped for embedding between double quotes in
+// JSON. It uses encoding/json so ALL control bytes (\r, \b, \f, NUL, …)
+// are escaped — the previous hand-rolled version only handled \ " \n \t,
+// which produced invalid JSON for values containing other control bytes.
+// HTML escaping is disabled so values like connection strings keep their
+// literal & < > characters.
 func escapeJSONValue(s string) string {
-	escaped := strings.ReplaceAll(s, "\\", "\\\\")
-	escaped = strings.ReplaceAll(escaped, "\"", "\\\"")
-	escaped = strings.ReplaceAll(escaped, "\n", "\\n")
-	escaped = strings.ReplaceAll(escaped, "\t", "\\t")
-	return escaped
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	//nolint:errcheck // encoding a string into a bytes.Buffer cannot fail
+	enc.Encode(s)
+	out := strings.TrimRight(buf.String(), "\n")
+	if len(out) >= 2 { // strip the surrounding quotes Encode adds
+		return out[1 : len(out)-1]
+	}
+	return out
 }
 
 func escapeYAMLValue(s string) string {
