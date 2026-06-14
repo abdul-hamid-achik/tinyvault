@@ -257,10 +257,10 @@ func fullCatalog() docsCatalog {
 			},
 			{
 				Name:        "interactive-browser",
-				Summary:     "Full-screen, read-only terminal UI for browsing the vault (status, projects, secrets, audit).",
-				Commands:    []string{"tvault browse", "tvault browse --project webapp", "tvault browse --single-pane", "tvault browse --no-anim"},
+				Summary:     "Full-screen terminal UI for browsing the vault (status, projects, secrets, audit); read-only by default, --rw for edits.",
+				Commands:    []string{"tvault browse", "tvault browse --rw", "tvault browse --project webapp", "tvault browse --single-pane", "tvault browse --no-anim"},
 				SeeAlso:     []string{"tvault help browse"},
-				Description: "Built on the Bubble Tea v2 / Lip Gloss v2 (charm.land) stack. The browser never writes — all mutations stay in the CLI. Browse project and secret metadata while locked; unlock in-app with 'u' to reveal a value behind a key press ('r'), which re-masks on 'esc' / pane change / quit. Vim + arrow + mouse-wheel navigation, live key filter, light/dark theme auto-detected from the terminal background. Animations disable on --no-anim, $TVAULT_NO_ANIM, or over SSH.",
+				Description: "Built on the Bubble Tea v2 / Lip Gloss v2 (charm.land) stack. Read-only by default; pass --rw to enable audited in-app edits (n new, e edit, d delete) that use the same encryption path as the CLI. Browse project and secret metadata while locked; unlock in-app with 'u' to reveal a value behind a key press ('r'), which re-masks on 'esc' / pane change / quit. Vim + arrow + mouse-wheel navigation, live key filter, light/dark theme auto-detected from the terminal background. Animations disable on --no-anim, $TVAULT_NO_ANIM, or over SSH.",
 			},
 			{
 				Name:        "diagnostics",
@@ -313,8 +313,8 @@ func fullCatalog() docsCatalog {
 			{
 				Slug:        "browse",
 				Title:       "tvault browse",
-				Description: "Launches a full-screen, read-only terminal UI for browsing the vault. Four panes — status, projects, secrets, audit — with vim/arrow/mouse-wheel navigation and a live key filter. Press 'r' to reveal the selected value (warm-orange = a secret is showing), 'esc' to re-mask; revealed values live only in memory and are wiped on esc, pane change, and quit. The vault can be browsed (metadata only) while locked; press 'u' to unlock in-app. The browser never writes — use the CLI for mutations. Built on Bubble Tea v2 / Lip Gloss v2.",
-				Example:     "  tvault browse\n  tvault browse webapp               # open a specific project\n  tvault browse --single-pane        # small terminals\n  tvault browse --no-anim            # disable animations (SSH/screen-reader friendly)",
+				Description: "Launches a full-screen terminal UI for browsing the vault, read-only by default. Four panes — status, projects, secrets, audit — with vim/arrow/mouse-wheel navigation and a live key filter. Press 'r' to reveal the selected value (warm-orange = a secret is showing), 'esc' to re-mask; revealed values live only in memory and are wiped on esc, pane change, and quit. The vault can be browsed (metadata only) while locked; press 'u' to unlock in-app. Pass --rw to enable audited in-app new/edit/delete (n/e/d), using the same encryption path as the CLI. Built on Bubble Tea v2 / Lip Gloss v2.",
+				Example:     "  tvault browse\n  tvault browse --rw                 # enable in-app new/edit/delete\n  tvault browse webapp               # open a specific project\n  tvault browse --single-pane        # small terminals\n  tvault browse --no-anim            # disable animations (SSH/screen-reader friendly)",
 			},
 		},
 	}

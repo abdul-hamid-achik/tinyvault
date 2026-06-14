@@ -48,6 +48,10 @@ func (m Model) View() tea.View {
 		middle = m.renderHelpOverlay(bodyH)
 	case modeUnlock:
 		middle = m.renderUnlockOverlay(bodyH)
+	case modeNewKey, modeSetValue:
+		middle = m.renderEditOverlay(bodyH)
+	case modeConfirmDel:
+		middle = m.renderConfirmOverlay(bodyH)
 	default:
 		middle = m.renderBody(m.width, bodyH)
 	}
@@ -85,6 +89,9 @@ func (m Model) renderHeader() string {
 			lockStyle = lipgloss.NewStyle().Foreground(fadeColor(m.styles.pal.warn, a))
 		}
 		parts = append(parts, lockStyle.Render(dot+" locked"))
+	}
+	if m.rw {
+		parts = append(parts, m.styles.revealed.Render("rw")) // writes enabled
 	}
 
 	proj := m.viewProject
@@ -140,6 +147,9 @@ func (m Model) activeHint() string {
 	case paneSecrets:
 		if !m.status.unlocked {
 			return "secrets — locked; press u to unlock, then r to reveal"
+		}
+		if m.rw {
+			return "secrets — r reveal · c copy · n new · e edit · d delete · / filter"
 		}
 		return "secrets — r reveal · R reveal all · c copy · / filter"
 	case paneAudit:
@@ -486,6 +496,37 @@ func (m Model) renderUnlockOverlay(h int) string {
 		placed = indentLines(placed, offset)
 	}
 	return clampGrid(placed, m.width, h)
+}
+
+// renderEditOverlay draws the new-key / set-value input modal (--rw).
+func (m Model) renderEditOverlay(h int) string {
+	var title string
+	switch {
+	case m.mode == modeNewKey:
+		title = "New secret — key name"
+	case m.editing:
+		title = "Edit " + m.pendingKey
+	default:
+		title = "New secret — value"
+	}
+	body := lipgloss.JoinVertical(lipgloss.Left,
+		m.styles.titleHot.Render(title), "",
+		m.edit.View(), "",
+		m.styles.muted.Render("⏎ save · esc cancel"),
+	)
+	box := m.styles.overlay.Width(clampInt(m.width/2, 30, 60)).Render(body)
+	return clampGrid(lipgloss.Place(m.width, h, lipgloss.Center, lipgloss.Center, box), m.width, h)
+}
+
+// renderConfirmOverlay draws the delete-confirmation modal (--rw).
+func (m Model) renderConfirmOverlay(h int) string {
+	body := lipgloss.JoinVertical(lipgloss.Left,
+		m.styles.titleHot.Render("Delete secret"), "",
+		m.styles.row.Render("Delete '"+m.confirmKey+"' permanently?"), "",
+		m.styles.bad.Render("y")+m.styles.muted.Render(" delete  ·  n / esc cancel"),
+	)
+	box := m.styles.overlay.Width(clampInt(m.width/2, 30, 56)).Render(body)
+	return clampGrid(lipgloss.Place(m.width, h, lipgloss.Center, lipgloss.Center, box), m.width, h)
 }
 
 // clampGrid forces s to exactly h rows, each at least w cells wide. It

@@ -46,8 +46,10 @@ Security Scan, Build**. All four must be green.
 - Lives in `cmd/tvault/cmd/browse/` — the **only** package that imports
   `charm.land/*` (Bubble Tea v2 / Lip Gloss v2 / Bubbles v2 / Glamour v2).
   Strictly the v2 line: no `harmonica`, no `huh`; animations are hand-rolled.
-- **Read-only by design** — it never writes to the vault. The only decryption
-  it performs is the on-demand reveal (`r`), audited exactly like `tvault get`.
+- **Read-only by default** — with no flags it never writes; the only decryption
+  is the on-demand reveal (`r`), audited like `tvault get`. `--rw` enables
+  audited in-app edits (`n`/`e`/`d`) that reuse the CLI's `vault.SetSecret`/
+  `DeleteSecret` path; rotation + project create/delete stay in the CLI.
 - **Invariant:** every rendered `View().Content` must be exactly the terminal
   `width × height` cells, or Bubble Tea's cell-diff renderer corrupts the
   screen. `layout_test.go` enforces this across all modes — keep it passing.

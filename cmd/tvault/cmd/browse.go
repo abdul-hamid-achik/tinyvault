@@ -15,6 +15,7 @@ var (
 	browseSinglePane bool
 	browseNoAnim     bool
 	browseAuditLimit int
+	browseRW         bool
 )
 
 var browseCmd = &cobra.Command{
@@ -24,16 +25,18 @@ var browseCmd = &cobra.Command{
 
 Four panes — status, projects, secrets, and audit — with vim, arrow, and
 mouse-wheel navigation, a live key filter, and reveal-on-demand (press
-'r' to show a value, 'esc' to re-mask). It is READ-ONLY: every mutation
-still goes through the CLI, and the MCP server remains the network surface.
+'r' to show a value, 'esc' to re-mask). READ-ONLY by default; pass --rw to
+enable audited in-app edits (n new, e edit, d delete) that use the same
+encryption path as the CLI. The MCP server remains the network surface.
 
 If TVAULT_PASSPHRASE is set, it starts unlocked; otherwise it starts locked
 and you can unlock in-app with 'u'. Browsing project/secret metadata works
-while locked — only revealing a value needs the key.
+while locked — only revealing or editing a value needs the key.
 
 Examples:
   tvault browse
   tvault browse webapp
+  tvault browse --rw                   # enable in-app new/edit/delete
   tvault browse --project staging --no-anim
   tvault browse --single-pane          # force single-pane (small terminals)
   tvault browse --audit-limit 200`,
@@ -47,6 +50,7 @@ func init() {
 	browseCmd.Flags().BoolVar(&browseSinglePane, "single-pane", false, "Force single-pane mode (small terminals)")
 	browseCmd.Flags().BoolVar(&browseNoAnim, "no-anim", false, "Disable animations (also via $TVAULT_NO_ANIM)")
 	browseCmd.Flags().IntVar(&browseAuditLimit, "audit-limit", 100, "Number of recent audit entries to load")
+	browseCmd.Flags().BoolVar(&browseRW, "rw", false, "Enable in-app edits (new/edit/delete secrets); read-only by default")
 }
 
 func runBrowse(cmd *cobra.Command, args []string) error {
@@ -96,5 +100,6 @@ func runBrowse(cmd *cobra.Command, args []string) error {
 		SinglePane: browseSinglePane,
 		NoAnim:     browseNoAnim,
 		AuditLimit: browseAuditLimit,
+		ReadWrite:  browseRW,
 	})
 }

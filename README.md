@@ -18,7 +18,7 @@ TinyVault is a single-binary CLI tool and [MCP server](https://modelcontextproto
 - **Multi-Project** -- Organize secrets into projects with independent encryption keys
 - **.env Ecosystem** -- Safe dotenv parser (no shell expansion), `tvault://` placeholder interpolation, two-way sync (pull/push/mirror), and `.env.encrypted` files (Rails credentials pattern, KEK-tied, safe to commit)
 - **Relational Search** -- `tvault search` and `vault_search_secrets` for prefix, name glob, time-range, version, and cross-project queries
-- **Interactive Browser** -- `tvault browse`: a full-screen, read-only terminal UI (Bubble Tea v2) to browse status, projects, secrets, and audit — with a live filter and reveal-on-demand (`r` shows a value, `esc` re-masks). Never writes; all mutations stay in the CLI
+- **Interactive Browser** -- `tvault browse`: a full-screen terminal UI (Bubble Tea v2) to browse status, projects, secrets, and audit — with a live filter and reveal-on-demand (`r` shows a value, `esc` re-masks). Read-only by default; `--rw` enables audited in-app new/edit/delete
 - **Output Redaction** -- MCP server automatically redacts secret values from command output
 - **Access Policy** -- YAML-based allow/deny patterns control what AI agents can access
 - **Zero External Dependencies at Runtime** -- No database servers, no Docker, no network -- just a local bbolt file
@@ -99,6 +99,7 @@ tvault docs features
 
 ```bash
 tvault browse                       # browse the current project
+tvault browse --rw                  # enable in-app new/edit/delete (audited)
 tvault browse webapp                # open a specific project
 tvault browse --single-pane         # one pane at a time (small terminals)
 tvault browse --no-anim             # disable animations (SSH / screen readers)
@@ -110,10 +111,12 @@ the selected value (warm orange = a secret is showing), `R` to reveal all,
 `c` to copy, and `esc` to re-mask. Revealed values live only in memory and
 are wiped on `esc`, on pane change, and on quit.
 
-The browser is **read-only** — it never writes to the vault. Browsing
-project/secret metadata works while the vault is locked; press `u` to
-unlock in-app and reveal values. Light/dark theme is auto-detected from
-your terminal. Run `tvault help browse` for the full keybinding cheat sheet.
+The browser is **read-only by default** — a stray keystroke can't change
+anything. Launch with `--rw` to enable in-app `n`ew / `e`dit / `d`elete,
+which use the same encryption path as the CLI and are written to the audit
+log just like `tvault set`/`delete`. Browsing metadata works while locked;
+press `u` to unlock in-app. Light/dark theme is auto-detected. Run
+`tvault help browse` for the full keybinding cheat sheet.
 
 ## Projects
 

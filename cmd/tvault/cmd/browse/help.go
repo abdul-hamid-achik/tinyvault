@@ -10,9 +10,10 @@ import (
 // lives in `tvault help browse`, and both are kept close in wording.
 const helpMarkdown = `# tvault browse — keys & concepts
 
-A **read-only** window into your vault. It never writes: every mutation
-still goes through the CLI. Use it to *see* your secrets, *filter* them,
-and *reveal* a value behind a key press without leaking it to scrollback.
+A window into your vault, **read-only by default**. Use it to *see* your
+secrets, *filter* them, and *reveal* a value behind a key press without
+leaking it to scrollback. Launch with ` + "`--rw`" + ` to enable audited
+in-app edits (new / edit / delete).
 
 **Panes**
 
@@ -40,6 +41,15 @@ and *reveal* a value behind a key press without leaking it to scrollback.
 - ` + "`esc`" + ` — re-mask everything (also clears on pane change & quit)
 - ` + "`c`" + ` — copy the selected value to the clipboard
 
+**Edit** (only with ` + "`--rw`" + `)
+
+- ` + "`n`" + ` — new secret (enter a key, then a value)
+- ` + "`e`" + ` — edit the selected secret's value
+- ` + "`d`" + ` — delete the selected secret (asks to confirm)
+
+These use the same encryption path as the CLI and are written to the audit
+log, exactly like ` + "`tvault set`" + ` / ` + "`tvault delete`" + `.
+
 **Vault**
 
 - ` + "`u`" + ` — unlock (prompts for the passphrase, in-app)
@@ -50,9 +60,10 @@ and *reveal* a value behind a key press without leaking it to scrollback.
 **Safety**
 
 Revealed values live only in memory and only while shown. They are wiped
-on ` + "`esc`" + `, when you switch panes, and on quit. Nothing the browser does is
-ever written to the vault or the audit log — except that ` + "`r`" + ` decrypts a
-value, which the CLI records the same way ` + "`tvault get`" + ` would.
+on ` + "`esc`" + `, when you switch panes, and on quit. Without ` + "`--rw`" + ` the browser
+never writes to the vault; the only thing it records is a reveal (` + "`r`" + `),
+which the audit log treats exactly like ` + "`tvault get`" + `. With ` + "`--rw`" + `, your
+new/edit/delete actions are written and audited like the matching CLI command.
 
 Press ` + "`?`" + ` again to close this help.`
 

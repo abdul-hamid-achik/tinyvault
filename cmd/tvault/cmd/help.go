@@ -358,9 +358,10 @@ func helpContent() HelpContent {
 			},
 			{
 				Name:     "Browse secrets interactively",
-				Commands: []string{"tvault browse", "tvault browse --project webapp --no-anim"},
-				Description: "The browser is read-only — it never writes. Use it to explore, filter, and reveal values " +
-					"behind a key press without exposing them to the terminal scrollback.",
+				Commands: []string{"tvault browse", "tvault browse --rw", "tvault browse --project webapp --no-anim"},
+				Description: "Read-only by default — explore, filter, and reveal values " +
+					"behind a key press without exposing them to the terminal scrollback. " +
+					"Pass --rw for audited in-app new/edit/delete.",
 			},
 		},
 
@@ -444,15 +445,16 @@ func helpContent() HelpContent {
 		},
 
 		Browse: HelpBrowse{
-			WhatItIs: "tvault browse is a full-screen, read-only terminal UI for browsing the vault. " +
-				"Four panes (status, projects, secrets, audit) give you vault health, the project " +
+			WhatItIs: "tvault browse is a full-screen terminal UI for browsing the vault, read-only by " +
+				"default. Four panes (status, projects, secrets, audit) give you vault health, the project " +
 				"list with secret counts, the current project's keys, and recent audit activity — all " +
 				"at once. It is built on the Bubble Tea v2 / Lip Gloss v2 (charm.land) stack with a " +
 				"light/dark theme auto-detected from your terminal background.",
-			WhatItIsNot: "It is NOT an editor. The browser never writes to the vault — every mutation " +
-				"(set, delete, rotate, project create) still goes through the CLI. This keeps the " +
-				"security model identical to the CLI: the only decryption the browser ever performs is the " +
-				"on-demand 'reveal', recorded in the audit log exactly like 'tvault get'.",
+			WhatItIsNot: "By default it is NOT an editor — it only reads, so a stray keystroke can't change " +
+				"anything. Pass --rw to enable in-app edits (n new, e edit, d delete); they use the SAME " +
+				"encryption path as the CLI and are written to the audit log just like 'tvault set/delete'. " +
+				"Rotation and project create/delete still go through the CLI. The only decryption the " +
+				"browser performs is the on-demand reveal (and the prefill when editing), audited like 'tvault get'.",
 			Panes: []string{
 				"1 Status   — unlocked/locked, current project, secret + project counts, last write, vault id",
 				"2 Projects — every project with its secret count; the vault's current project is marked",
@@ -467,6 +469,7 @@ func helpContent() HelpContent {
 				"r              reveal the selected value (R reveals all)",
 				"esc            re-mask every revealed value (also exits the filter)",
 				"c              copy the selected value to the clipboard",
+				"n / e / d      (--rw only) new / edit / delete a secret — audited",
 				"u / L          unlock (in-app passphrase prompt) / lock the vault",
 				"^r / ^l        reload from disk / redraw",
 				"? / q          toggle in-app help / quit",

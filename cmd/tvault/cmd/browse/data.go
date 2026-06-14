@@ -148,6 +148,46 @@ func auditCmd(v *vault.Vault, limit int) tea.Cmd {
 	}
 }
 
+// mutationDoneMsg signals a successful in-app write/delete (--rw mode), so
+// the model can re-mask, reload, and confirm.
+type mutationDoneMsg struct {
+	action string // "set" | "delete"
+	key    string
+}
+
+// auditTUI writes a best-effort audit entry for a TUI action (source:tui),
+// matching the CLI/MCP vocabulary.
+func auditTUI(v *vault.Vault, action, key, project string) {
+	//nolint:errcheck // audit is best-effort; never block a mutation
+	v.AppendAudit(&store.AuditEntry{
+		Action:       action,
+		ResourceType: "secret",
+		ResourceName: key,
+		Timestamp:    time.Now().UTC(),
+		Metadata:     map[string]any{"project": project, "source": "tui"},
+	})
+}
+
+func setSecretCmd(v *vault.Vault, project, key, value string) tea.Cmd {
+	return func() tea.Msg {
+		if err := v.SetSecret(project, key, value); err != nil {
+			return errMsg{context: "set " + key, err: err}
+		}
+		auditTUI(v, "secret.write", key, project)
+		return mutationDoneMsg{action: "set", key: key}
+	}
+}
+
+func deleteSecretCmd(v *vault.Vault, project, key string) tea.Cmd {
+	return func() tea.Msg {
+		if err := v.DeleteSecret(project, key); err != nil {
+			return errMsg{context: "delete " + key, err: err}
+		}
+		auditTUI(v, "secret.delete", key, project)
+		return mutationDoneMsg{action: "delete", key: key}
+	}
+}
+
 func revealCmd(v *vault.Vault, project, key string, epoch int) tea.Cmd {
 	return func() tea.Msg {
 		val, err := revealSecret(v, project, key)

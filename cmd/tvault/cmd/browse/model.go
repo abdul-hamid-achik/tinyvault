@@ -48,10 +48,13 @@ func (p paneID) title() string {
 type mode int
 
 const (
-	modeNormal mode = iota
-	modeFilter      // the filter textinput is focused
-	modeUnlock      // the unlock passphrase modal is up
-	modeHelp        // the help overlay is up
+	modeNormal     mode = iota
+	modeFilter          // the filter textinput is focused
+	modeUnlock          // the unlock passphrase modal is up
+	modeHelp            // the help overlay is up
+	modeNewKey          // entering a new secret's key name (--rw)
+	modeSetValue        // entering a secret's value, new or edited (--rw)
+	modeConfirmDel      // confirming a secret delete (--rw)
 )
 
 const (
@@ -70,6 +73,7 @@ type Options struct {
 	SinglePane bool
 	NoAnim     bool
 	AuditLimit int
+	ReadWrite  bool // --rw: enable in-app set/edit/delete (default read-only)
 }
 
 // Model is the top-level Bubble Tea model for `tvault browse`.
@@ -101,6 +105,13 @@ type Model struct {
 	statusLine    string // transient one-line message in the footer
 	lastErr       error
 	quitting      bool
+
+	// read-write (--rw) edit state
+	rw         bool
+	edit       textinput.Model // key/value entry for new/edit
+	pendingKey string          // key being created or edited
+	editing    bool            // true = editing an existing key, false = new
+	confirmKey string          // key pending delete confirmation
 
 	// components
 	filter textinput.Model
@@ -135,6 +146,9 @@ func New(v *vault.Vault, opts Options) Model {
 	ui.EchoMode = textinput.EchoPassword
 	ui.Prompt = ""
 
+	ei := textinput.New()
+	ei.Prompt = ""
+
 	sp := spinner.New(spinner.WithSpinner(spinner.Dot))
 
 	m := Model{
@@ -143,8 +157,10 @@ func New(v *vault.Vault, opts Options) Model {
 		revealed: make(map[string]string),
 		active:   paneSecrets,
 		mode:     modeNormal,
+		rw:       opts.ReadWrite,
 		filter:   fi,
 		unlock:   ui,
+		edit:     ei,
 		spin:     sp,
 		hvp:      viewport.New(viewport.WithWidth(80), viewport.WithHeight(20)),
 		help:     help.New(),
@@ -288,6 +304,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusLine = "copied " + msg.key + " to clipboard"
 		return m, tea.SetClipboard(msg.value)
 
+	case mutationDoneMsg:
+		// A write/delete changed the data: re-mask and reload everything
+		// (counts, the secrets list, and the audit pane all move).
+		m.wipeRevealed()
+		m.statusLine = msg.action + " " + msg.key
+		m.loading = true
+		return m, tea.Batch(m.reloadCmds()...)
+
 	case errMsg:
 		m.lastErr = msg.err
 		m.statusLine = msg.context + ": " + msg.err.Error()
@@ -402,6 +426,54 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.unlock, cmd = m.unlock.Update(msg)
 		return m, cmd
 
+	case modeNewKey:
+		switch msg.String() {
+		case "esc":
+			m.cancelEdit()
+			return m, nil
+		case "enter":
+			key := strings.TrimSpace(m.edit.Value())
+			if key == "" {
+				m.statusLine = "key cannot be empty"
+				return m, nil
+			}
+			m.pendingKey = key
+			m.mode = modeSetValue
+			m.edit.SetValue("")
+			m.edit.Placeholder = "value for " + key
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.edit, cmd = m.edit.Update(msg)
+		return m, cmd
+
+	case modeSetValue:
+		switch msg.String() {
+		case "esc":
+			m.cancelEdit()
+			return m, nil
+		case "enter":
+			key, proj, val := m.pendingKey, m.viewProject, m.edit.Value()
+			m.cancelEdit()
+			return m, setSecretCmd(m.vault, proj, key, val)
+		}
+		var cmd tea.Cmd
+		m.edit, cmd = m.edit.Update(msg)
+		return m, cmd
+
+	case modeConfirmDel:
+		switch msg.String() {
+		case "y", "Y":
+			key, proj := m.confirmKey, m.viewProject
+			m.confirmKey = ""
+			m.mode = modeNormal
+			return m, deleteSecretCmd(m.vault, proj, key)
+		case "n", "N", "esc":
+			m.confirmKey = ""
+			m.mode = modeNormal
+		}
+		return m, nil
+
 	default:
 		// modeNormal — handled below.
 	}
@@ -471,6 +543,13 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Copy):
 		return m.copyCurrent()
 
+	case msg.String() == "n" && m.rw:
+		return m.startNewSecret()
+	case msg.String() == "e" && m.rw && m.active == paneSecrets:
+		return m.startEditSecret()
+	case msg.String() == "d" && m.rw && m.active == paneSecrets:
+		return m.startDeleteSecret()
+
 	case key.Matches(msg, m.keys.Escape):
 		m.wipeRevealed()
 		m.statusLine = ""
@@ -495,14 +574,7 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.wipeRevealed() // re-mask everything; the data is being refetched
 		m.loading = true
 		m.statusLine = "reloading…"
-		cmds := []tea.Cmd{
-			statusCmd(m.vault),
-			projectsCmd(m.vault),
-			auditCmd(m.vault, m.opts.AuditLimit),
-		}
-		if m.viewProject != "" {
-			cmds = append(cmds, secretsCmd(m.vault, m.viewProject))
-		}
+		cmds := m.reloadCmds()
 		if m.anim {
 			cmds = append(cmds, m.spin.Tick)
 		}
@@ -524,6 +596,85 @@ func (m *Model) focusPane(p paneID) {
 	}
 	m.wipeRevealed()
 	m.active = p
+}
+
+// reloadCmds returns the commands that refresh all panes from disk.
+func (m Model) reloadCmds() []tea.Cmd {
+	cmds := []tea.Cmd{
+		statusCmd(m.vault),
+		projectsCmd(m.vault),
+		auditCmd(m.vault, m.opts.AuditLimit),
+	}
+	if m.viewProject != "" {
+		cmds = append(cmds, secretsCmd(m.vault, m.viewProject))
+	}
+	return cmds
+}
+
+// cancelEdit leaves any --rw edit mode and clears the input.
+func (m *Model) cancelEdit() {
+	m.mode = modeNormal
+	m.edit.Blur()
+	m.edit.SetValue("")
+	m.pendingKey = ""
+	m.editing = false
+}
+
+// startNewSecret begins creating a new secret (--rw): key entry first.
+func (m Model) startNewSecret() (tea.Model, tea.Cmd) {
+	if !m.status.unlocked {
+		m.statusLine = "vault is locked — press u to unlock"
+		return m, nil
+	}
+	m.focusPane(paneSecrets)
+	m.editing = false
+	m.pendingKey = ""
+	m.mode = modeNewKey
+	m.edit.SetValue("")
+	m.edit.Placeholder = "new key name"
+	m.edit.EchoMode = textinput.EchoNormal
+	return m, m.edit.Focus()
+}
+
+// startEditSecret edits the selected secret's value (--rw). It decrypts
+// the current value to prefill the input — an audited read.
+func (m Model) startEditSecret() (tea.Model, tea.Cmd) {
+	ref, ok := m.currentSecret()
+	if !ok {
+		return m, nil
+	}
+	if !m.status.unlocked {
+		m.statusLine = "vault is locked — press u to unlock"
+		return m, nil
+	}
+	val, err := revealSecret(m.vault, ref.Project, ref.Key)
+	if err != nil {
+		m.statusLine = "edit " + ref.Key + ": " + err.Error()
+		return m, nil
+	}
+	m.editing = true
+	m.pendingKey = ref.Key
+	m.mode = modeSetValue
+	m.edit.EchoMode = textinput.EchoNormal
+	m.edit.SetValue(val)
+	m.edit.Placeholder = "value for " + ref.Key
+	m.edit.CursorEnd()
+	return m, m.edit.Focus()
+}
+
+// startDeleteSecret asks to confirm deleting the selected secret (--rw).
+func (m Model) startDeleteSecret() (tea.Model, tea.Cmd) {
+	ref, ok := m.currentSecret()
+	if !ok {
+		return m, nil
+	}
+	if !m.status.unlocked {
+		m.statusLine = "vault is locked — press u to unlock"
+		return m, nil
+	}
+	m.confirmKey = ref.Key
+	m.mode = modeConfirmDel
+	return m, nil
 }
 
 // moveCursor moves the selection within the active pane.

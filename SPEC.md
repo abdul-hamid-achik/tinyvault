@@ -538,13 +538,16 @@ complete list of features and topics.
 
 ### 5.4 The interactive browser (`tvault browse`)
 
-`tvault browse` is the **human** surface — a full-screen, **read-only**
-terminal UI for browsing the vault. It is the natural sibling to `tvault
-docs` (agent-readable manifest) and `tvault help` (long-form manual).
-The browser never writes: every mutation still goes through the CLI, so the
-security model is identical to the CLI's. The only decryption the browser
-performs is the on-demand reveal, which is recorded in the audit log
-exactly like `tvault get`.
+`tvault browse` is the **human** surface — a full-screen terminal UI for
+browsing the vault, **read-only by default**. It is the natural sibling to
+`tvault docs` (agent-readable manifest) and `tvault help` (long-form
+manual). With no flags it only reads, so a stray keystroke can't change
+anything; the only decryption is the on-demand reveal, recorded in the
+audit log exactly like `tvault get`. Pass `--rw` to enable in-app edits
+(`n` new, `e` edit, `d` delete): these reuse the CLI's encryption path
+(`internal/vault.SetSecret`/`DeleteSecret`) and are audited as
+`secret.write`/`secret.delete`. Rotation and project create/delete still
+go through the CLI.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
