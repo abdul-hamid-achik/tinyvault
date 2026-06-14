@@ -534,6 +534,73 @@ complete list of features and topics.
 
 ---
 
+### 5.4 The interactive browser (`tvault browse`)
+
+`tvault browse` is the **human** surface — a full-screen, **read-only**
+terminal UI for browsing the vault. It is the natural sibling to `tvault
+docs` (agent-readable manifest) and `tvault help` (long-form manual).
+The browser never writes: every mutation still goes through the CLI, so the
+security model is identical to the CLI's. The only decryption the browser
+performs is the on-demand reveal, which is recorded in the audit log
+exactly like `tvault get`.
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ tvault  •  ● unlocked  •  webapp  •  47 secrets  •  3 projects     │  header
+├────────────────────────┬─────────────────────────────────────────┤
+│ 2 Projects (3)         │ 3 Secrets (47)                            │
+│ ▸ webapp           47  │ STRIPE_KEY            ••••••••            │
+│   api               6  │ DATABASE_URL          ••••••••            │
+│   batch             2  │ AWS_SECRET            ••••••••            │
+├────────────────────────┤ ...                                      │
+│ 1 Status               ├─────────────────────────────────────────┤
+│ ● unlocked             │ 4 Audit (100)                             │
+│ project  webapp        │ 14:32  set  STRIPE_KEY                    │
+│ secrets  55            │ 14:31  unlock  webapp                     │
+└────────────────────────┴─────────────────────────────────────────┘
+  secrets — r reveal · R reveal all · c copy · / filter                footer
+  ↑↓ navigate  / filter  r reveal  c copy  ? help  q quit
+```
+
+**Layout.** Four panes — status, projects, secrets, audit — are shown
+together as a responsive grid (two columns, ≥ 90×20). On smaller
+terminals (or with `--single-pane`) it collapses to one pane at a time
+with a `[1][2][3][4]` tab strip. The rendered frame is always exactly
+the terminal size, which the Bubble Tea v2 cell-diff renderer requires.
+
+**Keybindings.** Vim + arrow + mouse-wheel: `↑↓`/`jk` (or the wheel)
+navigate, `←→`/`hl` and `1`–`4`/`tab` switch panes, `⏎` opens a project,
+`/` filters keys, `r` reveals the selected value (`R` reveals all), `c`
+copies to the clipboard, `u`/`L` unlock/lock, `esc` re-masks, `?` toggles
+in-app help (glamour-rendered), `q` quits.
+
+**Reveal-map security model.** Decrypted values live only in an in-memory
+map, only while displayed, and are wiped aggressively — on `esc`, on pane
+change, and on quit. They never touch disk and never enter the audit log
+(only the fact that a reveal occurred is recorded). The reveal accent is
+a deliberate warm orange ("this is a secret value, be careful"), distinct
+from the red used for errors. Project and secret *metadata* can be
+browsed while the vault is locked (`Search` / `SnapshotProjects` /
+`ListAudit` read metadata only); revealing a value requires unlocking,
+which can be done in-app with `u`.
+
+**Animation system.** Tasteful, gated, and pure-Go (no spring library):
+a loading spinner, a soft pulse on the lock indicator while locked, and a
+brief flash on reveal. All animations disable automatically under
+`--no-anim`, `$TVAULT_NO_ANIM`, or an SSH session (`$SSH_CONNECTION` /
+`$SSH_TTY`), and the frame ticker only runs while something is actually
+animating, so an idle browser is free.
+
+**Dependency footprint.** The browser is the only thing that pulls in the
+`charm.land/*` v2 stack — `bubbletea/v2`, `lipgloss/v2`, `bubbles/v2`,
+and `glamour/v2` (for the help pane). It is opt-in via the `tui`
+subcommand; no other command imports those libraries. Adding the stack
+takes the binary from ~12 MB to ~24 MB uncompressed. No `harmonica` —
+animations are hand-rolled easing — and no `huh`, keeping the dependency
+set strictly to the v2 line.
+
+---
+
 ## 6. Comparison with adjacent tools
 
 |                         | TinyVault      | 1Password CLI | `pass`         | Vault dev mode  | Doppler        |

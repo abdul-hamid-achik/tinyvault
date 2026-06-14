@@ -48,6 +48,7 @@ Topics:
   output           --json, --format options, exit codes
   agent            patterns for MCP-using AI agents
   troubleshooting  passphrase loss, locked vault, migration
+  browse           the interactive terminal UI
 
 Without a topic, prints the full tour.`,
 	Args: cobra.MaximumNArgs(1),
@@ -78,7 +79,18 @@ type HelpContent struct {
 	Recipes      []HelpRecipe `json:"recipes"`
 	AgentGuide   HelpAgent    `json:"agent_guide"`
 	Troubleshoot []HelpItem   `json:"troubleshooting"`
+	Browse       HelpBrowse   `json:"browse"`
 	Topics       []HelpTopic  `json:"topics"`
+}
+
+// HelpBrowse documents the interactive terminal UI (tvault browse).
+type HelpBrowse struct {
+	WhatItIs    string   `json:"what_it_is"`
+	WhatItIsNot string   `json:"what_it_is_not"`
+	Panes       []string `json:"panes"`
+	Keys        []string `json:"keys"`
+	WhenToUse   string   `json:"when_to_use"`
+	Security    string   `json:"security"`
 }
 
 // HelpStep is one step in the vault lifecycle.
@@ -341,6 +353,12 @@ func helpContent() HelpContent {
 				Description: "Add to .claude/settings.local.json or your MCP host config. The server " +
 					"speaks JSON-RPC over stdio; configure env={TVAULT_PASSPHRASE: ...}.",
 			},
+			{
+				Name:     "Browse secrets interactively",
+				Commands: []string{"tvault browse", "tvault browse --project webapp --no-anim"},
+				Description: "The browser is read-only — it never writes. Use it to explore, filter, and reveal values " +
+					"behind a key press without exposing them to the terminal scrollback.",
+			},
 		},
 
 		AgentGuide: HelpAgent{
@@ -422,7 +440,48 @@ func helpContent() HelpContent {
 			},
 		},
 
+		Browse: HelpBrowse{
+			WhatItIs: "tvault browse is a full-screen, read-only terminal UI for browsing the vault. " +
+				"Four panes (status, projects, secrets, audit) give you vault health, the project " +
+				"list with secret counts, the current project's keys, and recent audit activity — all " +
+				"at once. It is built on the Bubble Tea v2 / Lip Gloss v2 (charm.land) stack with a " +
+				"light/dark theme auto-detected from your terminal background.",
+			WhatItIsNot: "It is NOT an editor. The browser never writes to the vault — every mutation " +
+				"(set, delete, rotate, project create) still goes through the CLI. This keeps the " +
+				"security model identical to the CLI: the only decryption the browser ever performs is the " +
+				"on-demand 'reveal', recorded in the audit log exactly like 'tvault get'.",
+			Panes: []string{
+				"1 Status   — unlocked/locked, current project, secret + project counts, last write, vault id",
+				"2 Projects — every project with its secret count; the vault's current project is marked",
+				"3 Secrets  — the selected project's keys (the main view); values masked until revealed",
+				"4 Audit    — the most recent audit-log entries, newest first",
+			},
+			Keys: []string{
+				"↑/↓ or j/k     navigate within the focused pane (mouse wheel scrolls too)",
+				"←/→ or h/l     move between panes (1/2/3/4 jump; tab/⇧tab cycle)",
+				"⏎              open the highlighted project's secrets",
+				"/              live-filter the current project's keys",
+				"r              reveal the selected value (R reveals all)",
+				"esc            re-mask every revealed value (also exits the filter)",
+				"c              copy the selected value to the clipboard",
+				"u / L          unlock (in-app passphrase prompt) / lock the vault",
+				"^r / ^l        reload from disk / redraw",
+				"? / q          toggle in-app help / quit",
+			},
+			WhenToUse: "Use the browser when you want to SEE the vault — explore what's there, check which " +
+				"project is current, filter keys, or peek at a value during a screen-share without it " +
+				"hitting scrollback. Use the CLI (or MCP) for everything scripted or mutating: set, run, " +
+				"sync, rotate, and anything an agent does.",
+			Security: "Revealed values live only in memory, only while shown, and are wiped on esc, on " +
+				"pane change, and on quit. They never touch disk and never appear in the audit log " +
+				"(only the fact that a reveal happened is recorded). The warm-orange reveal color is a " +
+				"deliberate 'a secret is showing' signal. Browsing metadata works while the vault is " +
+				"locked; revealing a value requires unlocking first.",
+		},
+
 		Topics: []HelpTopic{
+			{Slug: "browse", Title: "The interactive terminal UI",
+				Description: "What the browser is and isn't, the four panes, the full keybinding cheat sheet, and the reveal security model."},
 			{Slug: "workflow", Title: "Lifecycle and day-to-day usage",
 				Description: "init -> set -> run, projects, sync, backup, rotate, MCP."},
 			{Slug: "safety", Title: "Encryption, redaction, .env safety",
@@ -468,10 +527,12 @@ func emitHelp(w io.Writer, topic string, asJSON bool) error {
 			return enc.Encode(c.AgentGuide)
 		case "troubleshooting":
 			return enc.Encode(c.Troubleshoot)
+		case "browse":
+			return enc.Encode(c.Browse)
 		case "topics":
 			return enc.Encode(c.Topics)
 		default:
-			return fmt.Errorf("unknown topic %q (try: workflow, safety, recipes, output, agent, troubleshooting, topics)", topic)
+			return fmt.Errorf("unknown topic %q (try: workflow, safety, recipes, output, agent, troubleshooting, browse, topics)", topic)
 		}
 	}
 
@@ -486,7 +547,10 @@ func emitHelp(w io.Writer, topic string, asJSON bool) error {
 		writeRecipes(w, c)
 		writeAgentGuide(w, c)
 		writeTroubleshoot(w, c)
+		writeBrowse(w, c)
 		writeTopicsList(w, c)
+	case "browse":
+		writeBrowse(w, c)
 	case "workflow":
 		writeLifecycle(w, c)
 	case "safety":
@@ -502,9 +566,26 @@ func emitHelp(w io.Writer, topic string, asJSON bool) error {
 	case "topics":
 		writeTopicsList(w, c)
 	default:
-		return fmt.Errorf("unknown topic %q (try: workflow, safety, recipes, output, agent, troubleshooting, topics)", topic)
+		return fmt.Errorf("unknown topic %q (try: workflow, safety, recipes, output, agent, troubleshooting, browse, topics)", topic)
 	}
 	return nil
+}
+
+func writeBrowse(w io.Writer, c HelpContent) {
+	fmt.Fprintln(w, "Interactive browser (tvault browse)")
+	fmt.Fprintln(w, "----------------------------")
+	fmt.Fprintf(w, "\n%s\n", c.Browse.WhatItIs)
+	fmt.Fprintf(w, "\nWhat it is NOT:\n  %s\n", c.Browse.WhatItIsNot)
+	fmt.Fprintln(w, "\nPanes:")
+	for _, p := range c.Browse.Panes {
+		fmt.Fprintf(w, "  %s\n", p)
+	}
+	fmt.Fprintln(w, "\nKeys:")
+	for _, k := range c.Browse.Keys {
+		fmt.Fprintf(w, "  %s\n", k)
+	}
+	fmt.Fprintf(w, "\nWhen to use it:\n  %s\n", c.Browse.WhenToUse)
+	fmt.Fprintf(w, "\nSecurity:\n  %s\n\n", c.Browse.Security)
 }
 
 func writeOverview(w io.Writer, c HelpContent) {

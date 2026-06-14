@@ -1,0 +1,46 @@
+# Glyphrun configuration for tinyvault.
+#
+# Glyphrun (https://github.com/abdul-hamid-achik/glyphrun) runs terminal
+# behavior specs in a real PTY. We use it to exercise `tvault browse` — the
+# Bubble Tea v2 terminal UI — end-to-end in a real terminal, complementing
+# the fast model-only Go tests in cmd/tvault/cmd/browse.
+#
+# Run with:  glyph run specs/glyphrun/browse_reveal.yml --format md
+version: 1
+
+defaultEnvironment: local
+
+artifactRoot: .glyphrun/runs
+snapshotRoot: .glyphrun/snapshots
+
+environments:
+  local:
+    env:
+      TERM: xterm-256color
+      COLORTERM: truecolor
+      LANG: en_US.UTF-8
+      # Deterministic, non-interactive vault for the TUI specs.
+      TVAULT_DIR: .glyphrun/tmp/vault
+      TVAULT_PASSPHRASE: glyphpass
+
+terminal:
+  profile: xterm-256color
+  cols: 120
+  rows: 40
+  normalize:
+    trimRight: true
+    normalizeLineEndings: true
+
+artifacts:
+  rawLog: true
+  frames: true
+  finalScreen: true
+  snapshots: true
+
+# The vault passphrase must never leak into committed artifacts.
+redaction:
+  enabled: true
+  patterns:
+    - name: tvault-passphrase
+      regex: 'glyphpass'
+      replace: '<redacted-passphrase>'

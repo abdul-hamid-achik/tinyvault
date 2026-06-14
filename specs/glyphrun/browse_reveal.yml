@@ -1,0 +1,96 @@
+version: 1
+name: tvault_browse_reveal
+
+intent: |
+  A user opens `tvault browse` against an unlocked vault, sees the vault is
+  unlocked along with its projects and secret keys, navigates to a secret
+  and reveals its masked value with `r`, then quits cleanly with `q`.
+
+  This is the end-to-end PTY smoke test for the Bubble Tea v2 browser. The
+  fast model-only assertions live in cmd/tvault/cmd/browse/*_test.go; this
+  spec proves the whole thing renders and drives correctly in a real
+  terminal.
+
+target:
+  cmd: ["./bin/tvault", "browse", "--no-anim"]
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/vault"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 15000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/vault"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/vault TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/vault TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/vault TVAULT_PASSPHRASE=glyphpass ./bin/tvault use webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/vault TVAULT_PASSPHRASE=glyphpass ./bin/tvault set STRIPE_KEY sk_live_glyph123 -p webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/vault TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph -p webapp"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "unlocked"
+      timeoutMs: 6000
+  - wait:
+      screen:
+        contains: "webapp"
+      timeoutMs: 3000
+  - snapshot: home
+  - press: "3"
+  - wait:
+      screen:
+        contains: "STRIPE_KEY"
+      timeoutMs: 3000
+  # Cursor starts on DB_URL (sorted first); move down to STRIPE_KEY.
+  - press: "down"
+  - press: "r"
+  - wait:
+      screen:
+        contains: "sk_live_glyph123"
+      timeoutMs: 3000
+  - snapshot: revealed
+  # esc re-masks every revealed value and clears the status line, so the
+  # footer falls back to the secrets hint ("…R reveal all…"). Waiting on
+  # that both asserts the re-mask AND separates esc from q in time, so the
+  # lone ESC is delivered as its own key rather than merging with q.
+  - wait:
+      screen:
+        contains: "sk_live_glyph123"
+      timeoutMs: 2000
+  - press: "esc"
+  - wait:
+      screen:
+        contains: "reveal all"
+      timeoutMs: 3000
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  # The screen assertions ("unlocked", "webapp", "STRIPE_KEY", the revealed
+  # value, the re-mask) are enforced by the wait steps above — a wait that
+  # times out errors the run. Outcomes verify the durable end-state: the
+  # browser exits the alternate screen and returns status 0 (vault closed).
+  - id: clean_exit
+    description: q exits the browser cleanly with status 0
+    verify:
+      process:
+        exitCode: 0

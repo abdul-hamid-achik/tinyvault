@@ -72,8 +72,19 @@ cmd/tvault/
     rotate.go                # tvault key rotate
     mcp_server.go            # tvault mcp-server (stdio MCP transport)
     ci.go                    # tvault ci init (generate CI workflow files)
+    browse.go                # tvault browse (cobra wiring + TTY checks; calls browse pkg)
     completion.go            # Shell completion
     output.go                # Color output helpers (Success, Error, Warning, Info)
+    browse/                  # The interactive browser (the ONLY package importing charm.land/*)
+      run.go                 # Run(): builds the model, runs the Bubble Tea v2 program
+      model.go               # tea.Model: state, Init/Update, key handling
+      view.go                # View(): responsive 4-pane layout, panes, overlays
+      styles.go              # themeStyles: catppuccin light/dark, picked at runtime
+      keymap.go              # key.Binding set; implements help.KeyMap
+      data.go                # read-only loaders wrapping internal/vault + tea.Cmd msgs
+      anim.go                # pure-Go easing + animation gating (no harmonica)
+      help.go                # in-app help markdown, glamour-rendered
+      *_test.go              # model/data/styles/keymap/layout tests + glyphrun dump helper
 
 internal/
   crypto/
@@ -251,6 +262,16 @@ Before every commit:
 | `golang.org/x/term`                      | Secure passphrase input (no echo)        |
 | `github.com/modelcontextprotocol/go-sdk` | MCP server SDK                           |
 | `go.yaml.in/yaml/v3`                     | YAML parsing (access policy)             |
+| `charm.land/bubbletea/v2`                | TUI runtime (`tvault browse` only)          |
+| `charm.land/lipgloss/v2`                 | TUI styling/layout (`tvault browse` only)   |
+| `charm.land/bubbles/v2`                  | TUI components: textinput, spinner, help, viewport, key, table |
+| `charm.land/glamour/v2`                  | Markdown rendering for the in-app help pane |
+
+The browser is a `cmd/` subcommand, **not** an `internal/` package — it
+imports the `charm.land/*` v2 libraries that are otherwise absent from
+the project. Those libraries are pulled in **only** by `tvault browse`; no
+other command links them at runtime. The stack is strictly the v2 line
+(no `harmonica`, no `huh`): animations are hand-rolled easing.
 
 ## Where things live
 

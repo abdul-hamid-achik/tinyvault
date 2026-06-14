@@ -18,6 +18,7 @@ TinyVault is a single-binary CLI tool and [MCP server](https://modelcontextproto
 - **Multi-Project** -- Organize secrets into projects with independent encryption keys
 - **.env Ecosystem** -- Safe dotenv parser (no shell expansion), `tvault://` placeholder interpolation, two-way sync (pull/push/mirror), and `.env.encrypted` files (Rails credentials pattern, KEK-tied, safe to commit)
 - **Relational Search** -- `tvault search` and `vault_search_secrets` for prefix, name glob, time-range, version, and cross-project queries
+- **Interactive Browser** -- `tvault browse`: a full-screen, read-only terminal UI (Bubble Tea v2) to browse status, projects, secrets, and audit — with a live filter and reveal-on-demand (`r` shows a value, `esc` re-masks). Never writes; all mutations stay in the CLI
 - **Output Redaction** -- MCP server automatically redacts secret values from command output
 - **Access Policy** -- YAML-based allow/deny patterns control what AI agents can access
 - **Zero External Dependencies at Runtime** -- No database servers, no Docker, no network -- just a local bbolt file
@@ -90,6 +91,29 @@ tvault get API_KEY --from .env
 # Machine-readable feature manifest for AI agents
 tvault docs features
 ```
+
+## Interactive Browser
+
+`tvault browse` opens a full-screen terminal UI for browsing the vault — the
+**human** surface alongside the CLI (scripts) and the MCP server (agents).
+
+```bash
+tvault browse                       # browse the current project
+tvault browse webapp                # open a specific project
+tvault browse --single-pane         # one pane at a time (small terminals)
+tvault browse --no-anim             # disable animations (SSH / screen readers)
+```
+
+Four panes — **status**, **projects**, **secrets**, **audit** — with vim,
+arrow, and mouse-wheel navigation. Press `/` to filter keys live, `r` to reveal
+the selected value (warm orange = a secret is showing), `R` to reveal all,
+`c` to copy, and `esc` to re-mask. Revealed values live only in memory and
+are wiped on `esc`, on pane change, and on quit.
+
+The browser is **read-only** — it never writes to the vault. Browsing
+project/secret metadata works while the vault is locked; press `u` to
+unlock in-app and reveal values. Light/dark theme is auto-detected from
+your terminal. Run `tvault help browse` for the full keybinding cheat sheet.
 
 ## Projects
 

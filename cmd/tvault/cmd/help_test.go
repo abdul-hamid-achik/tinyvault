@@ -45,7 +45,7 @@ func TestEmitHelpJSON(t *testing.T) {
 	}
 	for _, k := range []string{
 		"overview", "lifecycle", "conventions", "output", "safety",
-		"recipes", "agent_guide", "troubleshooting", "topics",
+		"recipes", "agent_guide", "troubleshooting", "browse", "topics",
 	} {
 		if _, ok := doc[k]; !ok {
 			t.Errorf("JSON manifest missing top-level key %q", k)
@@ -54,10 +54,10 @@ func TestEmitHelpJSON(t *testing.T) {
 	if got, want := len(doc["lifecycle"].([]any)), 6; got != want {
 		t.Errorf("lifecycle has %d entries, want %d", got, want)
 	}
-	if got, want := len(doc["recipes"].([]any)), 12; got != want {
+	if got, want := len(doc["recipes"].([]any)), 13; got != want {
 		t.Errorf("recipes has %d entries, want %d", got, want)
 	}
-	if got, want := len(doc["topics"].([]any)), 6; got != want {
+	if got, want := len(doc["topics"].([]any)), 7; got != want {
 		t.Errorf("topics has %d entries, want %d", got, want)
 	}
 	if got, want := len(doc["troubleshooting"].([]any)), 8; got != want {
@@ -67,7 +67,7 @@ func TestEmitHelpJSON(t *testing.T) {
 
 // TestEmitHelpTopicText verifies each topic produces non-empty text.
 func TestEmitHelpTopicText(t *testing.T) {
-	topics := []string{"workflow", "safety", "recipes", "output", "agent", "troubleshooting", "topics"}
+	topics := []string{"workflow", "safety", "recipes", "output", "agent", "troubleshooting", "browse", "topics"}
 	for _, topic := range topics {
 		t.Run(topic, func(t *testing.T) {
 			out := &bytes.Buffer{}
@@ -100,6 +100,7 @@ func TestEmitHelpTopicJSON(t *testing.T) {
 		{topic: "output", shapeIsArray: false, wantKeys: []string{"json_usage", "env_formats", "golden_rule"}},
 		{topic: "agent", shapeIsArray: false, wantKeys: []string{"discover", "preferred_order", "anti_patterns", "when_to_ask_for_help"}},
 		{topic: "troubleshooting", shapeIsArray: true, firstItemKey: "problem"},
+		{topic: "browse", shapeIsArray: false, wantKeys: []string{"what_it_is", "what_it_is_not", "panes", "keys", "when_to_use", "security"}},
 		{topic: "topics", shapeIsArray: true, firstItemKey: "slug"},
 	}
 	for _, tc := range cases {
@@ -169,7 +170,7 @@ func TestRunHelpIsCobraWired(t *testing.T) {
 // silently changing shape (which would break agents that rely on it).
 func TestHelpContentStableTopicCount(t *testing.T) {
 	c := helpContent()
-	if got, want := len(c.Topics), 6; got != want {
+	if got, want := len(c.Topics), 7; got != want {
 		t.Errorf("Topics has %d entries, want %d (this is part of the agent contract)", got, want)
 	}
 }

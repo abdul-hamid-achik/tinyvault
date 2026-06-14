@@ -66,3 +66,7 @@ credentials/
 
 # Vecgrep semantic search index
 .vecgrep/
+
+# Glyphrun run artifacts + scratch vault (the config + specs ARE committed)
+.glyphrun/runs/
+.glyphrun/tmp/
