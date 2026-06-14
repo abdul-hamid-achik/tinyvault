@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -294,6 +296,9 @@ func TestMCPServerIntegration(t *testing.T) {
 			"vault_status",
 			"vault_audit_log",
 			"vault_generate_secret",
+			"vault_search_secrets",
+			"vault_list_secrets_by_prefix",
+			"vault_audit_log_since",
 		} {
 			if !toolNames[name] {
 				t.Errorf("missing tool: %s", name)
@@ -738,6 +743,116 @@ func TestMCPServerIntegration(t *testing.T) {
 		}
 	})
 
+	t.Run("vault_search_secrets", func(t *testing.T) {
+		// Add a uniquely-named secret so we can search for it.
+		if _, err := cs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name:      "vault_set_secret",
+			Arguments: map[string]any{"key": "UNIQUE_SEARCH_TOKEN", "value": "x"},
+		}); err != nil {
+			t.Fatalf("set UNIQUE_SEARCH_TOKEN: %v", err)
+		}
+
+		// Search by exact name pattern.
+		res, err := cs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name:      "vault_search_secrets",
+			Arguments: map[string]any{"name_like": "UNIQUE_SEARCH_*"},
+		})
+		if err != nil {
+			t.Fatalf("search: %v", err)
+		}
+		if res.IsError {
+			text := res.Content[0].(*sdkmcp.TextContent).Text
+			t.Fatalf("search returned error: %s", text)
+		}
+		text := res.Content[0].(*sdkmcp.TextContent).Text
+		var out searchSecretsOutput
+		if err := json.Unmarshal([]byte(text), &out); err != nil {
+			t.Fatalf("unmarshal: %v\nbody: %s", err, text)
+		}
+		if out.Count != 1 {
+			t.Errorf("expected count=1, got %d (results: %+v)", out.Count, out.Results)
+		}
+		if len(out.Results) > 0 && out.Results[0].Key != "UNIQUE_SEARCH_TOKEN" {
+			t.Errorf("expected UNIQUE_SEARCH_TOKEN, got %+v", out.Results[0])
+		}
+	})
+
+	t.Run("vault_list_secrets_by_prefix", func(t *testing.T) {
+		// Use a prefix that no other test uses.
+		prefix := "PFX_" + uniqueSuffix()
+		if _, err := cs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name:      "vault_set_secret",
+			Arguments: map[string]any{"key": prefix + "_A", "value": "a"},
+		}); err != nil {
+			t.Fatalf("set PFX_A: %v", err)
+		}
+		if _, err := cs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name:      "vault_set_secret",
+			Arguments: map[string]any{"key": prefix + "_B", "value": "b"},
+		}); err != nil {
+			t.Fatalf("set PFX_B: %v", err)
+		}
+		if _, err := cs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name:      "vault_set_secret",
+			Arguments: map[string]any{"key": "OTHER_KEY", "value": "x"},
+		}); err != nil {
+			t.Fatalf("set OTHER_KEY: %v", err)
+		}
+
+		res, err := cs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name:      "vault_list_secrets_by_prefix",
+			Arguments: map[string]any{"prefix": prefix},
+		})
+		if err != nil {
+			t.Fatalf("list by prefix: %v", err)
+		}
+		if res.IsError {
+			text := res.Content[0].(*sdkmcp.TextContent).Text
+			t.Fatalf("tool error: %s", text)
+		}
+		text := res.Content[0].(*sdkmcp.TextContent).Text
+		var out listByPrefixOutput
+		if err := json.Unmarshal([]byte(text), &out); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(out.Keys) != 2 {
+			t.Errorf("expected 2 PFX_* keys, got %d: %v", len(out.Keys), out.Keys)
+		}
+		for _, k := range out.Keys {
+			if !strings.HasPrefix(k, prefix) {
+				t.Errorf("key %q does not start with %q", k, prefix)
+			}
+		}
+	})
+
+	t.Run("vault_audit_log_since", func(t *testing.T) {
+		// Filter by action=secret.read; we should get audit entries.
+		res, err := cs.CallTool(ctx, &sdkmcp.CallToolParams{
+			Name:      "vault_audit_log_since",
+			Arguments: map[string]any{"action": "secret.read", "limit": float64(10)},
+		})
+		if err != nil {
+			t.Fatalf("call: %v", err)
+		}
+		if res.IsError {
+			text := res.Content[0].(*sdkmcp.TextContent).Text
+			t.Fatalf("tool error: %s", text)
+		}
+		text := res.Content[0].(*sdkmcp.TextContent).Text
+		var out auditLogOutput
+		if err := json.Unmarshal([]byte(text), &out); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(out.Entries) == 0 {
+			t.Error("expected at least one secret.read entry")
+		}
+		for _, e := range out.Entries {
+			if e.Action != "secret.read" {
+				t.Errorf("action filter leaked: got %q", e.Action)
+			}
+		}
+	})
+
 	t.Run("resource_vault_status", func(t *testing.T) {
 		res, err := cs.ReadResource(ctx, &sdkmcp.ReadResourceParams{URI: "vault://status"})
 		if err != nil {
@@ -968,4 +1083,12 @@ func TestMCPServerIntegration(t *testing.T) {
 			t.Fatalf("allowed keys = %+v, want only IMPORT_API", out.Keys)
 		}
 	})
+}
+
+// uniqueSuffix returns a short, test-unique suffix based on the
+// current nanosecond timestamp. Used by the relational-query tests
+// to avoid name collisions with other subtests in the same
+// integration suite.
+func uniqueSuffix() string {
+	return strconv.FormatInt(time.Now().UnixNano(), 36)
 }

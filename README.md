@@ -7,16 +7,20 @@ Dead-simple local secrets management for developers and AI agents.
 
 TinyVault is a single-binary CLI tool and [MCP server](https://modelcontextprotocol.io) that stores secrets locally with strong encryption. No accounts, no servers, no cloud -- just a passphrase-protected vault on your machine.
 
+> **See [SPEC.md](SPEC.md) for the full design doc** -- architecture, threat model, MCP security story, comparison with 1Password CLI / `pass` / Vault / Doppler, and roadmap.
+
 ## Features
 
 - **AES-256-GCM Encryption** -- Two-tier key hierarchy with per-project data encryption keys
 - **Argon2id Key Derivation** -- Memory-hard passphrase hashing resistant to GPU/ASIC attacks
 - **Single Binary** -- One `tvault` binary for CLI use and MCP server mode
-- **MCP Server** -- AI agents can manage secrets via the Model Context Protocol (stdio)
+- **MCP Server** -- 18 tools: AI agents can manage secrets via the Model Context Protocol (stdio) without the values ever entering the model context
 - **Multi-Project** -- Organize secrets into projects with independent encryption keys
+- **.env Ecosystem** -- Safe dotenv parser (no shell expansion), `tvault://` placeholder interpolation, two-way sync (pull/push/mirror), and `.env.encrypted` files (Rails credentials pattern, KEK-tied, safe to commit)
+- **Relational Search** -- `tvault search` and `vault_search_secrets` for prefix, name glob, time-range, version, and cross-project queries
 - **Output Redaction** -- MCP server automatically redacts secret values from command output
 - **Access Policy** -- YAML-based allow/deny patterns control what AI agents can access
-- **Zero Dependencies** -- No database servers, no Docker, no network -- just a local bbolt file
+- **Zero External Dependencies at Runtime** -- No database servers, no Docker, no network -- just a local bbolt file
 - **Cross-Platform** -- Linux, macOS, Windows (amd64 and arm64)
 
 ## Install
@@ -50,15 +54,41 @@ tvault list
 # Run a command with secrets injected as environment variables
 tvault run -- npm start
 
+# Run with a .env file that has tvault:// placeholders (commit-safe templates)
+tvault run --env-file .env -- npm start
+
 # Export secrets
 tvault env                     # shell format (eval-able)
 tvault env --format dotenv     # .env file format
 tvault env --format json       # JSON format
+tvault env --format yaml       # YAML
+tvault env --format k8s-secret --name=my-secret  # K8s Secret manifest
 
-# Import dotenv files safely
+# Import dotenv files safely (no shell expansion, name allowlist)
 tvault import .env
 tvault import --env production
 tvault import --interactive --env production
+
+# Two-way sync between .env files and the vault
+tvault sync --direction pull --path .env       # vault -> .env
+tvault sync --direction push --path .env       # .env -> vault
+tvault sync --direction mirror --path .env     # both, with conflict reporting
+
+# Search secret metadata across all projects (metadata only, never decrypts)
+tvault search --prefix STRIPE_
+tvault search --project prod --name-like 'DB_*'
+tvault search --since 2026-01-01T00:00:00Z
+tvault list --prefix STRIPE_                    # project-scoped shortcut
+
+# Encrypted .env files (Rails credentials pattern; safe to commit)
+tvault encrypt-env --in .env --out .env.encrypted
+tvault decrypt-env --in .env.encrypted --out .env
+
+# Read a value from a .env file without unlocking the vault
+tvault get API_KEY --from .env
+
+# Machine-readable feature manifest for AI agents
+tvault docs features
 ```
 
 ## Projects
@@ -107,15 +137,31 @@ Add to `.claude/settings.local.json`:
 | Tool | Description |
 |------|-------------|
 | `vault_list_projects` | List all projects with secret counts |
-| `vault_list_secrets` | List secret keys in a project |
-| `vault_get_secret` | Get a decrypted secret value |
+| `vault_create_project` | Create a project with its own DEK |
+| `vault_delete_project` | Delete a project and all its secrets |
+| `vault_list_secrets` | List secret keys in a project (metadata only) |
+| `vault_search_secrets` | Relational search: by project, prefix, name glob, update time, version |
+| `vault_list_secrets_by_prefix` | Cheaper prefix-only list (autocomplete-style) |
+| `vault_get_secret` | Get a decrypted secret value (use sparingly) |
 | `vault_set_secret` | Create or update a secret |
 | `vault_delete_secret` | Delete a secret |
+| `vault_generate_secret` | Generate a random secret and store it (value never returned) |
 | `vault_run_with_secrets` | Run a command with secrets as env vars (output redacted) |
 | `vault_export_env` | Write a .env file and return the path (values never sent to AI) |
 | `vault_list_env_files` | Discover safe dotenv files without returning any values |
 | `vault_preview_env_import` | Preview a dotenv import with key names, counts, and diagnostics only |
 | `vault_import_env_files` | Import dotenv files into the vault without exposing values |
+| `vault_status` | Vault metadata + lock state |
+| `vault_audit_log` | Recent audit entries (newest first) |
+| `vault_audit_log_since` | Time-range + action-filtered audit log |
+
+The recommended pattern for an agent is to discover the surface once via
+`tvault docs features`, then use the relational tools
+(`vault_search_secrets`, `vault_list_secrets_by_prefix`) to find keys
+without ever asking the model to enumerate values. Use
+`vault_run_with_secrets` whenever the agent needs to *use* a value;
+the value goes into the subprocess environment and never appears in
+the model's context.
 
 ### Safe Dotenv Imports
 

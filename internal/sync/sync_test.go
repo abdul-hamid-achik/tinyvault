@@ -192,6 +192,52 @@ func TestMirrorReportsConflicts(t *testing.T) {
 	}
 }
 
+func TestMirrorWithOverwriteResolvesConflicts(t *testing.T) {
+	src := newFake()
+	_ = src.SetSecret("default", "A", "vault-A")
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".env")
+	writeFile(t, path, "A=env-wins\n")
+
+	res, err := Sync(src, "default", path, Mirror, true)
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if len(res.Conflicts) != 1 {
+		t.Fatalf("expected 1 conflict, got %d", len(res.Conflicts))
+	}
+	if res.Conflicts[0].Resolution != "kept-env" {
+		t.Errorf("expected kept-env resolution, got %q", res.Conflicts[0].Resolution)
+	}
+	if !containsAll(res.Updated, []string{"A"}) {
+		t.Errorf("A should be Updated when --overwrite, got %+v", res.Updated)
+	}
+	got, _ := src.GetAllSecrets("default")
+	if got["A"] != "env-wins" {
+		t.Errorf("vault should now hold env value, got %q", got["A"])
+	}
+}
+
+func TestMirrorVaultOnlyKeyIsPulledToEnv(t *testing.T) {
+	src := newFake()
+	_ = src.SetSecret("default", "VAULT_ONLY", "from-vault")
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".env")
+	writeFile(t, path, "ENV_ONLY=from-env\n")
+
+	res, err := Sync(src, "default", path, Mirror, true)
+	if err != nil {
+		t.Fatalf("Sync: %v", err)
+	}
+	if !containsAll(res.Created, []string{"VAULT_ONLY", "ENV_ONLY"}) {
+		t.Errorf("both keys should be Created, got %+v", res.Created)
+	}
+	got, _ := src.GetAllSecrets("default")
+	if got["VAULT_ONLY"] != "from-vault" || got["ENV_ONLY"] != "from-env" {
+		t.Errorf("both should now be in vault, got %+v", got)
+	}
+}
+
 func TestParseDirection(t *testing.T) {
 	tests := []struct {
 		in      string
