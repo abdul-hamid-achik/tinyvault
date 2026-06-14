@@ -165,6 +165,16 @@ internal/
     encryptedenv_v2_test.go  # v2: multi-recipient, wrong/absent identity, KEK-independence, version detect
   validation/
     validation.go            # Input validation (keys, project names)
+
+specs/
+  glyphrun/                  # End-to-end PTY specs for `tvault browse` (glyphrun)
+    browse_reveal.yml        # reveal one value (r) + re-mask (esc) + clean quit
+    browse_filter.yml        # live key filter (/) narrows the list
+    browse_panes.yml         # pane focus 1-4 tracks the footer hint
+    browse_reveal_all.yml    # reveal every value (R) + re-mask
+    browse_unlock.yml        # locked start → in-app unlock (u) → reveal
+    browse_rw_edit.yml       # --rw: create (n) + delete (d) a secret end-to-end
+glyphrun.config.yml          # glyphrun runtime: env, terminal, passphrase redaction
 ```
 
 ## Security Rules

@@ -1,0 +1,132 @@
+version: 1
+name: tvault_browse_rw_edit
+
+intent: |
+  A user opens `tvault browse --rw` (in-app writes enabled; the header shows an
+  "rw" badge) on an unlocked vault. They create a new secret with `n` (typing a
+  key, then a value), see it appear in the Secrets pane and the count grow to
+  3, then delete it with `d` + `y`, watching the count return to 2. Every write
+  goes through the same vault.SetSecret / DeleteSecret path as the CLI.
+
+  This proves the audited in-app edit path (new + delete) drives correctly over
+  a PTY. The model-only mutation logic (overlay prompts, confirmation text) is
+  covered by cmd/tvault/cmd/browse/mutations_test.go; this spec proves the
+  keystrokes drive a real create + delete through the real vault end-to-end.
+
+  Note on overlays + cell updates: glyphrun's terminal emulator does not fully
+  apply Bubble Tea v2's cell-diff repaint when a centered modal opens over the
+  multi-pane body (stale border cells linger), and it can drop a single-cell
+  update such as the pane-title count digit (2 → 3). The keystrokes still reach
+  the model, so this spec drives the new-key / value / delete-confirm modals
+  "blind" (settling on idle between inputs) and asserts on signals that repaint
+  reliably as whole strings: the new key's row appearing in the Secrets pane
+  ("API_TOKEN") and the footer status line confirming each write ("set
+  API_TOKEN", "delete API_TOKEN").
+
+target:
+  cmd: ["./bin/tvault", "browse", "--rw", "--no-anim"]
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/rw"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/rw"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/rw TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/rw TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/rw TVAULT_PASSPHRASE=glyphpass ./bin/tvault use webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/rw TVAULT_PASSPHRASE=glyphpass ./bin/tvault set STRIPE_KEY sk_live_glyph123 -p webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/rw TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph -p webapp"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "unlocked"
+      timeoutMs: 6000
+  # Start with 2 secrets (clean multi-pane state).
+  - wait:
+      screen:
+        contains: "Secrets (2)"
+      timeoutMs: 3000
+  - snapshot: rw_start
+  # n → new-key modal (driven blind; settle on idle).
+  - press: "n"
+  - wait:
+      idle:
+        quietForMs: 300
+      timeoutMs: 3000
+  - type: "API_TOKEN"
+  - wait:
+      idle:
+        quietForMs: 300
+      timeoutMs: 3000
+  # enter advances to the value modal (still blind).
+  - press: "enter"
+  - wait:
+      idle:
+        quietForMs: 300
+      timeoutMs: 3000
+  - type: "tok_secret_999"
+  - wait:
+      idle:
+        quietForMs: 300
+      timeoutMs: 3000
+  # enter saves; the modal closes and the panes reload. Settle on idle so every
+  # reload (status/projects/secrets/audit) has landed — this guarantees the
+  # Secrets list now holds API_TOKEN at the cursor (sorted first) before delete.
+  - press: "enter"
+  - wait:
+      idle:
+        quietForMs: 500
+      timeoutMs: 5000
+  # The write is confirmed in the footer and the new key is in the Secrets pane.
+  - wait:
+      screen:
+        contains: "set API_TOKEN"
+      timeoutMs: 3000
+  - wait:
+      screen:
+        contains: "API_TOKEN"
+      timeoutMs: 3000
+  - snapshot: created
+  # d → delete-confirm modal for the selected (first, sorted) key API_TOKEN.
+  - press: "d"
+  - wait:
+      idle:
+        quietForMs: 300
+      timeoutMs: 3000
+  - press: "y"
+  # The delete completes; the footer confirms it.
+  - wait:
+      screen:
+        contains: "delete API_TOKEN"
+      timeoutMs: 5000
+  - snapshot: deleted
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  - id: clean_exit
+    description: q exits cleanly with status 0 after an in-app create + delete
+    verify:
+      process:
+        exitCode: 0

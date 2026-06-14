@@ -126,6 +126,10 @@ Security Scan, Build**. All four must be green.
   and a late (epoch-stale) reveal is dropped so it can't resurrect a value.
 - **Verify TUI changes in a real PTY** with glyphrun (the `glyph` CLI, at
   `~/projects/glyphrun`): `glyph run specs/glyphrun/browse_reveal.yml --format md`.
+  The full e2e suite (reveal, filter, panes, reveal-all, unlock, `--rw` edit)
+  and two glyphrun gotchas (config-injected passphrase; overlays / single-cell
+  updates not always repainting → drive modals blind) are documented in
+  `specs/glyphrun/README.md`.
 
 ## Committing
 

@@ -1,0 +1,91 @@
+version: 1
+name: tvault_browse_filter
+
+intent: |
+  A user opens `tvault browse` on an unlocked vault with two secrets, focuses
+  the Secrets pane, presses `/` to live-filter the keys, and types "DB". The
+  filter narrows the list to the single matching key (DB_URL) and the pane
+  title reflects the match count (1/2). Pressing esc clears the filter and the
+  full list (2) returns. Then the user quits cleanly with `q`.
+
+  This proves the live key filter drives correctly in a real terminal. The
+  model-only filter logic is covered by cmd/tvault/cmd/browse/model_test.go;
+  this spec proves it renders and responds to keystrokes over a PTY.
+
+target:
+  cmd: ["./bin/tvault", "browse", "--no-anim"]
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/filter"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 15000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/filter"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/filter TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/filter TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/filter TVAULT_PASSPHRASE=glyphpass ./bin/tvault use webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/filter TVAULT_PASSPHRASE=glyphpass ./bin/tvault set STRIPE_KEY sk_live_glyph123 -p webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/filter TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph -p webapp"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "unlocked"
+      timeoutMs: 6000
+  # Both keys present, full count shown in the pane title.
+  - wait:
+      screen:
+        contains: "Secrets (2)"
+      timeoutMs: 3000
+  - snapshot: unfiltered
+  # `/` focuses the Secrets pane and enters filter mode (footer shows "filter").
+  - press: "/"
+  - wait:
+      screen:
+        contains: "filter"
+      timeoutMs: 3000
+  - type: "DB"
+  # The filter narrows to DB_URL: 1 of 2 keys match.
+  - wait:
+      screen:
+        contains: "Secrets (1/2)"
+      timeoutMs: 3000
+  - snapshot: filtered
+  # esc clears the filter; the full list returns and the secrets hint is back.
+  - press: "esc"
+  - wait:
+      screen:
+        contains: "Secrets (2)"
+      timeoutMs: 3000
+  - wait:
+      screen:
+        contains: "reveal all"
+      timeoutMs: 3000
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  - id: clean_exit
+    description: q exits the browser cleanly with status 0 after filtering
+    verify:
+      process:
+        exitCode: 0

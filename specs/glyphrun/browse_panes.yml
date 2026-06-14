@@ -1,0 +1,90 @@
+version: 1
+name: tvault_browse_panes
+
+intent: |
+  A user opens `tvault browse` and cycles the focus across the four panes with
+  the number keys 1–4. The footer context hint tracks the active pane: Status
+  ("vault health at a glance"), Projects ("to preview"), Audit ("most recent
+  activity"), and back to Secrets ("reveal all"). Then the user quits with `q`.
+
+  This proves pane focus switching drives correctly over a PTY. The model-only
+  focus logic is covered by cmd/tvault/cmd/browse/interactions_test.go; this
+  spec proves the per-pane footer hint renders and updates in a real terminal.
+
+target:
+  cmd: ["./bin/tvault", "browse", "--no-anim"]
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/panes"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 15000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/panes"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/panes TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/panes TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/panes TVAULT_PASSPHRASE=glyphpass ./bin/tvault use webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/panes TVAULT_PASSPHRASE=glyphpass ./bin/tvault set STRIPE_KEY sk_live_glyph123 -p webapp"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "unlocked"
+      timeoutMs: 6000
+  # Secrets pane is focused on launch — its hint is showing.
+  - wait:
+      screen:
+        contains: "reveal all"
+      timeoutMs: 3000
+  - snapshot: secrets_focused
+  # 1 → Status pane.
+  - press: "1"
+  - wait:
+      screen:
+        contains: "vault health at a glance"
+      timeoutMs: 3000
+  # 2 → Projects pane.
+  - press: "2"
+  - wait:
+      screen:
+        contains: "to preview"
+      timeoutMs: 3000
+  # 4 → Audit pane.
+  - press: "4"
+  - wait:
+      screen:
+        contains: "most recent activity"
+      timeoutMs: 3000
+  # 3 → back to Secrets pane.
+  - press: "3"
+  - wait:
+      screen:
+        contains: "reveal all"
+      timeoutMs: 3000
+  - snapshot: back_to_secrets
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  - id: clean_exit
+    description: q exits cleanly with status 0 after cycling panes
+    verify:
+      process:
+        exitCode: 0
