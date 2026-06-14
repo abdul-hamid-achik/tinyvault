@@ -67,6 +67,8 @@ cmd/tvault/
     encrypted_env.go         # tvault encrypt-env / decrypt-env (.env.encrypted)
     search.go                # tvault search (relational query, metadata only)
     diff.go                  # tvault diff <file> (key/value drift vs a .env; metadata-only by default)
+    identity.go              # tvault identity new/list (X25519 keypairs for sharing — Spine A)
+    json_helper.go           # writeJSON(): shared --json encoder
     docs.go                  # tvault docs (machine-readable feature manifest)
     projects.go / use.go     # tvault projects list/create / tvault use PROJECT
     backup.go                # tvault backup <path> / tvault restore <path> (restore is a separate command)
@@ -93,6 +95,7 @@ cmd/tvault/
 internal/
   crypto/
     crypto.go                # AES-256-GCM encrypt/decrypt, Argon2id key derivation
+    recipient.go             # X25519 recipient layer: WrapDEK/UnwrapDEK, Identity (Spine A)
     crypto_test.go           # Comprehensive crypto tests
   store/
     store.go                 # SQL-shaped tabular Store interface

@@ -441,6 +441,9 @@ tvault key rotate                 # re-encrypt every project DEK under a new KEK
 tvault doctor                     # read-only setup diagnostics (--json; exit 1 on failure)
 tvault diff <file>                # key drift vs a .env (--values compares values, never prints them)
 
+tvault identity new [name]        # generate an X25519 identity; print its tvault1… recipient
+tvault identity list              # list local identities + recipients
+
 tvault ci init --provider=github-actions
 tvault ci init --provider=gitlab
 
