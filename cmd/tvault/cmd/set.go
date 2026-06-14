@@ -117,6 +117,7 @@ func runSet(_ *cobra.Command, args []string) error {
 	if err := v.SetSecret(project, key, value); err != nil {
 		return fmt.Errorf("failed to set secret: %w", err)
 	}
+	recordAudit(v, "secret.write", "secret", key, map[string]any{"project": project})
 
 	fmt.Fprintf(os.Stderr, "Secret '%s' set successfully\n", key)
 	return nil

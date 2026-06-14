@@ -47,6 +47,7 @@ func runDelete(_ *cobra.Command, args []string) error {
 	if err := v.DeleteSecret(project, key); err != nil {
 		return fmt.Errorf("failed to delete secret: %w", err)
 	}
+	recordAudit(v, "secret.delete", "secret", key, map[string]any{"project": project})
 
 	Success("Secret '%s' deleted", key)
 	return nil

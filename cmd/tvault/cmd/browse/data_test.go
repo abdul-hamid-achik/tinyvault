@@ -117,3 +117,23 @@ func TestRevealCmdProducesError(t *testing.T) {
 		t.Errorf("locked reveal cmd produced %T, want errMsg", msg)
 	}
 }
+
+func TestRevealIsAudited(t *testing.T) {
+	v := newScratchVault(t)
+	if _, err := revealSecret(v, "webapp", "STRIPE_KEY"); err != nil {
+		t.Fatalf("revealSecret: %v", err)
+	}
+	entries, err := loadAudit(v, 100)
+	if err != nil {
+		t.Fatalf("loadAudit: %v", err)
+	}
+	found := false
+	for _, e := range entries {
+		if e.Action == "secret.read" && e.ResourceName == "STRIPE_KEY" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("a TUI reveal should write a secret.read audit entry")
+	}
+}

@@ -1,6 +1,8 @@
 package browse
 
 import (
+	"time"
+
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/store"
@@ -63,9 +65,22 @@ func loadAudit(v *vault.Vault, limit int) ([]*store.AuditEntry, error) {
 }
 
 // revealSecret decrypts a single value. Requires the vault to be
-// unlocked; returns vault.ErrLocked otherwise.
+// unlocked; returns vault.ErrLocked otherwise. A successful decrypt is
+// audited as a secret.read (same vocabulary as the CLI and MCP), so a
+// reveal/copy in the browser shows up in the Audit pane and the log.
 func revealSecret(v *vault.Vault, project, key string) (string, error) {
-	return v.GetSecret(project, key)
+	val, err := v.GetSecret(project, key)
+	if err == nil {
+		//nolint:errcheck // audit is best-effort; never block a reveal
+		v.AppendAudit(&store.AuditEntry{
+			Action:       "secret.read",
+			ResourceType: "secret",
+			ResourceName: key,
+			Timestamp:    time.Now().UTC(),
+			Metadata:     map[string]any{"project": project, "source": "tui"},
+		})
+	}
+	return val, err
 }
 
 // ---- messages ----

@@ -68,6 +68,7 @@ func runGet(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get secret: %w", err)
 	}
+	recordAudit(v, "secret.read", "secret", key, map[string]any{"project": project})
 
 	if jsonOutput {
 		enc := json.NewEncoder(os.Stdout)
