@@ -41,6 +41,26 @@ Security Scan, Build**. All four must be green.
   (`default-signifies-exhaustive`). Enum sentinels like `paneCount` don't need
   an explicit case.
 
+## Sharing & committable secrets (the recipient layer)
+
+- `internal/crypto/recipient.go` is the asymmetric layer: X25519 → HKDF-SHA256
+  → ChaCha20-Poly1305 wrapping (`WrapDEK`/`UnwrapDEK`, `Identity`). It uses
+  only stdlib `crypto/ecdh` + already-vendored `x/crypto` — **do not add
+  `filippo.io/age` or any new crypto dependency** without discussion.
+- Built on it: `tvault identity new/list`, `projects share/unshare/recipients`
+  (revocation **rotates the DEK and re-encrypts every value** via
+  `store.RekeyProject` — re-wrapping alone would be security theater), the
+  `.env.encrypted` **v2** format (`EncryptV2`/`DecryptV2`, commit-safe,
+  KEK-independent), and `tvault git-filter` (clean/smudge, `gitfilter.go`).
+- Identities are passphrase-independent keypairs at
+  `~/.tvault/identities/<name>.key` (0600). Public half = `tvault1…`
+  (shareable/committable), private half = `tvault-key1…` (never commit).
+- `git-filter` invariants worth preserving: the clean filter is **idempotent**
+  (re-emits the staged blob when plaintext is unchanged, or `git status` is
+  perpetually dirty), refuses to run with no recipients, passes already-encrypted
+  input through (no double-encrypt), and in **locked mode** (no identity) the
+  smudge filter passes ciphertext through instead of failing checkout.
+
 ## The interactive browser (`tvault browse`)
 
 - Lives in `cmd/tvault/cmd/browse/` — the **only** package that imports

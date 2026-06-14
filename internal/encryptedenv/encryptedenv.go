@@ -25,6 +25,7 @@ package encryptedenv
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -35,17 +36,108 @@ import (
 )
 
 const (
-	magicLen   = 16
-	magicValue = "tvault-encrypted"
-	version    = uint8(1)
-	headerLen  = magicLen + 1 + 3 + crypto.SaltSize + crypto.NonceSize
+	magicLen    = 16
+	magicValue  = "tvault-encrypted"
+	version     = uint8(1) // KEK-tied (passphrase) format
+	version2    = uint8(2) // recipient-based, commit-safe, KEK-independent
+	headerLen   = magicLen + 1 + 3 + crypto.SaltSize + crypto.NonceSize
+	v2PrefixLen = magicLen + 1 + 3 // magic + version + reserved, before the recipient block
 )
 
 // ErrInvalidMagic is returned when a file's magic header does not match.
 var ErrInvalidMagic = errors.New("not a tvault-encrypted file (magic mismatch)")
 
-// ErrUnsupportedVersion is returned when a file's version byte is not 1.
+// ErrUnsupportedVersion is returned when a file's version byte is not recognized.
 var ErrUnsupportedVersion = errors.New("unsupported encrypted-env version")
+
+// ErrMalformed is returned when a v2 file's recipient block is truncated.
+var ErrMalformed = errors.New("malformed encrypted-env file")
+
+// FileVersion reads the format version byte from an encrypted-env file so
+// callers can dispatch v1 (passphrase) vs v2 (identity) decryption.
+func FileVersion(file []byte) (uint8, error) {
+	if len(file) < magicLen+1 || string(file[:magicLen]) != magicValue {
+		return 0, ErrInvalidMagic
+	}
+	return file[magicLen], nil
+}
+
+// EncryptV2 encrypts plaintext to one or more X25519 recipients, producing a
+// commit-safe file that does NOT depend on the vault KEK: any holder of a
+// matching private identity can decrypt it (e.g. a teammate, CI, or an
+// agent), and rotating the vault passphrase does not invalidate it. A random
+// per-file key encrypts the body and is wrapped to each recipient.
+//
+// v2 layout: magic(16) || version(1)=2 || reserved(3) || count(uint16) ||
+//
+//	[ stanzaLen(uint16) || stanza ]... || body( crypto.Encrypt(fileKey) )
+func EncryptV2(recipients [][]byte, plaintext []byte) ([]byte, error) {
+	if len(recipients) == 0 {
+		return nil, errors.New("no recipients")
+	}
+	fileKey, err := crypto.GenerateKey()
+	if err != nil {
+		return nil, err
+	}
+	defer crypto.ZeroBytes(fileKey)
+
+	stanzas, err := crypto.WrapDEK(fileKey, recipients)
+	if err != nil {
+		return nil, err
+	}
+	body, err := crypto.Encrypt(fileKey, plaintext) // self-contained nonce||ct
+	if err != nil {
+		return nil, err
+	}
+
+	buf := make([]byte, 0, v2PrefixLen+2+len(body))
+	buf = append(buf, []byte(magicValue)...)
+	buf = append(buf, version2, 0, 0, 0)
+	buf = binary.BigEndian.AppendUint16(buf, uint16(len(stanzas)))
+	for _, st := range stanzas {
+		buf = binary.BigEndian.AppendUint16(buf, uint16(len(st)))
+		buf = append(buf, st...)
+	}
+	buf = append(buf, body...)
+	return buf, nil
+}
+
+// DecryptV2 decrypts a v2 file using an X25519 identity. Returns
+// crypto.ErrNoMatchingRecipient if the identity is not a recipient.
+func DecryptV2(id *crypto.Identity, file []byte) ([]byte, error) {
+	v, err := FileVersion(file)
+	if err != nil {
+		return nil, err
+	}
+	if v != version2 {
+		return nil, fmt.Errorf("%w: got %d, want %d (v2)", ErrUnsupportedVersion, v, version2)
+	}
+	off := v2PrefixLen
+	if len(file) < off+2 {
+		return nil, ErrMalformed
+	}
+	count := int(binary.BigEndian.Uint16(file[off:]))
+	off += 2
+	stanzas := make([][]byte, 0, count)
+	for i := 0; i < count; i++ {
+		if len(file) < off+2 {
+			return nil, ErrMalformed
+		}
+		n := int(binary.BigEndian.Uint16(file[off:]))
+		off += 2
+		if n == 0 || len(file) < off+n {
+			return nil, ErrMalformed
+		}
+		stanzas = append(stanzas, file[off:off+n])
+		off += n
+	}
+	fileKey, err := crypto.UnwrapDEK(id, stanzas)
+	if err != nil {
+		return nil, err
+	}
+	defer crypto.ZeroBytes(fileKey)
+	return crypto.Decrypt(fileKey, file[off:])
+}
 
 // Encrypt reads plaintext (a .env body) and returns the encrypted file
 // bytes. kek is the vault's in-memory KEK.

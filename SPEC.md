@@ -139,6 +139,9 @@ plus `golang.org/x/crypto/argon2`.
 |-----------------------|------------------------------------------|----------------------------------------------|
 | **Argon2id**          | Passphrase → KEK derivation              | time=3, memory=64 MiB, threads=4, salt=16 B  |
 | **AES-256-GCM**       | Symmetric encryption (KEK, DEK, values)  | 32-byte key, 12-byte random nonce per op     |
+| **X25519 (crypto/ecdh)** | Recipient layer: wrap a DEK/file-key to a public key | stdlib scalar clamping; low-order points rejected at ECDH |
+| **HKDF-SHA256**       | Derive a per-stanza wrap key from the ECDH secret | salt = eph_pub‖recipient_pub, info domain-separated |
+| **ChaCha20-Poly1305** | AEAD that seals the wrapped key (stanza) | 32-byte wrap key, 12-byte nonce, AAD = eph_pub |
 | **`crypto/rand`**     | All randomness (nonces, salts, DEKs)     | n/a                                          |
 | **`ZeroBytes`**       | Key zeroization after use                | n/a                                          |
 
@@ -175,6 +178,28 @@ User passphrase
   the old KEK, re-encrypts it with the new KEK, and swaps. Secret values
   are never touched.
 
+**Asymmetric recipient layer (sharing & committable secrets).** Alongside
+the KEK wrap, a project DEK (or a standalone file key) can be wrapped to one
+or more X25519 *recipients* — the age-style sealed-box construction in
+`internal/crypto/recipient.go`:
+
+```
+ephemeral X25519 keypair → ECDH(eph_priv, recipient_pub) = shared
+wrap_key = HKDF-SHA256(shared, salt = eph_pub‖recipient_pub, info)
+stanza   = version ‖ eph_pub ‖ nonce ‖ ChaCha20-Poly1305(wrap_key, DEK, AAD=eph_pub)
+```
+
+One stanza per recipient; any holder of a matching private identity unwraps
+the DEK **without the passphrase**. This powers `projects share/unshare`, the
+v2 `.env.encrypted` format, and the git filters. **Revocation is real**:
+`projects unshare` rotates the DEK, re-encrypts every value, and re-wraps to
+the *remaining* recipients atomically (`store.RekeyProject`), so a removed
+recipient loses access even with an old copy of the vault file. Identities
+are independent of the passphrase: a keypair stored 0600 under
+`~/.tvault/identities/<name>.key`, public half encoded `tvault1…`, private
+half `tvault-key1…`. No new dependency — only `chacha20poly1305` + `hkdf`
+from the already-vendored `x/crypto`.
+
 **Argon2id parameters are conservative.** 64 MiB / 3 iterations / 4 threads
 is ~200 ms on a modern x86 laptop. Tunable in `internal/crypto/crypto.go`
 if hardware targets change.
@@ -195,7 +220,10 @@ cmd/tvault/
     env.go                   # export in shell/dotenv/json/yaml/k8s formats
     export.go / import.go / import_interactive.go
     sync.go                  # two-way reconciliation between .env and vault
-    encrypted_env.go         # encrypt-env / decrypt-env (.env.encrypted)
+    encrypted_env.go         # encrypt-env / decrypt-env (.env.encrypted v1+v2)
+    identity.go              # identity new/list (X25519 keypairs)
+    project_share.go         # projects share/unshare/recipients
+    gitfilter.go             # git-filter install/track/status + clean/smudge
     search.go                # tvault search (relational query, metadata only)
     docs.go                  # machine-readable docs surface (features, topics)
     projects.go / use.go
@@ -213,7 +241,7 @@ internal/
                   (Create/Open/Unlock/Lock, project, secret, Search, ...)
   dotenv/         safe dotenv parser, name allowlist, tvault:// interpolation
   sync/           two-way reconciliation between .env files and the vault
-  encryptedenv/   .env.encrypted format (tvault-encrypted-v1, KEK-tied)
+  encryptedenv/   .env.encrypted format: v1 (KEK-tied) + v2 (recipient-based, commit-safe)
   mcp/            MCP server (tools, prompts, resources, access policy, redaction)
   validation/     key + project name validation
 ```
@@ -410,8 +438,10 @@ tvault sync --direction pull      # vault -> .env
 tvault sync --direction push      # .env -> vault
 tvault sync --direction mirror    # reconcile in both directions
 
-tvault encrypt-env --in .env      # .env -> .env.encrypted (KEK-tied, commit-safe)
-tvault decrypt-env --in .env.enc  # reverse
+tvault encrypt-env --in .env      # .env -> .env.encrypted v1 (KEK-tied)
+tvault encrypt-env --in .env --recipient tvault1…   # v2: commit-safe, no passphrase
+tvault decrypt-env --in .env.enc  # reverse (auto-detects v1/v2)
+tvault decrypt-env --in .env.enc --identity ci      # v2: open with an identity
 
 tvault search --prefix STRIPE_    # relational query (metadata only, no decrypt)
 tvault search --project prod --name-like 'DB_*'
@@ -447,6 +477,11 @@ tvault projects share <recipient>    # grant a recipient access to a project
 tvault projects unshare <recipient>  # revoke (rotates the key + re-encrypts)
 tvault projects recipients           # list a project's recipients
 tvault env --identity <name>      # read a shared project with an identity (no passphrase)
+
+tvault git-filter install --recipient tvault1…   # configure transparent repo encryption
+tvault git-filter track .env      # add a .gitattributes pattern (encrypt on commit)
+tvault git-filter status          # show config, recipients, identity availability
+tvault git-filter checkout        # re-decrypt the working tree (run after cloning)
 
 tvault ci init --provider=github-actions
 tvault ci init --provider=gitlab
@@ -508,20 +543,43 @@ Mirror pushes env-only keys to the vault, pulls vault-only keys to
 with `--json`). Either side can be the source of truth per invocation.
 
 **Encrypted .env files (Rails credentials pattern).** A `.env` can be
-encrypted to a `.env.encrypted` file using the vault's KEK:
+encrypted to a self-contained `.env.encrypted` file in one of two formats,
+both sharing the magic `tvault-encrypted` and a version byte:
 
 ```bash
+# v1 — tied to the vault KEK (passphrase)
 tvault encrypt-env --in .env --out .env.encrypted
 tvault decrypt-env --in .env.encrypted --out .env
+
+# v2 — wrapped to X25519 recipients (commit-safe, KEK-independent)
+tvault encrypt-env --in .env --recipient tvault1… --out .env.encrypted
+tvault decrypt-env --in .env.encrypted --identity ci --out .env
 ```
 
-The output is a self-contained binary file with magic `tvault-encrypted-v1`,
-a per-file salt, a per-file nonce, and AES-256-GCM ciphertext. The
-key is derived via HKDF-SHA256 from the vault KEK + the file's salt.
-Decryption requires the vault to be unlocked with the same passphrase
-that was active at encryption time. **Passphrase rotation invalidates
-all previously encrypted files** — this matches `RotatePassphrase`
-semantics. The format is documented in `internal/encryptedenv/encryptedenv.go`.
+- **v1** (`version = 1`): per-file salt + nonce + AES-256-GCM ciphertext,
+  with the file key derived via HKDF-SHA256 from the vault KEK + salt.
+  Decryption needs the vault unlocked with the passphrase that was active
+  at encryption time, so **passphrase rotation invalidates v1 files**
+  (matching `RotatePassphrase` semantics).
+- **v2** (`version = 2`): a random per-file key encrypts the body
+  (`crypto.Encrypt`) and is wrapped to one or more recipients via the
+  recipient layer. Layout: `magic(16) ‖ version(1)=2 ‖ reserved(3) ‖
+  count(uint16) ‖ [stanzaLen(uint16) ‖ stanza]… ‖ body`. Any holder of a
+  matching identity decrypts it with `--identity`, **no passphrase**, and
+  rotation does not invalidate it. `decrypt-env` auto-detects the version
+  via `encryptedenv.FileVersion`.
+
+Both formats are documented in `internal/encryptedenv/encryptedenv.go`.
+
+**Transparent git filters.** `tvault git-filter` wires the v2 format into
+git clean/smudge filters so secrets are stored encrypted in history but
+appear as plaintext in the working tree for anyone holding a recipient
+identity (git-crypt-style, keyed by the recipient layer). Recipients live
+in a committed `.tvault-recipients` file; identity resolution is
+`$TVAULT_IDENTITY` → `git config tvault.identity` → `default`. The clean
+filter is idempotent — it re-emits the staged blob when the plaintext is
+unchanged — so `git status` stays quiet; without an identity, files stay
+encrypted ("locked") instead of failing checkout. See `cmd/tvault/cmd/gitfilter.go`.
 
 ### 5.3 Agent discoverability
 
@@ -651,9 +709,11 @@ they are sketches of where the product could go.
   `version` (which is already stored, just not exposed). (Small.)
 - **`vault_rotate_secret` MCP tool** — generate-and-replace with
   supersession grace period. (Small.)
-- **Pre-commit / clean filter for committing an encrypted vault file.**
-  The killer feature for "1Password CLI but better" — `git diff` shows
-  only key names, never values. (Medium.)
+- ✅ **Git clean/smudge filters for committing encrypted secrets.** Shipped
+  as `tvault git-filter` (clean=encrypt, smudge=decrypt) over the v2
+  recipient format: matched files are ciphertext in history, plaintext in
+  the working tree for identity holders. Recipients in a committed
+  `.tvault-recipients` file. See §5.2.
 
 ### Tier 2 — Agent-first differentiators
 

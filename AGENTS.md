@@ -64,11 +64,12 @@ cmd/tvault/
     import.go                # tvault import (read secrets from file)
     import_interactive.go    # interactive (text-prompt) file picker for --interactive imports
     sync.go                  # tvault sync --direction pull|push|mirror
-    encrypted_env.go         # tvault encrypt-env / decrypt-env (.env.encrypted)
+    encrypted_env.go         # tvault encrypt-env / decrypt-env (.env.encrypted v1 KEK + v2 recipient)
     search.go                # tvault search (relational query, metadata only)
     diff.go                  # tvault diff <file> (key/value drift vs a .env; metadata-only by default)
     identity.go              # tvault identity new/list (X25519 keypairs for sharing — Spine A)
     project_share.go         # tvault projects share/unshare/recipients (Spine A)
+    gitfilter.go             # tvault git-filter install/track/status/checkout + clean/smudge (Spine A)
     json_helper.go           # writeJSON(): shared --json encoder
     docs.go                  # tvault docs (machine-readable feature manifest)
     projects.go / use.go     # tvault projects list/create / tvault use PROJECT
@@ -144,8 +145,9 @@ internal/
     sync.go                  # Two-way reconciliation between .env and vault
     sync_test.go             # Direction + conflict + round-trip tests
   encryptedenv/
-    encryptedenv.go          # .env.encrypted format (tvault-encrypted-v1, KEK-tied)
-    encryptedenv_test.go     # Round-trip, tamper, wrong-KEK, salt/nonce randomness
+    encryptedenv.go          # .env.encrypted: v1 (KEK-tied) + v2 (recipient-based, commit-safe)
+    encryptedenv_test.go     # v1: round-trip, tamper, wrong-KEK, salt/nonce randomness
+    encryptedenv_v2_test.go  # v2: multi-recipient, wrong/absent identity, KEK-independence, version detect
   validation/
     validation.go            # Input validation (keys, project names)
 ```
@@ -164,6 +166,10 @@ User Passphrase
   -> Argon2id(passphrase, salt) -> KEK (Key Encryption Key)
     -> AES-GCM(KEK, DEK) -> Encrypted per-project DEK
       -> AES-GCM(DEK, secret) -> Encrypted secret value
+
+Recipient layer (passphrase-independent, alongside the KEK wrap):
+  X25519 ECDH -> HKDF-SHA256 -> ChaCha20-Poly1305(wrap_key, DEK)  [one stanza per recipient]
+  -> powers projects share/unshare, .env.encrypted v2, and git-filter
 ```
 
 ### MCP Security
@@ -181,10 +187,16 @@ User Passphrase
 - The parser does **no** variable expansion or command substitution.
   A value like `${tvault://KEY}` is preserved verbatim; only `tvault
   run` (or explicit `Resolve`) interprets it.
-- `.env.encrypted` files use AES-256-GCM with a per-file key derived
-  via HKDF-SHA256 from the vault KEK. Tampered or wrong-KEK files
-  fail decryption. Passphrase rotation invalidates prior files by
-  design.
+- `.env.encrypted` **v1** files use AES-256-GCM with a per-file key
+  derived via HKDF-SHA256 from the vault KEK. Tampered or wrong-KEK
+  files fail decryption. Passphrase rotation invalidates prior v1 files
+  by design.
+- `.env.encrypted` **v2** files (`encrypt-env --recipient`) wrap a random
+  per-file key to X25519 recipients — KEK-independent, so they survive
+  passphrase rotation and are decryptable only with a matching identity
+  (`--identity`). `decrypt-env` auto-detects the version. `tvault git-filter`
+  uses v2 for transparent encrypt-on-commit / decrypt-on-checkout; secret
+  values never enter git history in plaintext.
 
 See [SPEC.md section 3](SPEC.md#3-threat-model) for the full threat model,
 including out-of-scope items (no HSM, no recovery without passphrase, etc.).

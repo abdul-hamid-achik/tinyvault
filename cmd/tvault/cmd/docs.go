@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -53,12 +54,15 @@ Available subcommands:
   mcp              How the MCP server integrates with AI agents
   interpolate      tvault:// reference syntax and resolution
   sync             Two-way sync between .env files and the vault
-  encrypted-env    The .env.encrypted format
+  encrypted-env    The .env.encrypted format (v1 passphrase, v2 recipient)
+  committable-secrets  Commit secrets to a repo (git filters / v2 files)
   safety           Threat model and safety properties
   quickstart       Five-line getting-started
   browse           The interactive terminal UI
 
-If no subcommand is provided, the full catalog is printed.`,
+Any topic or feature can also be named directly, e.g.
+` + "`tvault docs committable-secrets`" + `. If nothing is named, the full
+catalog is printed.`,
 	RunE: runDocs,
 }
 
@@ -72,20 +76,60 @@ func init() {
 	docsCmd.AddCommand(docsFeaturesCmd, docsTopicsCmd, docsRunCmd, docsMCPCmd, docsInterpolateCmd, docsSyncCmd, docsEncryptedEnvCmd, docsSafetyCmd, docsQuickstartCmd, docsBrowseCmd)
 }
 
-func runDocs(cmd *cobra.Command, args []string) error {
+func runDocs(_ *cobra.Command, args []string) error {
 	cat := fullCatalog()
+
+	// A topic/feature can be named positionally or via --topic. Resolve a
+	// topic first, then fall back to a feature, before printing the full
+	// catalog when nothing was requested.
+	topic := docsTopicFlag
+	if topic == "" && len(args) > 0 {
+		topic = args[0]
+	}
+	if topic != "" {
+		if printTopic(cat, topic) == nil {
+			return nil
+		}
+		if f, ok := findFeature(cat, topic); ok {
+			return printFeature(f)
+		}
+		return fmt.Errorf("no topic or feature %q; try `tvault docs topics` or `tvault docs features`", topic)
+	}
+
 	out, err := json.MarshalIndent(cat, "", "  ")
 	if err != nil {
 		return err
 	}
-	if len(args) > 0 {
-		_ = cmd
-	}
-	_, err = os.Stdout.Write(out)
-	if err != nil {
+	if _, err := os.Stdout.Write(out); err != nil {
 		return err
 	}
 	fmt.Println()
+	return nil
+}
+
+func findFeature(cat docsCatalog, name string) (docsFeature, bool) {
+	for _, f := range cat.Features {
+		if f.Name == name {
+			return f, true
+		}
+	}
+	return docsFeature{}, false
+}
+
+func printFeature(f docsFeature) error {
+	fmt.Printf("# %s\n\n%s\n", f.Name, f.Summary)
+	if f.Description != "" {
+		fmt.Printf("\n%s\n", f.Description)
+	}
+	if len(f.Commands) > 0 {
+		fmt.Printf("\nCommands:\n")
+		for _, c := range f.Commands {
+			fmt.Printf("  %s\n", c)
+		}
+	}
+	if len(f.SeeAlso) > 0 {
+		fmt.Printf("\nSee also: %s\n", strings.Join(f.SeeAlso, ", "))
+	}
 	return nil
 }
 
@@ -270,6 +314,13 @@ func fullCatalog() docsCatalog {
 				Description: "An identity is an X25519 keypair (tvault identity new) whose public 'recipient' (tvault1…) is safe to share/commit. `tvault projects share <recipient>` wraps the project's data key to that recipient; the holder of the matching private identity then reads the project with `tvault env --identity <name>` — no vault passphrase needed. `tvault projects unshare` truly revokes: it rotates the project key and re-encrypts every value, so a removed recipient loses access even from an old vault copy. The DEK wrapping is X25519 → HKDF-SHA256 → ChaCha20-Poly1305 (internal/crypto/recipient.go), with no new dependency.",
 			},
 			{
+				Name:        "committable-secrets",
+				Summary:     "Commit secrets to a repo encrypted to X25519 recipients; they decrypt themselves on checkout. No passphrase in the files.",
+				Commands:    []string{"tvault encrypt-env --in .env --recipient tvault1…", "tvault decrypt-env --in .env.encrypted --identity <name>", "tvault git-filter install --recipient tvault1…", "tvault git-filter track .env", "tvault git-filter status"},
+				SeeAlso:     []string{"tvault docs committable-secrets", "tvault docs secret-sharing"},
+				Description: "Two layers, both keyed by the recipient layer so no passphrase ever touches the files. (1) Standalone: `encrypt-env --recipient` writes a self-contained v2 .env.encrypted that any holder of a matching identity opens with `decrypt-env --identity` — KEK-independent, so passphrase rotation does not invalidate it. (2) Transparent git filters: `git-filter install` registers clean/smudge filters and `git-filter track <pattern>` adds .gitattributes entries, so matched files are stored encrypted in history but appear as plaintext in the working tree for anyone holding a recipient identity. Recipients live in a committed .tvault-recipients file (public keys only) so the read-set travels with the repo. Without an identity, files stay 'locked' (ciphertext) rather than failing checkout; the clean filter re-emits unchanged blobs so git status stays quiet; identity resolution is $TVAULT_IDENTITY, then `git config tvault.identity`, then 'default'.",
+			},
+			{
 				Name:        "diagnostics",
 				Summary:     "Read-only setup diagnostics + a typed config file.",
 				Commands:    []string{"tvault doctor", "tvault doctor --json"},
@@ -303,8 +354,14 @@ func fullCatalog() docsCatalog {
 			{
 				Slug:        "encrypted-env",
 				Title:       ".env.encrypted",
-				Description: "A .env file encrypted with AES-256-GCM using a per-file key derived via HKDF-SHA256 from the vault's KEK. The format magic is 'tvault-encrypted-v1'. Decryption requires the vault to be unlocked with the same passphrase that was active at encryption time. Passphrase rotation invalidates all previously encrypted files.",
-				Example:     "  tvault encrypt-env --in .env\n  tvault encrypt-env --in .env.production --out config/secrets.encrypted\n  tvault decrypt-env --in .env.encrypted --out .env",
+				Description: "Two formats share the 'tvault-encrypted' magic. v1 (default): AES-256-GCM with a per-file key derived via HKDF-SHA256 from the vault KEK — decryption needs the vault unlocked with the passphrase that was active at encryption time, and passphrase rotation invalidates it. v2 (encrypt-env --recipient): a random per-file key encrypts the body and is wrapped to one or more X25519 recipients, so any holder of a matching identity decrypts it with --identity, no passphrase, and rotation does not invalidate it. decrypt-env auto-detects the version.",
+				Example:     "  tvault encrypt-env --in .env\n  tvault encrypt-env --in .env --recipient tvault1… --out .env.encrypted\n  tvault decrypt-env --in .env.encrypted --identity ci --out .env",
+			},
+			{
+				Slug:        "committable-secrets",
+				Title:       "Committing secrets to a repo",
+				Description: "Keep secrets in the repo, encrypted in history, decrypting themselves on checkout. Either commit standalone v2 files (encrypt-env --recipient), or use transparent git clean/smudge filters: `git-filter install` configures the repo, `git-filter track <pattern>` marks files in .gitattributes, recipients go in a committed .tvault-recipients file. Matched files are ciphertext in history and plaintext in the working tree for anyone holding a recipient identity; everyone else sees ciphertext ('locked'). The clean filter re-emits unchanged blobs so git status stays quiet; `git-filter install` / `git-filter checkout` re-decrypt the working tree after a clone.",
+				Example:     "  tvault identity new\n  tvault git-filter install --recipient tvault1…\n  tvault git-filter track .env 'secrets/*.env'\n  git add .gitattributes .tvault-recipients && git commit -m \"enable tvault\"\n  # after cloning elsewhere:\n  tvault git-filter install         # decrypts the working tree",
 			},
 			{
 				Slug:        "safety",
