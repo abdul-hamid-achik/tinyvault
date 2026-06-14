@@ -265,7 +265,7 @@ func fullCatalog() docsCatalog {
 			},
 			{
 				Name:        "mcp-server",
-				Summary:     "MCP server over stdio with 18 tools, 2 prompts, 3 resources.",
+				Summary:     "MCP server over stdio with 19 tools, 2 prompts, 3 resources.",
 				Commands:    []string{"tvault mcp-server"},
 				Description: "Agents can manage secrets without the values ever entering the model context: vault_run_with_secrets injects env vars, vault_export_env writes to disk and returns the path, vault_generate_secret returns only {stored: true}.",
 			},
@@ -318,7 +318,7 @@ func fullCatalog() docsCatalog {
 				Summary:     "Commit secrets to a repo encrypted to X25519 recipients; they decrypt themselves on checkout. No passphrase in the files.",
 				Commands:    []string{"tvault encrypt-env --in .env --recipient tvault1…", "tvault decrypt-env --in .env.encrypted --identity <name>", "tvault git-filter install --recipient tvault1…", "tvault git-filter track .env", "tvault git-filter status"},
 				SeeAlso:     []string{"tvault docs committable-secrets", "tvault docs secret-sharing"},
-				Description: "Two layers, both keyed by the recipient layer so no passphrase ever touches the files. (1) Standalone: `encrypt-env --recipient` writes a self-contained v2 .env.encrypted that any holder of a matching identity opens with `decrypt-env --identity` — KEK-independent, so passphrase rotation does not invalidate it. (2) Transparent git filters: `git-filter install` registers clean/smudge filters and `git-filter track <pattern>` adds .gitattributes entries, so matched files are stored encrypted in history but appear as plaintext in the working tree for anyone holding a recipient identity. Recipients live in a committed .tvault-recipients file (public keys only) so the read-set travels with the repo. Without an identity, files stay 'locked' (ciphertext) rather than failing checkout; the clean filter re-emits unchanged blobs so git status stays quiet; identity resolution is $TVAULT_IDENTITY, then `git config tvault.identity`, then 'default'.",
+				Description: "Two layers, both keyed by the recipient layer so no passphrase ever touches the files. (1) Standalone: `encrypt-env --recipient` writes a self-contained v2 .env.encrypted that any holder of a matching identity opens with `decrypt-env --identity` — KEK-independent, so passphrase rotation does not invalidate it. (2) Transparent git filters: `git-filter install` registers clean/smudge filters and `git-filter track <pattern>` adds .gitattributes entries, so matched files are stored encrypted in history but appear as plaintext in the working tree for anyone holding a recipient identity. Recipients live in a committed .tvault-recipients file (public keys only) so the read-set travels with the repo. Without an identity, files stay 'locked' (ciphertext) rather than failing checkout; the clean filter re-emits unchanged blobs so git status stays quiet; identity resolution is $TVAULT_IDENTITY, then `git config tvault.identity`, then 'default'. Over MCP, an agent can produce the same v2 blob with the vault_seal_for_recipients tool (it returns ciphertext only, never plaintext).",
 			},
 			{
 				Name:        "diagnostics",
@@ -337,7 +337,7 @@ func fullCatalog() docsCatalog {
 			{
 				Slug:        "mcp",
 				Title:       "MCP server",
-				Description: "Starts a Model Context Protocol server on stdio. Add to your MCP host config with command=tvault args=[mcp-server] env={TVAULT_PASSPHRASE:...}. The server exposes 18 tools, 2 prompts, and 3 resources. The model never needs to see secret values: prefer vault_run_with_secrets and vault_export_env over vault_get_secret.",
+				Description: "Starts a Model Context Protocol server on stdio. Add to your MCP host config with command=tvault args=[mcp-server] env={TVAULT_PASSPHRASE:...}. The server exposes 19 tools, 2 prompts, and 3 resources. The model never needs to see secret values: prefer vault_run_with_secrets and vault_export_env over vault_get_secret.",
 			},
 			{
 				Slug:        "interpolate",

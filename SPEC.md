@@ -329,7 +329,7 @@ The MCP server is the most security-sensitive surface. The design rules:
 
 ## 4. The MCP surface
 
-18 tools, 2 prompts, 3 resources. All registered through
+19 tools, 2 prompts, 3 resources. All registered through
 `github.com/modelcontextprotocol/go-sdk` v1.4.1.
 
 ### 4.1 Tools
@@ -354,9 +354,14 @@ The MCP server is the most security-sensitive surface. The design rules:
 | `vault_list_env_files`        | no            | no             | no                 | always allowed        |
 | `vault_preview_env_import`    | no            | no             | no                 | always allowed        |
 | `vault_import_env_files`      | no            | yes            | no                 | `CanWrite`            |
+| `vault_seal_for_recipients`   | no (ciphertext out) | no       | no                 | `CanAccessProject` + `CanAccessSecret` |
 
 The value-returning tools are deliberately few and each returns the value
-only when the agent has no alternative. `vault_get_secret` even includes a
+only when the agent has no alternative. `vault_seal_for_recipients` is the
+inverse: it lets an agent *package* secrets to X25519 recipients and hand
+back the result, because the result is ciphertext (a v2 `.env.encrypted`
+blob) — only a holder of a matching private identity can open it, so it is
+safe to return, commit, or move across transports. `vault_get_secret` even includes a
 `warning` field reminding the caller that the value is now in the model
 context.
 
