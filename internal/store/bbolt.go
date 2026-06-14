@@ -290,6 +290,40 @@ func (s *BoltStore) UpdateProject(project *Project) error {
 	})
 }
 
+// RekeyProject atomically updates the project record and rewrites all of its
+// secret entries verbatim, in one transaction. The caller (UnshareProject)
+// has already rotated the DEK and re-encrypted every value; this persists
+// the result all-or-nothing. Entries are written exactly as given (no
+// version increment) since the plaintext values are unchanged.
+func (s *BoltStore) RekeyProject(project *Project, secrets map[string]*SecretEntry) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		projects := tx.Bucket(bucketProjects)
+		idKey := []byte(project.ID.String())
+		if projects.Get(idKey) == nil {
+			return ErrProjectNotFound
+		}
+		pdata, err := json.Marshal(project)
+		if err != nil {
+			return fmt.Errorf("marshal project: %w", err)
+		}
+		if err := projects.Put(idKey, pdata); err != nil {
+			return err
+		}
+
+		secretsBucket := tx.Bucket(bucketSecrets)
+		for key, entry := range secrets {
+			sdata, err := json.Marshal(entry)
+			if err != nil {
+				return fmt.Errorf("marshal secret %s: %w", key, err)
+			}
+			if err := secretsBucket.Put(secretKey(project.ID, key), sdata); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func (s *BoltStore) DeleteProject(id uuid.UUID) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(bucketProjects)

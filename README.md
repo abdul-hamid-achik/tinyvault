@@ -141,6 +141,32 @@ tvault use default
 tvault projects list
 ```
 
+## Sharing secrets (without sharing the passphrase)
+
+Share a project with a teammate, a CI runner, or an agent using **X25519
+recipients** (age-style) — no one needs the master passphrase:
+
+```bash
+# On the recipient's side: make an identity; the recipient string is public.
+tvault identity new ci            # prints: tvault1…  (private key stays 0600)
+
+# On the owner's side: grant that recipient access to a project.
+tvault projects share tvault1…    # -p webapp to pick a project
+tvault projects recipients        # see who has access
+
+# The recipient reads the project with their identity — no passphrase:
+tvault env --identity ci --format dotenv
+
+# Revoke: rotates the project key and re-encrypts every value, so the
+# removed recipient loses access even from an old copy of the vault.
+tvault projects unshare tvault1…
+```
+
+The data key is wrapped per-recipient (X25519 → HKDF-SHA256 →
+ChaCha20-Poly1305); secret values stay encrypted under the project key.
+This is the foundation for committing self-decrypting secrets to a repo
+(coming next). See `tvault docs secret-sharing`.
+
 ## MCP Server (AI Agent Integration)
 
 TinyVault can serve as an MCP server over stdio, letting AI agents (Claude, etc.) securely access and manage secrets.

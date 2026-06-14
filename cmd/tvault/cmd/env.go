@@ -5,17 +5,21 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
 )
 
 var (
-	envFormat  string
-	envExport  bool
-	envK8sName string
-	envK8sNs   string
+	envFormat   string
+	envExport   bool
+	envK8sName  string
+	envK8sNs    string
+	envIdentity string
 )
 
 var envCmd = &cobra.Command{
@@ -41,22 +45,51 @@ func init() {
 	envCmd.Flags().BoolVarP(&envExport, "export", "e", true, "Include 'export' prefix (shell format only)")
 	envCmd.Flags().StringVar(&envK8sName, "name", "", "Kubernetes Secret name (required for k8s-secret format)")
 	envCmd.Flags().StringVar(&envK8sNs, "namespace", "default", "Kubernetes namespace (k8s-secret format)")
+	envCmd.Flags().StringVar(&envIdentity, "identity", "", "Decrypt a shared project with this X25519 identity instead of the passphrase")
+}
+
+// envSecrets returns the project's decrypted secrets, either via the
+// passphrase (default) or, with --identity, via a shared X25519 identity
+// (recipient read — no passphrase, no unlock).
+func envSecrets() (map[string]string, error) {
+	if envIdentity != "" {
+		dir := getVaultDir()
+		v, err := vault.Open(dir)
+		if err != nil {
+			return nil, fmt.Errorf("vault not found at %s, run 'tvault init' first: %w", dir, err)
+		}
+		defer v.Close()
+		id, err := loadIdentity(filepath.Join(identitiesDir(), envIdentity+".key"))
+		if err != nil {
+			return nil, fmt.Errorf("load identity %q: %w", envIdentity, err)
+		}
+		project := resolveProject(v, projectName)
+		secrets, err := v.GetAllSecretsWithIdentity(project, id)
+		if err != nil {
+			return nil, fmt.Errorf("read project %q with identity %q: %w", project, envIdentity, err)
+		}
+		recordAudit(v, "secret.read", "project", project, map[string]any{"via": "identity:" + envIdentity})
+		return secrets, nil
+	}
+
+	v, err := openAndUnlockVault()
+	if err != nil {
+		return nil, err
+	}
+	defer v.Close()
+	project := resolveProject(v, projectName)
+	secrets, err := v.GetAllSecrets(project)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get secrets: %w", err)
+	}
+	return secrets, nil
 }
 
 func runEnv(_ *cobra.Command, _ []string) error {
-	v, err := openAndUnlockVault()
+	secrets, err := envSecrets()
 	if err != nil {
 		return err
 	}
-	defer v.Close()
-
-	project := resolveProject(v, projectName)
-
-	secrets, err := v.GetAllSecrets(project)
-	if err != nil {
-		return fmt.Errorf("failed to get secrets: %w", err)
-	}
-
 	if len(secrets) == 0 {
 		return nil
 	}

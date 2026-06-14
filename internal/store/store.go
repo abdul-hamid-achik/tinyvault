@@ -114,6 +114,13 @@ type ProjectStore interface {
 	// ProjectFilter narrows the result set.
 	// A zero-value ProjectFilter means "no filter".
 	ListProjectsFiltered(filter ProjectFilter) ([]*Project, error)
+
+	// RekeyProject atomically replaces a project's record AND rewrites all
+	// of its secret entries (verbatim, no version bump) in a single
+	// transaction. Used when revoking a recipient: the DEK is rotated and
+	// every value re-encrypted, which must be all-or-nothing so a failure
+	// can never leave secrets encrypted under a mix of old and new keys.
+	RekeyProject(project *Project, secrets map[string]*SecretEntry) error
 }
 
 // ProjectFilter narrows a ListProjects call.
@@ -248,6 +255,19 @@ type Project struct {
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 	DeletedAt    *time.Time `json:"deleted_at,omitempty"`
+
+	// RecipientWraps holds the project DEK additionally wrapped to one or
+	// more X25519 recipients (the asymmetric sharing layer). It is absent on
+	// projects that have never been shared (backward-compatible: old records
+	// deserialize to nil). The DEK is still wrapped under the vault KEK in
+	// EncryptedDEK for the local owner; these are extra copies for sharing.
+	RecipientWraps []DEKWrap `json:"recipient_wraps,omitempty"`
+}
+
+// DEKWrap is one project-DEK copy wrapped to a single X25519 recipient.
+type DEKWrap struct {
+	Recipient []byte `json:"recipient"` // X25519 public key (the recipient)
+	Stanza    []byte `json:"stanza"`    // crypto.WrapDEK output for that recipient
 }
 
 // SecretEntry represents an encrypted secret stored in the vault.

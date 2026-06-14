@@ -68,6 +68,7 @@ cmd/tvault/
     search.go                # tvault search (relational query, metadata only)
     diff.go                  # tvault diff <file> (key/value drift vs a .env; metadata-only by default)
     identity.go              # tvault identity new/list (X25519 keypairs for sharing — Spine A)
+    project_share.go         # tvault projects share/unshare/recipients (Spine A)
     json_helper.go           # writeJSON(): shared --json encoder
     docs.go                  # tvault docs (machine-readable feature manifest)
     projects.go / use.go     # tvault projects list/create / tvault use PROJECT
@@ -111,6 +112,8 @@ internal/
                              # GetAllSecrets, ListSecretMetadata
     query.go                 # Relational query layer (Search, CountSecrets,
                              # SearchProjects, ListAudit, SnapshotProjects)
+    sharing.go               # ShareProject/UnshareProject (DEK re-key on revoke),
+                             # GetAllSecretsWithIdentity (recipient read) — Spine A
     errors.go                # Sentinel errors (ErrLocked, ErrWrongPassphrase, etc.)
     vault_test.go            # Vault lifecycle tests
     query_test.go            # Relational query tests

@@ -263,6 +263,13 @@ func fullCatalog() docsCatalog {
 				Description: "Built on the Bubble Tea v2 / Lip Gloss v2 (charm.land) stack. Read-only by default; pass --rw to enable audited in-app edits (n new, e edit, d delete) that use the same encryption path as the CLI. Browse project and secret metadata while locked; unlock in-app with 'u' to reveal a value behind a key press ('r'), which re-masks on 'esc' / pane change / quit. Vim + arrow + mouse-wheel navigation, live key filter, light/dark theme auto-detected from the terminal background. Animations disable on --no-anim, $TVAULT_NO_ANIM, or over SSH.",
 			},
 			{
+				Name:        "secret-sharing",
+				Summary:     "Share/commit secrets to X25519 recipients without sharing the passphrase (age-style).",
+				Commands:    []string{"tvault identity new", "tvault projects share <recipient>", "tvault projects unshare <recipient>", "tvault env --identity <name>"},
+				SeeAlso:     []string{"tvault identity list", "tvault projects recipients"},
+				Description: "An identity is an X25519 keypair (tvault identity new) whose public 'recipient' (tvault1…) is safe to share/commit. `tvault projects share <recipient>` wraps the project's data key to that recipient; the holder of the matching private identity then reads the project with `tvault env --identity <name>` — no vault passphrase needed. `tvault projects unshare` truly revokes: it rotates the project key and re-encrypts every value, so a removed recipient loses access even from an old vault copy. The DEK wrapping is X25519 → HKDF-SHA256 → ChaCha20-Poly1305 (internal/crypto/recipient.go), with no new dependency.",
+			},
+			{
 				Name:        "diagnostics",
 				Summary:     "Read-only setup diagnostics + a typed config file.",
 				Commands:    []string{"tvault doctor", "tvault doctor --json"},

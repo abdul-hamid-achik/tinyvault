@@ -443,6 +443,10 @@ tvault diff <file>                # key drift vs a .env (--values compares value
 
 tvault identity new [name]        # generate an X25519 identity; print its tvault1… recipient
 tvault identity list              # list local identities + recipients
+tvault projects share <recipient>    # grant a recipient access to a project
+tvault projects unshare <recipient>  # revoke (rotates the key + re-encrypts)
+tvault projects recipients           # list a project's recipients
+tvault env --identity <name>      # read a shared project with an identity (no passphrase)
 
 tvault ci init --provider=github-actions
 tvault ci init --provider=gitlab
