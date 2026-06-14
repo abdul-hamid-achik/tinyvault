@@ -323,7 +323,9 @@ The MCP server is the most security-sensitive surface. The design rules:
 | `vault_search_secrets`        | no            | no             | no                 | `CanAccessProject` + `CanAccessSecret` |
 | `vault_list_secrets_by_prefix`| no            | no             | no                 | `CanAccessProject` + `CanAccessSecret` |
 | `vault_audit_log_since`       | no            | no             | no                 | `CanWrite` |
-| `vault_list_env_files` / `vault_preview_env_import` / `vault_import_env_files` | no | yes (last) | no | `CanWrite` for the import |
+| `vault_list_env_files`        | no            | no             | no                 | always allowed        |
+| `vault_preview_env_import`    | no            | no             | no                 | always allowed        |
+| `vault_import_env_files`      | no            | yes            | no                 | `CanWrite`            |
 
 The value-returning tools are deliberately few and each returns the value
 only when the agent has no alternative. `vault_get_secret` even includes a
