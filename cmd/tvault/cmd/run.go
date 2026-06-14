@@ -26,19 +26,22 @@ var runCmd = &cobra.Command{
 This is useful for running applications that need access to secrets
 without exposing them in shell history or scripts.
 
-A .env file (or comma-separated list) can be supplied with --env-file.
-The file's values are merged with the vault, with the vault taking
-precedence. Values containing ${tvault://project/key} placeholders are
-resolved against the vault at run time.
+A .env file can be supplied with --env-file. The file's values are
+merged with the vault, with the vault taking precedence. Values
+containing ${tvault://project/key} placeholders are resolved against
+the vault at run time.
+
+Use "--" to separate the tvault flags from the command's own flags:
+
+  tvault run --env-file .env -- npm start          # npm gets no flags
+  tvault run -- docker compose up --build         # compose gets flags
+  tvault run python manage.py runserver            # no flag conflict
 
 Examples:
-  tvault run npm start
-  tvault run python manage.py runserver
-  tvault run -- docker compose up
+  tvault run -- npm start
   tvault run --env-file .env -- npm start
   tvault run --env-file .env.production -- ./deploy.sh`,
-	DisableFlagParsing: false,
-	RunE:               runRun,
+	RunE: runRun,
 }
 
 func init() {
