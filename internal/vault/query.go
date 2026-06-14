@@ -1,10 +1,7 @@
 package vault
 
 import (
-	"fmt"
 	"time"
-
-	"github.com/google/uuid"
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/store"
 )
@@ -156,26 +153,6 @@ func (v *Vault) ListProjectNamesByPrefix(prefix string) ([]string, error) {
 	return v.SearchProjects(prefix, "", 0)
 }
 
-// ProjectByID is a low-level accessor used by sync to compute diffs
-// without going through name lookup. It returns ErrProjectNotFound if
-// the id is unknown.
-func (v *Vault) ProjectByID(id uuid.UUID) (*store.Project, error) {
-	p, err := v.store.GetProject(id)
-	if err != nil {
-		return nil, mapStoreError(err)
-	}
-	return p, nil
-}
-
-// ProjectCount returns the number of non-deleted projects.
-func (v *Vault) ProjectCount() int {
-	all, err := v.store.ListProjects()
-	if err != nil {
-		return 0
-	}
-	return len(all)
-}
-
 // ProjectSnapshot is a read-only summary of a project. Used by the
 // MCP layer to surface the same fields as a SQL projection.
 type ProjectSnapshot struct {
@@ -210,16 +187,4 @@ func (v *Vault) SnapshotProjects() ([]ProjectSnapshot, error) {
 		})
 	}
 	return out, nil
-}
-
-// errSearchEmpty is a sentinel returned when a Search query yields no
-// rows. Callers can errors.Is against it if they want a different code
-// path for "no results" vs "error".
-var errSearchEmpty = fmt.Errorf("no results")
-
-// IsEmptyResult reports whether err indicates an empty search result.
-// Reserved for future use; currently always returns false because
-// Search returns an empty slice on no results, not an error.
-func IsEmptyResult(err error) bool {
-	return err != nil && err.Error() == errSearchEmpty.Error()
 }
