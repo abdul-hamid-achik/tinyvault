@@ -19,9 +19,12 @@ import (
 // local identity. Both share the v2 format used by encrypt-env --recipient.
 
 var (
-	sealRecipients []string
-	sealKeys       []string
-	sealOut        string
+	sealRecipients   []string
+	sealKeys         []string
+	sealOut          string
+	sealFormat       string
+	sealK8sName      string
+	sealK8sNamespace string
 
 	openIn       string
 	openIdentity string
@@ -71,6 +74,10 @@ func init() {
 	sealCmd.Flags().StringArrayVar(&sealKeys, "key", nil,
 		"Secret key to include; repeatable. Default: all secrets in the project")
 	sealCmd.Flags().StringVarP(&sealOut, "out", "o", "", "Write the sealed blob here (default: stdout)")
+	sealCmd.Flags().StringVar(&sealFormat, "format", "raw",
+		"Output format: raw (a v2 blob) | k8s (a commit-safe SealedSecret manifest; render with `tvault k8s render`)")
+	sealCmd.Flags().StringVar(&sealK8sName, "name", "", "Kubernetes Secret name (required for --format k8s)")
+	sealCmd.Flags().StringVar(&sealK8sNamespace, "namespace", "default", "Kubernetes namespace (--format k8s)")
 
 	openCmd.Flags().StringVarP(&openIn, "in", "i", "", "Sealed input file (default: stdin)")
 	openCmd.Flags().StringVar(&openIdentity, "identity", "",
@@ -79,49 +86,86 @@ func init() {
 }
 
 func runSeal(_ *cobra.Command, _ []string) error {
-	recipients, source, err := resolveSealRecipients()
+	switch sealFormat {
+	case "raw", "k8s":
+	default:
+		return fmt.Errorf("unknown --format %q (valid: raw, k8s)", sealFormat)
+	}
+	if sealFormat == "k8s" && sealK8sName == "" {
+		return fmt.Errorf("--name is required for --format k8s")
+	}
+
+	sealed, recipients, count, err := produceSealedBlob()
 	if err != nil {
 		return err
 	}
+
+	if sealFormat == "k8s" {
+		manifest, merr := k8sSealedManifest(sealK8sName, sealK8sNamespace, recipients, sealed)
+		if merr != nil {
+			return merr
+		}
+		return writeSealOut(manifest, fmt.Sprintf("Sealed %d secret(s) into SealedSecret %q", count, sealK8sName))
+	}
+	return writeSealOut(sealed, fmt.Sprintf("Sealed %d secret(s) to %d recipient(s)", count, len(recipients)))
+}
+
+// produceSealedBlob reads the project, seals it to the resolved recipients, and
+// returns the v2 blob, the recipient strings, and the secret count. Shared by
+// `seal` (raw and k8s formats).
+func produceSealedBlob() (sealed []byte, recipientStrs []string, count int, err error) {
+	recipients, source, err := resolveSealRecipients()
+	if err != nil {
+		return nil, nil, 0, err
+	}
 	if len(recipients) == 0 {
-		return fmt.Errorf("no recipients: pass --recipient tvault1… or add them to .tvault-recipients")
+		return nil, nil, 0, fmt.Errorf("no recipients: pass --recipient tvault1… or add them to .tvault-recipients")
 	}
 
 	v, err := openAndUnlockVault()
 	if err != nil {
-		return err
+		return nil, nil, 0, err
 	}
 	defer v.Close()
 
 	project := resolveProject(v, projectName)
 	all, err := v.GetAllSecrets(project)
 	if err != nil {
-		return fmt.Errorf("read project %q: %w", project, err)
+		return nil, nil, 0, fmt.Errorf("read project %q: %w", project, err)
 	}
 	selected, err := selectSecretKeys(all, sealKeys)
 	if err != nil {
-		return err
+		return nil, nil, 0, err
 	}
 
-	sealed, err := encryptedenv.EncryptV2(recipients, dotenv.Marshal(selected))
+	sealed, err = encryptedenv.EncryptV2(recipients, dotenv.Marshal(selected))
 	if err != nil {
-		return fmt.Errorf("seal: %w", err)
+		return nil, nil, 0, fmt.Errorf("seal: %w", err)
 	}
 
 	recordAudit(v, "secret.seal", "project", project, map[string]any{
 		"recipients": len(recipients),
 		"keys":       len(selected),
 		"via":        source,
+		"format":     sealFormat,
 	})
 
+	strs := make([]string, len(recipients))
+	for i, r := range recipients {
+		strs[i] = crypto.EncodeRecipient(r)
+	}
+	return sealed, strs, len(selected), nil
+}
+
+func writeSealOut(data []byte, msg string) error {
 	if sealOut == "" {
-		_, werr := os.Stdout.Write(sealed)
+		_, werr := os.Stdout.Write(data)
 		return werr
 	}
-	if err := os.WriteFile(sealOut, sealed, 0o600); err != nil {
+	if err := os.WriteFile(sealOut, data, 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", sealOut, err)
 	}
-	fmt.Fprintf(os.Stderr, "Sealed %d secret(s) to %d recipient(s) → %s\n", len(selected), len(recipients), sealOut)
+	fmt.Fprintf(os.Stderr, "%s → %s\n", msg, sealOut)
 	return nil
 }
 
