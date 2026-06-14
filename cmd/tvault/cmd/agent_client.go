@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"strings"
 	"time"
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/agent"
@@ -30,6 +31,11 @@ func dialAgent() (*agent.Client, bool) {
 	c, err := agent.Dial(getVaultDir(), 3*time.Second)
 	if err != nil {
 		return nil, false
+	}
+	// A capability token (for an agent started with --require-token) travels in
+	// the environment; it is ignored by a default-mode agent.
+	if tok := strings.TrimSpace(os.Getenv("TVAULT_AGENT_TOKEN")); tok != "" {
+		c = c.WithToken(tok)
 	}
 	return c, true
 }

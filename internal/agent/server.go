@@ -52,12 +52,34 @@ func (a *agentState) handleConn(conn *net.UnixConn) {
 		writeResponse(conn, errResp(fmt.Sprintf("protocol version mismatch: client %d, server %d", req.V, ProtocolVersion)))
 		return
 	}
-	writeResponse(conn, a.dispatch(req, uid, pid))
+
+	// Capability-token gate: in --require-token mode every op needs a valid
+	// token (the operator stops the agent with a signal, not the socket).
+	var scope tokenScope
+	if a.requireToken {
+		s, ok := a.lookupToken(req.Token)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "tvault agent: denied %q from peer uid %d (token required or invalid)\n", req.Op, uid)
+			writeResponse(conn, errResp("token required or invalid"))
+			return
+		}
+		scope = s
+	}
+	writeResponse(conn, a.dispatch(req, uid, pid, scope))
 }
 
-func (a *agentState) dispatch(req Request, uid uint32, pid int) Response {
+func (a *agentState) dispatch(req Request, uid uint32, pid int, scope tokenScope) Response {
+	tokID := ""
+	if a.requireToken {
+		tokID = tokenID(req.Token)
+	}
 	switch req.Op {
 	case OpStop:
+		// Only an unrestricted token (or any peer in default mode) may stop the
+		// agent — a project-scoped delegate must not shut it down for everyone.
+		if a.requireToken && !scope.allows("") {
+			return errResp("only an unrestricted token may stop the agent")
+		}
 		a.triggerShutdown()
 		return Response{V: ProtocolVersion, OK: true}
 
@@ -71,52 +93,81 @@ func (a *agentState) dispatch(req Request, uid uint32, pid int) Response {
 		}}
 
 	case OpGet:
-		if req.Key == "" {
-			return errResp("get requires a key")
-		}
-		var val string
-		if err := a.withVault(func(v *vault.Vault) error {
-			project := resolveProject(v, req.Project)
-			s, e := v.GetSecret(project, req.Key)
-			if e != nil {
-				return e
-			}
-			val = s
-			auditRead(v, project, req.Key, uid, pid)
-			return nil
-		}); err != nil {
-			return errResp(err.Error())
-		}
-		return Response{V: ProtocolVersion, OK: true, Value: val}
+		return a.doGet(req, scope, uid, pid, tokID)
 
 	case OpGetAll:
-		var secrets map[string]string
-		var resolved string
-		if err := a.withVault(func(v *vault.Vault) error {
-			resolved = resolveProject(v, req.Project)
-			m, e := v.GetAllSecrets(resolved)
-			if e != nil {
-				return e
-			}
-			secrets = m
-			auditRead(v, resolved, "", uid, pid)
-			return nil
-		}); err != nil {
-			return errResp(err.Error())
-		}
-		return Response{V: ProtocolVersion, OK: true, Secrets: secrets, Project: resolved}
+		return a.doGetAll(req, scope, uid, pid, tokID)
 
 	default:
 		return errResp("unknown op: " + req.Op)
 	}
 }
 
+func (a *agentState) doGet(req Request, scope tokenScope, uid uint32, pid int, tokID string) Response {
+	if req.Key == "" {
+		return errResp("get requires a key")
+	}
+	var val string
+	if err := a.withVault(func(v *vault.Vault) error {
+		project := resolveProject(v, req.Project)
+		if !scope.allows(project) {
+			return errScope(project)
+		}
+		s, e := v.GetSecret(project, req.Key)
+		if e != nil {
+			return e
+		}
+		val = s
+		auditRead(v, project, req.Key, uid, pid, tokID)
+		return nil
+	}); err != nil {
+		return errResp(err.Error())
+	}
+	return Response{V: ProtocolVersion, OK: true, Value: val}
+}
+
+func (a *agentState) doGetAll(req Request, scope tokenScope, uid uint32, pid int, tokID string) Response {
+	var secrets map[string]string
+	var resolved string
+	if err := a.withVault(func(v *vault.Vault) error {
+		resolved = resolveProject(v, req.Project)
+		if !scope.allows(resolved) {
+			return errScope(resolved)
+		}
+		m, e := v.GetAllSecrets(resolved)
+		if e != nil {
+			return e
+		}
+		secrets = m
+		auditRead(v, resolved, "", uid, pid, tokID)
+		return nil
+	}); err != nil {
+		return errResp(err.Error())
+	}
+	return Response{V: ProtocolVersion, OK: true, Secrets: secrets, Project: resolved}
+}
+
+// allows reports whether the token scope permits reading the given project
+// (an empty scope project means "any project").
+func (s tokenScope) allows(project string) bool {
+	return s.project == "" || s.project == project
+}
+
+func errScope(project string) error {
+	return fmt.Errorf("token not in scope for project %q", project)
+}
+
 // auditRead records an agent-served read on the open vault. Best-effort: an
 // audit failure must never block the response (and never includes a value).
-func auditRead(v *vault.Vault, project, key string, uid uint32, pid int) {
+// tokID, when non-empty, is a hash prefix of the capability token (never the
+// token itself).
+func auditRead(v *vault.Vault, project, key string, uid uint32, pid int, tokID string) {
 	meta := map[string]any{"via": "agent", "project": project, "peer_uid": uid}
 	if pid > 0 {
 		meta["peer_pid"] = pid
+	}
+	if tokID != "" {
+		meta["token_id"] = tokID
 	}
 	//nolint:errcheck // audit is best-effort
 	v.AppendAudit(&store.AuditEntry{

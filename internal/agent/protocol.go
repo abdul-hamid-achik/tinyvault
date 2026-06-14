@@ -33,6 +33,13 @@ type Options struct {
 	Project string        // current project (for status display only)
 	Idle    time.Duration // 0 = never auto-lock
 	OnReady func(socket string, pid int)
+	// RequireToken, when true, denies any socket request that does not carry a
+	// valid capability token from TokenFile — a privilege-separation gate for a
+	// delegate the OS confines from the raw socket (a different uid / container
+	// / sandbox). It is NOT a control against a same-uid attacker, who can read
+	// the token or dial the socket directly. See the threat model in SPEC.md.
+	RequireToken bool
+	TokenFile    string // 0600 file of `token[:project]` lines (require-token mode)
 }
 
 // Request is one newline-delimited JSON request. One request → one response
@@ -42,6 +49,10 @@ type Request struct {
 	Op      string `json:"op"` // "get" | "getall" | "status" | "stop"
 	Project string `json:"project,omitempty"`
 	Key     string `json:"key,omitempty"`
+	// Token is an optional capability token (TVAULT_AGENT_TOKEN). It is ignored
+	// unless the agent runs with --require-token; the field is omitempty so a
+	// token-less client is byte-identical to before (no protocol bump needed).
+	Token string `json:"token,omitempty"`
 }
 
 // Response is the agent's reply. Value/Secrets are present only for get/getall.

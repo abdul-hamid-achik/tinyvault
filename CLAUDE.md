@@ -101,6 +101,14 @@ Security Scan, Build**. All four must be green.
 - CLI routing (`get`/`env`/`run`) tries the agent then falls back to a direct
   unlock; `--no-agent` / `TVAULT_NO_AGENT` force direct. `x/sys` is now a direct
   require for the peer-cred calls (was indirect — no new module).
+- **`--require-token` honesty:** capability tokens (`tokens_unix.go`) are a
+  privilege-separation gate for an **OS-confined** delegate only — they are
+  **not** a control against a same-uid process (it can read the token or dial
+  the socket). Keep the SPEC §5.5 threat-model note truthful. **Do not** build
+  the full broker (in-band mint, per-key allowlists, TTL) — a design panel ruled
+  it security theater; the recipient/identity model is the answer for real
+  delegation. Tokens are out-of-band (0600 file, SIGHUP reload), only their
+  SHA-256 is stored, and audit logs a hash prefix (`token_id`), never the token.
 
 ## The interactive browser (`tvault browse`)
 

@@ -787,6 +787,28 @@ passphrase prompt and the ~200 ms Argon2id derivation for daily use.
   — no value is interpolated into the hook text). **Windows** is unsupported
   (the command reports it clearly); use the direct CLI or `mcp-server`.
 
+- **Capability tokens (`--require-token`), and what they are NOT.** The agent's
+  default access control is the **same-uid** peer-credential check: *any*
+  same-uid process can read *any* secret via the socket. Capability tokens do
+  **not** change that and are **not** a defense against a malicious same-uid
+  process — it can read the token from `/proc`, the environment, or simply dial
+  the unprotected socket itself. `tvault agent start --require-token --token-file
+  <f>` is a **privilege-separation gate** that is load-bearing *only* for a
+  delegate the OS confines away from the raw socket (a different uid, a
+  container/namespace, a sandbox): with it on, the agent denies every request
+  that does not carry a valid token, and a `token[:project]` line scopes a token
+  to one project. Tokens are provisioned **out-of-band** in a 0600 file (SIGHUP
+  reloads it; no in-agent "mint" op exists, so there is no same-uid mint
+  primitive to abuse); only the token's SHA-256 is stored, and audit records a
+  hash prefix (`token_id`), never the token. The operator stops a require-token
+  agent with a signal (Ctrl-C / `SIGTERM`) or an unrestricted token. **For
+  untrusted/CI/container delegation, prefer a scoped *identity*** (`tvault
+  identity new` + `projects share`) — it is cryptographic, transport-agnostic,
+  and atomically revocable via DEK re-key, and needs no socket or agent. The
+  full token *broker* (in-band mint, per-key allowlists, TTL) is deliberately
+  **not** built: in the default mode it is security theater, and the recipient
+  model covers the real workflows better.
+
 ---
 
 ## 6. Comparison with adjacent tools
