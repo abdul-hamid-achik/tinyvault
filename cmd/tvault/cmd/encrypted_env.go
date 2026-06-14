@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -57,13 +58,15 @@ var envDecryptCmd = &cobra.Command{
   • Passphrase (v1): the vault must be unlocked, and the passphrase that
     was active when the file was created must still unlock it.
 
-  • Recipient (v2): pass --identity <name> to decrypt with a local
-    identity instead of the passphrase. No vault unlock is required.
+  • Recipient (v2): pass --identity <name>, or set TVAULT_IDENTITY_KEY
+    (a tvault-key1… string, e.g. in CI), to decrypt with a local identity
+    instead of the passphrase. No vault unlock is required.
 
 Examples:
   tvault decrypt-env --in .env.encrypted
   tvault decrypt-env --in .env.encrypted --out .env
   tvault decrypt-env --in .env.encrypted --identity ci --out .env
+  TVAULT_IDENTITY_KEY=tvault-key1… tvault decrypt-env --in .env.encrypted   # CI, no passphrase
   tvault decrypt-env --in config/.env.production.encrypted --out .env.production`,
 	RunE: runEnvDecrypt,
 }
@@ -145,19 +148,20 @@ func runEnvDecrypt(_ *cobra.Command, _ []string) error {
 	var plaintext []byte
 	switch {
 	case ver == 2 || envDecryptIdentity != "":
-		// v2: recipient-based. Decrypt with a local identity, no passphrase.
-		if envDecryptIdentity == "" {
-			return fmt.Errorf("this file is recipient-encrypted (v2); pass --identity <name> to decrypt it")
+		// v2: recipient-based. Decrypt with a local identity (file or
+		// TVAULT_IDENTITY_KEY) — no passphrase.
+		id, source, rerr := resolveIdentity(envDecryptIdentity)
+		if rerr != nil {
+			return rerr
 		}
-		keyPath, kerr := resolveIdentityFile(envDecryptIdentity)
-		if kerr != nil {
-			return kerr
+		if id == nil {
+			return fmt.Errorf("this file is recipient-encrypted (v2); pass --identity <name> or set %s to decrypt it", envIdentityKey)
 		}
-		id, ierr := loadIdentity(keyPath)
-		if ierr != nil {
-			return fmt.Errorf("load identity %q: %w", envDecryptIdentity, ierr)
-		}
+		warnEnvKeyUsed(os.Stderr, source, "decrypt-env")
 		plaintext, err = encryptedenv.DecryptV2(id, data)
+		if errors.Is(err, crypto.ErrNoMatchingRecipient) {
+			fmt.Fprintln(os.Stderr, "Tip: this identity is not a recipient of the file.")
+		}
 	default:
 		// v1: tied to the vault KEK; requires an unlocked vault.
 		v, verr := openAndUnlockVault()

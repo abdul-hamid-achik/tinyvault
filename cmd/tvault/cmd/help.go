@@ -216,10 +216,12 @@ func helpContent() HelpContent {
 				"--yes, -y       (delete/restore) skip confirmation prompt",
 			},
 			EnvVars: []string{
-				"TVAULT_PASSPHRASE   vault passphrase; skips the interactive prompt",
-				"TVAULT_DIR          vault directory; default ~/.tvault",
-				"TVAULT_PROJECT      default project; default 'default'",
-				"TVAULT_CONFIG       config file path; default ~/.tvault/config.yaml",
+				"TVAULT_PASSPHRASE     vault passphrase; skips the interactive prompt",
+				"TVAULT_IDENTITY_KEY   a private identity (tvault-key1…) for passphrase-free decrypt in CI/ssh; a local identity file takes precedence",
+				"TVAULT_IDENTITY       default identity name for git filters / recipient reads; default 'default'",
+				"TVAULT_DIR            vault directory; default ~/.tvault",
+				"TVAULT_PROJECT        default project; default 'default'",
+				"TVAULT_CONFIG         config file path; default ~/.tvault/config.yaml",
 			},
 			ExitCodes: []string{
 				"0   success",
@@ -369,6 +371,16 @@ func helpContent() HelpContent {
 					"After cloning, run `tvault git-filter install` to decrypt the working tree.",
 			},
 			{
+				Name: "Decrypt secrets in CI without the passphrase",
+				Commands: []string{
+					"tvault identity new ci",
+					"tvault identity export ci --force | gh secret set TVAULT_IDENTITY_KEY",
+					"tvault ci init --provider=github-actions --mode=identity --identity=ci",
+				},
+				Description: "CI holds a per-context identity (TVAULT_IDENTITY_KEY), not the master " +
+					"passphrase. decrypt-env / open / git-filter all use it automatically when no key file is present.",
+			},
+			{
 				Name:        "Audit log for the last hour",
 				Commands:    []string{"tvault audit log --since 2026-06-13T18:00:00Z --json"},
 				Description: "Find out which secret was read, when, and by which tool.",
@@ -450,6 +462,13 @@ func helpContent() HelpContent {
 				Solution: "Either (1) use 'tvault encrypt-env' to make a commit-safe .env.encrypted, " +
 					"or (2) replace the values with ${tvault://...} placeholders and use " +
 					"'tvault run --env-file .env' to resolve them at run time.",
+			},
+			{
+				Problem: "I set TVAULT_IDENTITY_KEY but tvault used a key file instead (or ignored it).",
+				Solution: "A local ~/.tvault/identities/<name>.key takes precedence over the env key " +
+					"(deterministic local dev) and tvault warns when it does — remove or rename the file " +
+					"to force the env key. If it was ignored entirely, the value was empty or malformed " +
+					"(the error never echoes the key); re-export it with 'tvault identity export <name> --force'.",
 			},
 			{
 				Problem: "'tvault rotate' didn't ask for confirmation.",

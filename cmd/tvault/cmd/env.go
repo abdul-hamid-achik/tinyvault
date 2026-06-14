@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -48,30 +49,33 @@ func init() {
 }
 
 // envSecrets returns the project's decrypted secrets, either via the
-// passphrase (default) or, with --identity, via a shared X25519 identity
-// (recipient read — no passphrase, no unlock).
+// passphrase (default) or, when an identity is explicitly requested (--identity
+// or the TVAULT_IDENTITY_KEY environment variable), via a shared X25519
+// identity (recipient read — no passphrase, no unlock).
 func envSecrets() (map[string]string, error) {
-	if envIdentity != "" {
+	// The recipient path is opt-in only: a stray ~/.tvault/identities/default.key
+	// must not silently divert a plain `tvault env` away from the passphrase.
+	if envIdentity != "" || strings.TrimSpace(os.Getenv(envIdentityKey)) != "" {
+		id, source, err := resolveIdentity(envIdentity)
+		if err != nil {
+			return nil, err
+		}
+		if id == nil {
+			return nil, fmt.Errorf("no identity available: pass --identity <name> or set %s", envIdentityKey)
+		}
 		dir := getVaultDir()
 		v, err := vault.Open(dir)
 		if err != nil {
 			return nil, fmt.Errorf("vault not found at %s, run 'tvault init' first: %w", dir, err)
 		}
 		defer v.Close()
-		keyPath, err := resolveIdentityFile(envIdentity)
-		if err != nil {
-			return nil, err
-		}
-		id, err := loadIdentity(keyPath)
-		if err != nil {
-			return nil, fmt.Errorf("load identity %q: %w", envIdentity, err)
-		}
+		warnEnvKeyUsed(os.Stderr, source, "env")
 		project := resolveProject(v, projectName)
 		secrets, err := v.GetAllSecretsWithIdentity(project, id)
 		if err != nil {
-			return nil, fmt.Errorf("read project %q with identity %q: %w", project, envIdentity, err)
+			return nil, fmt.Errorf("read project %q with identity: %w", project, err)
 		}
-		recordAudit(v, "secret.read", "project", project, map[string]any{"via": "identity:" + envIdentity})
+		recordAudit(v, "secret.read", "project", project, map[string]any{"via": "identity", "source": source})
 		return secrets, nil
 	}
 

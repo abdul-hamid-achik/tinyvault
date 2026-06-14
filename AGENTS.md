@@ -67,7 +67,7 @@ cmd/tvault/
     encrypted_env.go         # tvault encrypt-env / decrypt-env (.env.encrypted v1 KEK + v2 recipient)
     search.go                # tvault search (relational query, metadata only)
     diff.go                  # tvault diff <file> (key/value drift vs a .env; metadata-only by default)
-    identity.go              # tvault identity new/list (X25519 keypairs for sharing — Spine A)
+    identity.go              # tvault identity new/list/export + resolveIdentity (X25519, TVAULT_IDENTITY_KEY — Spine A)
     project_share.go         # tvault projects share/unshare/recipients (Spine A)
     gitfilter.go             # tvault git-filter install/track/status/checkout + clean/smudge (Spine A)
     json_helper.go           # writeJSON(): shared --json encoder
@@ -76,7 +76,7 @@ cmd/tvault/
     backup.go                # tvault backup <path> / tvault restore <path> (restore is a separate command)
     rotate.go                # tvault key rotate
     mcp_server.go            # tvault mcp-server (stdio MCP transport)
-    ci.go                    # tvault ci init (generate CI workflow files)
+    ci.go                    # tvault ci init --mode=passphrase|identity (generate CI workflow files)
     browse.go                # tvault browse (cobra wiring + TTY checks; calls browse pkg)
     doctor.go                # tvault doctor (read-only setup diagnostics; --json)
     audit_helper.go          # recordAudit(): CLI/TUI audit logging (MCP-vocab actions)
@@ -266,10 +266,12 @@ Before every commit:
 
 ## Environment Variables
 
-| Variable             | Description                                                                |
-|----------------------|----------------------------------------------------------------------------|
-| `TVAULT_PASSPHRASE`  | Vault passphrase (CI/CD, scripts, MCP server — skips interactive prompt).  |
-| `TVAULT_DIR`         | Vault directory (default: `~/.tvault`).                                    |
+| Variable               | Description                                                                |
+|------------------------|----------------------------------------------------------------------------|
+| `TVAULT_PASSPHRASE`    | Vault passphrase (CI/CD, scripts, MCP server — skips interactive prompt).  |
+| `TVAULT_IDENTITY_KEY`  | Private identity (`tvault-key1…`) for passphrase-free decrypt in CI/ssh/agents (`resolveIdentity`); a local key file takes precedence + warns. Never echoed in errors. |
+| `TVAULT_IDENTITY`      | Default identity name for git filters / recipient reads (default: `default`). |
+| `TVAULT_DIR`           | Vault directory (default: `~/.tvault`).                                    |
 
 ## Dependencies (go.mod)
 

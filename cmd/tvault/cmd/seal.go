@@ -135,13 +135,12 @@ func runOpen(_ *cobra.Command, _ []string) error {
 	if name == "" {
 		name = strings.TrimSpace(os.Getenv("TVAULT_IDENTITY"))
 	}
-	keyPath, err := resolveIdentityFile(name)
+	id, source, err := resolveIdentity(name)
 	if err != nil {
 		return err
 	}
-	id, err := loadIdentity(keyPath)
-	if err != nil {
-		return fmt.Errorf("load identity %q: %w", name, err)
+	if id == nil {
+		return fmt.Errorf("no identity available: pass --identity <name>, set TVAULT_IDENTITY, or set %s", envIdentityKey)
 	}
 
 	ver, err := encryptedenv.FileVersion(data)
@@ -151,6 +150,7 @@ func runOpen(_ *cobra.Command, _ []string) error {
 	if ver != 2 {
 		return fmt.Errorf("open handles recipient-sealed (v2) blobs; this is v%d — use `tvault decrypt-env` for passphrase files", ver)
 	}
+	warnEnvKeyUsed(os.Stderr, source, "open")
 	plaintext, err := encryptedenv.DecryptV2(id, data)
 	if err != nil {
 		return fmt.Errorf("open: %w", err)
@@ -160,10 +160,11 @@ func runOpen(_ *cobra.Command, _ []string) error {
 		_, werr := os.Stdout.Write(plaintext)
 		return werr
 	}
+	//nolint:gosec // --out is a user-chosen destination path (like cp's dest)
 	if err := os.WriteFile(openOut, plaintext, 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", openOut, err)
 	}
-	fmt.Fprintf(os.Stderr, "Opened with identity %q → %s\n", name, openOut)
+	fmt.Fprintf(os.Stderr, "Opened → %s\n", openOut)
 	return nil
 }
 

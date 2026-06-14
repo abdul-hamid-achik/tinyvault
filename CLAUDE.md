@@ -55,6 +55,13 @@ Security Scan, Build**. All four must be green.
 - Identities are passphrase-independent keypairs at
   `~/.tvault/identities/<name>.key` (0600). Public half = `tvault1…`
   (shareable/committable), private half = `tvault-key1…` (never commit).
+- **CI/ssh/agents** supply a per-context identity via `TVAULT_IDENTITY_KEY`
+  (a `tvault-key1…` string) — `resolveIdentity` (identity.go) is the single
+  resolver behind `open`/`decrypt-env`/`env --identity`/git filters. Precedence
+  is **file > env key** (with a stderr warning when a file overrides a set env
+  key), and the env-key value must **never** be echoed in an error. `tvault
+  identity export` prints the private key (TTY-guarded, `--force` off a tty);
+  `tvault ci init --mode=identity` scaffolds a passphrase-free workflow.
 - `git-filter` invariants worth preserving: the clean filter is **idempotent**
   (re-emits the staged blob when plaintext is unchanged, or `git status` is
   perpetually dirty), refuses to run with no recipients, passes already-encrypted
