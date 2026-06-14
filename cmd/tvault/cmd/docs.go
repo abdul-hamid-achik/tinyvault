@@ -327,6 +327,13 @@ func fullCatalog() docsCatalog {
 				Description: "`tvault doctor` checks the vault directory + permissions, vault validity, lock state, project/secret counts, the config and MCP-policy files, environment, and terminal — without unlocking. Exit code is non-zero if any check fails (warnings don't fail), so scripts can gate on it. Optional ~/.tvault/config.yaml supplies a `browse:` block (no_anim, single_pane, audit_limit) as defaults for the interactive browser; explicit flags win.",
 			},
 			{
+				Name:        "agent-and-hooks",
+				Summary:     "A local agent (unix) holds the vault unlocked so daily commands skip the prompt + Argon2id.",
+				Commands:    []string{"tvault agent start", "tvault agent status", "tvault agent stop", "tvault hook zsh", "tvault get DATABASE_URL --no-agent"},
+				SeeAlso:     []string{"tvault docs agent"},
+				Description: "`tvault agent start` (foreground; background it with & / nohup / systemd) unlocks the vault once and serves secret reads over a private 0600 unix socket in the 0700 vault dir, accepting only same-uid peers. get/env/run route through it automatically — no passphrase prompt, no ~200ms Argon2id — and fall back to a direct unlock when no agent is running (or with --no-agent / TVAULT_NO_AGENT). The agent caches only the KEK (not an open database), so direct access keeps working between requests; it auto-locks after an idle period and zeros the KEK on stop/idle/signal. `tvault hook <bash|zsh|fish|direnv>` prints a shell snippet (tvault_load) for loading a project's secrets via the agent. Unix only; on Windows the command reports it is unsupported.",
+			},
+			{
 				Name:        "secret-versioning",
 				Summary:     "Every overwrite archives the prior value; inspect history and roll back.",
 				Commands:    []string{"tvault history <key>", "tvault get <key> --version N", "tvault rollback <key> --to N"},
@@ -335,6 +342,12 @@ func fullCatalog() docsCatalog {
 			},
 		},
 		Topics: []docsTopic{
+			{
+				Slug:        "agent",
+				Title:       "tvault agent + hooks",
+				Description: "A local agent (unix only) unlocks the vault once and serves secret reads over a private 0600 unix socket (same-uid peers only), so get/env/run skip the passphrase prompt and the ~200ms Argon2id. It caches only the KEK and reopens the vault per request, so direct CLI access keeps working; it auto-locks when idle and zeros the KEK on stop/idle/signal. Run it in the foreground and background it yourself (& / nohup / systemd Type=simple / launchd). Bypass with --no-agent or TVAULT_NO_AGENT. `tvault hook <shell>` prints a tvault_load snippet for bash/zsh/fish/direnv.",
+				Example:     "  tvault agent start &\n  eval \"$(tvault hook zsh)\"\n  tvault_load              # loads current project, no prompt\n  tvault agent status\n  tvault agent stop",
+			},
 			{
 				Slug:        "versioning",
 				Title:       "Secret history & rollback",

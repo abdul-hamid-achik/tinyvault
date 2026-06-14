@@ -79,6 +79,11 @@ func envSecrets() (map[string]string, error) {
 		return secrets, nil
 	}
 
+	// Fast path: a running agent serves the project's secrets prompt-free.
+	if secrets, _, ok := agentAllSecrets(projectName); ok {
+		return secrets, nil
+	}
+
 	v, err := openAndUnlockVault()
 	if err != nil {
 		return nil, err

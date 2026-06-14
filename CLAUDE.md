@@ -84,6 +84,24 @@ Security Scan, Build**. All four must be green.
   atomically). `TestUnshareReEncryptsHistory` guards this — keep it passing.
   KEK rotation (`tvault key rotate`) doesn't touch values, so history is safe.
 
+## The local agent (`tvault agent`) — `internal/agent/`
+
+- Unix-only, opt-in daemon that holds the vault unlocked over a private 0600
+  unix socket so `get`/`env`/`run` skip the prompt + Argon2id. Build-tagged
+  (`*_unix.go` + `stub_other.go`); Windows gets `ErrUnsupportedPlatform`.
+- **Invariant — KEK-only, never an open DB.** bbolt is single-writer-process;
+  holding the database open would block every other `tvault`. The agent caches
+  only the KEK and reopens the vault per request (`vault.UnlockWithKEK`),
+  serialized by a mutex, so direct CLI access keeps working. Don't "optimize"
+  this into a held-open store.
+- **Security invariants worth preserving:** socket 0600 in the 0700 dir, tight
+  umask (no listen→chmod window), `flock` single-instance, mandatory peer-uid
+  check (fail-closed; per-OS `peercred_*.go`), read-only ops, and KEK zeroing on
+  **every** exit path (signal/idle/stop/panic). `agent start` never daemonizes.
+- CLI routing (`get`/`env`/`run`) tries the agent then falls back to a direct
+  unlock; `--no-agent` / `TVAULT_NO_AGENT` force direct. `x/sys` is now a direct
+  require for the peer-cred calls (was indirect — no new module).
+
 ## The interactive browser (`tvault browse`)
 
 - Lives in `cmd/tvault/cmd/browse/` — the **only** package that imports

@@ -100,6 +100,12 @@ internal/
     crypto.go                # AES-256-GCM encrypt/decrypt, Argon2id key derivation
     recipient.go             # X25519 recipient layer: WrapDEK/UnwrapDEK, Identity (Spine A)
     crypto_test.go           # Comprehensive crypto tests
+  agent/                     # local unlock-once agent (unix only — build-tagged)
+    protocol.go              # wire types + Options (no build tag)
+    agent.go / server.go     # listener, lifecycle, idle, per-request vault open
+    socket_unix.go           # socket perms, flock single-instance, path-length guard
+    peercred_{darwin,linux,other}.go  # SO_PEERCRED / LOCAL_PEERCRED (fail-closed)
+    client.go / stub_other.go # client + !unix stub (ErrUnsupportedPlatform)
   store/
     store.go                 # SQL-shaped tabular Store interface
                              # (MetaStore, ConfigStore, ProjectStore,
@@ -276,6 +282,7 @@ Before every commit:
 | Variable               | Description                                                                |
 |------------------------|----------------------------------------------------------------------------|
 | `TVAULT_PASSPHRASE`    | Vault passphrase (CI/CD, scripts, MCP server — skips interactive prompt).  |
+| `TVAULT_NO_AGENT`      | Bypass a running `tvault agent` and unlock the vault directly.             |
 | `TVAULT_IDENTITY_KEY`  | Private identity (`tvault-key1…`) for passphrase-free decrypt in CI/ssh/agents (`resolveIdentity`); a local key file takes precedence + warns. Never echoed in errors. |
 | `TVAULT_IDENTITY`      | Default identity name for git filters / recipient reads (default: `default`). |
 | `TVAULT_DIR`           | Vault directory (default: `~/.tvault`).                                    |
@@ -291,6 +298,7 @@ Before every commit:
 | `go.etcd.io/bbolt`                       | Encrypted vault storage (single file)    |
 | `golang.org/x/crypto`                    | Argon2id, HKDF (encrypted-env)           |
 | `golang.org/x/term`                      | Secure passphrase input (no echo)        |
+| `golang.org/x/sys`                       | unix peer-credential check for the agent (now a direct require; was indirect — no new module) |
 | `github.com/modelcontextprotocol/go-sdk` | MCP server SDK                           |
 | `go.yaml.in/yaml/v3`                     | YAML parsing (access policy)             |
 | `charm.land/bubbletea/v2`                | TUI runtime (`tvault browse` only)          |

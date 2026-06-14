@@ -66,15 +66,20 @@ func runRun(cmd *cobra.Command, args []string) error {
 	var vaultSecrets map[string]string
 	var project string
 	if !runEnvNoVault {
-		v, err := openAndUnlockVault()
-		if err != nil {
-			return err
-		}
-		project = resolveProject(v, projectName)
-		vaultSecrets, err = v.GetAllSecrets(project)
-		v.Close()
-		if err != nil {
-			return fmt.Errorf("failed to get secrets: %w", err)
+		// Fast path: a running agent serves the project's secrets prompt-free.
+		if secrets, resolved, ok := agentAllSecrets(projectName); ok {
+			vaultSecrets, project = secrets, resolved
+		} else {
+			v, err := openAndUnlockVault()
+			if err != nil {
+				return err
+			}
+			project = resolveProject(v, projectName)
+			vaultSecrets, err = v.GetAllSecrets(project)
+			v.Close()
+			if err != nil {
+				return fmt.Errorf("failed to get secrets: %w", err)
+			}
 		}
 	}
 
