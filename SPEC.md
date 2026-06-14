@@ -358,18 +358,18 @@ access_mode: read-write      # read-only | read-write | full
 allow_exec: false            # disable vault_run_with_secrets
 redact_output: true          # redact secret values from command output
 
-allow_projects:
+projects_allow:
   - "dev-*"
   - "staging"
 
-deny_projects:
+projects_deny:
   - "production"
 
-allow_secrets:
+secrets_allow:
   - "DATABASE_*"
   - "API_KEY"
 
-deny_secrets:
+secrets_deny:
   - "*_PASSWORD"
   - "MASTER_KEY"
 
@@ -435,7 +435,7 @@ tvault use <project>              # switch the current project
 tvault projects delete <name>     # soft-delete a project
 
 tvault backup <path>              # copy vault.db to path
-tvault backup --restore <path>    # replace vault.db from path
+tvault restore <path>             # replace vault.db from a backup
 tvault key rotate                 # re-encrypt every project DEK under a new KEK
 
 tvault ci init --provider=github-actions
@@ -593,7 +593,7 @@ animating, so an idle browser is free.
 
 **Dependency footprint.** The browser is the only thing that pulls in the
 `charm.land/*` v2 stack — `bubbletea/v2`, `lipgloss/v2`, `bubbles/v2`,
-and `glamour/v2` (for the help pane). It is opt-in via the `tui`
+and `glamour/v2` (for the help pane). It is opt-in via the `browse`
 subcommand; no other command imports those libraries. Adding the stack
 takes the binary from ~12 MB to ~24 MB uncompressed. No `harmonica` —
 animations are hand-rolled easing — and no `huh`, keeping the dependency
@@ -632,7 +632,7 @@ they are sketches of where the product could go.
 - **`tvault doctor`** — diagnose vault issues: wrong file permissions,
   passphrase correct but no projects, policy syntax errors, bbolt file
   integrity hints. (Small.)
-- **Shell completion for fish + nushell.** Currently bash/zsh/powershell
+- **Shell completion for nushell.** Currently bash/zsh/fish/powershell
   only. (Small.)
 - **`vault_secret_metadata` MCP tool** — return `created_at`, `updated_at`,
   `version` (which is already stored, just not exposed). (Small.)

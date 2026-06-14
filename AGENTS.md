@@ -56,19 +56,19 @@ cmd/tvault/
     init.go                  # tvault init
     unlock.go / lock.go      # tvault unlock / tvault lock
     status.go                # tvault status
-    get.go / set.go          # tvault get KEY / tvault set KEY VALUE (with --from .env)
+    get.go / set.go          # tvault get KEY / tvault set KEY VALUE (with --from-env / --from-file)
     list.go / delete.go      # tvault list / tvault delete KEY (list supports --prefix)
     run.go                   # tvault run -- CMD; --env-file + ${tvault://...} interpolation
     env.go                   # tvault env (export in shell/dotenv/json/yaml/k8s format)
     export.go                # tvault export (write secrets to file)
     import.go                # tvault import (read secrets from file)
-    import_interactive.go    # TUI picker for --interactive imports
+    import_interactive.go    # interactive (text-prompt) file picker for --interactive imports
     sync.go                  # tvault sync --direction pull|push|mirror
     encrypted_env.go         # tvault encrypt-env / decrypt-env (.env.encrypted)
     search.go                # tvault search (relational query, metadata only)
     docs.go                  # tvault docs (machine-readable feature manifest)
     projects.go / use.go     # tvault projects list/create / tvault use PROJECT
-    backup.go                # tvault backup / tvault backup --restore
+    backup.go                # tvault backup <path> / tvault restore <path> (restore is a separate command)
     rotate.go                # tvault key rotate
     mcp_server.go            # tvault mcp-server (stdio MCP transport)
     ci.go                    # tvault ci init (generate CI workflow files)
@@ -221,7 +221,7 @@ go build -o tvault ./cmd/tvault        # wrong (root is gitignored with /tvault)
 
 ## MCP Go SDK Notes
 
-Using `github.com/modelcontextprotocol/go-sdk` v1.2.0:
+Using `github.com/modelcontextprotocol/go-sdk` v1.4.1:
 
 - `jsonschema` struct tags are plain description strings: `jsonschema:"Project name"`
 - Tool registration: `mcp.AddTool[In, Out](server, tool, handler)`
@@ -264,7 +264,7 @@ Before every commit:
 | `go.yaml.in/yaml/v3`                     | YAML parsing (access policy)             |
 | `charm.land/bubbletea/v2`                | TUI runtime (`tvault browse` only)          |
 | `charm.land/lipgloss/v2`                 | TUI styling/layout (`tvault browse` only)   |
-| `charm.land/bubbles/v2`                  | TUI components: textinput, spinner, help, viewport, key, table |
+| `charm.land/bubbles/v2`                  | TUI components: textinput, spinner, help, viewport, key |
 | `charm.land/glamour/v2`                  | Markdown rendering for the in-app help pane |
 
 The browser is a `cmd/` subcommand, **not** an `internal/` package — it

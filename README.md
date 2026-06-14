@@ -217,18 +217,18 @@ access_mode: read-write    # read-only | read-write | full
 allow_exec: false          # disable vault_run_with_secrets
 redact_output: true        # redact secret values from command output
 
-allow_projects:
+projects_allow:
   - "dev-*"
   - "staging"
 
-deny_projects:
+projects_deny:
   - "production"
 
-allow_secrets:
+secrets_allow:
   - "DATABASE_*"
   - "API_KEY"
 
-deny_secrets:
+secrets_deny:
   - "*_PASSWORD"
   - "MASTER_KEY"
 ```
@@ -260,7 +260,7 @@ tvault key rotate
 tvault backup ~/.tvault-backup/vault.db
 
 # Restore from backup
-tvault backup --restore ~/.tvault-backup/vault.db
+tvault restore ~/.tvault-backup/vault.db
 ```
 
 ## Security
@@ -288,7 +288,7 @@ tvault (single binary)
     crypto/         # AES-256-GCM, Argon2id, key generation
     store/          # bbolt storage layer
     vault/          # High-level vault operations
-    mcp/            # MCP server (7 tools, access policy, redaction)
+    mcp/            # MCP server (18 tools, access policy, redaction)
     validation/     # Input validation
 ```
 

@@ -12,7 +12,7 @@ For detailed development standards, code organization, and security requirements
 2. Clone your fork
 3. Set up the development environment:
    ```bash
-   task setup
+   go mod download
    ```
 4. Create a feature branch:
    ```bash
@@ -21,15 +21,20 @@ For detailed development standards, code organization, and security requirements
 
 ## Before Submitting
 
-Run the full check suite:
+Run the full check suite (mirrors CI: Test, Lint, Security Scan, Build):
 ```bash
-task check
+go build ./...                 # builds successfully
+go test -race ./...            # all tests pass (race detector)
+golangci-lint run ./...        # 0 lint issues
+govulncheck ./...              # no new vulnerabilities in our code path
 ```
 
-This ensures:
-- Code passes linting (`task lint`)
-- All tests pass (`task test`)
-- Project builds successfully (`task build:all`)
+If you touch the interactive browser (`cmd/tvault/cmd/browse/`, the
+`tvault browse` TUI), also run its real-PTY smoke test with
+[glyphrun](https://github.com/abdul-hamid-achik/glyphrun):
+```bash
+glyph run specs/glyphrun/browse_reveal.yml --format md
+```
 
 ## Pull Request Process
 
