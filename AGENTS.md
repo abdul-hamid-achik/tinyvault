@@ -71,6 +71,7 @@ cmd/tvault/
     identity.go              # tvault identity new/list/export + resolveIdentity (X25519, TVAULT_IDENTITY_KEY — Spine A)
     project_share.go         # tvault projects share/unshare/recipients (Spine A)
     gitfilter.go             # tvault git-filter install/track/status/checkout + clean/smudge (Spine A)
+    k8s.go                   # tvault seal --format k8s + tvault k8s render (commit-safe SealedSecret — Spine A)
     json_helper.go           # writeJSON(): shared --json encoder
     docs.go                  # tvault docs (machine-readable feature manifest)
     projects.go / use.go     # tvault projects list/create / tvault use PROJECT

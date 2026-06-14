@@ -404,6 +404,16 @@ func helpContent() HelpContent {
 					"use --no-agent to bypass it.",
 			},
 			{
+				Name: "Commit-safe Kubernetes secrets (SealedSecret pattern)",
+				Commands: []string{
+					"tvault seal --format k8s --name app -p prod --recipient tvault1cluster… > sealed.yaml",
+					"git add sealed.yaml",
+					"tvault k8s render --in sealed.yaml --identity cluster | kubectl apply -f -",
+				},
+				Description: "Seal a project into a SealedSecret manifest (encryptedData is ciphertext — safe to commit); " +
+					"at deploy, render a real Secret with the cluster identity. No cluster controller needed.",
+			},
+			{
 				Name:        "Audit log for the last hour",
 				Commands:    []string{"tvault audit log --since 2026-06-13T18:00:00Z --json"},
 				Description: "Find out which secret was read, when, and by which tool.",

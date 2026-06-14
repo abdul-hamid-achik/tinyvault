@@ -485,6 +485,8 @@ tvault decrypt-env --in .env.enc --identity ci      # v2: open with an identity
 
 tvault seal --recipient tvault1…  # project secrets -> v2 blob (no plaintext on disk)
 tvault open --identity ci         # v2 blob -> dotenv (inverse of seal)
+tvault seal --format k8s --name app --recipient tvault1…   # commit-safe SealedSecret manifest
+tvault k8s render --in sealed.yaml --identity cluster      # -> real k8s Secret for kubectl apply
 
 tvault search --prefix STRIPE_    # relational query (metadata only, no decrypt)
 tvault search --project prod --name-like 'DB_*'

@@ -253,6 +253,22 @@ recipient and committing. Anyone without an identity sees only ciphertext
 stays quiet. `tvault git-filter status` shows config, recipients, and
 whether your identity is available. See `tvault docs committable-secrets`.
 
+**3. Kubernetes (commit-safe Secrets, SealedSecret-style)** — seal a project
+into a manifest you commit, then render a real `Secret` at deploy with the
+cluster's identity (no cluster controller required):
+
+```bash
+# author (has the cluster's public recipient):
+tvault seal --format k8s --name app-secrets -p prod --recipient tvault1cluster… > sealed.yaml
+git add sealed.yaml                       # encryptedData is ciphertext — safe to commit
+
+# deploy (holds the cluster identity, e.g. TVAULT_IDENTITY_KEY in an init container):
+tvault k8s render --in sealed.yaml --identity cluster | kubectl apply -f -
+```
+
+The rendered `Secret` is plaintext — pipe it to `kubectl`, never commit it.
+See `tvault docs k8s`.
+
 ## MCP Server (AI Agent Integration)
 
 TinyVault can serve as an MCP server over stdio, letting AI agents (Claude, etc.) securely access and manage secrets.
