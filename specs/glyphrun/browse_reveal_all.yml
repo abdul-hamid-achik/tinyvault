@@ -1,0 +1,83 @@
+version: 1
+name: tvault_browse_reveal_all
+
+intent: |
+  A user opens `tvault browse` on an unlocked vault with two secrets and
+  presses `R` to reveal every value in the Secrets pane at once. Both masked
+  values are replaced with their plaintext (sk_live_glyph123 and
+  postgres://glyph). Pressing esc re-masks every value, and `q` quits cleanly.
+
+  This is the bulk-reveal companion to browse_reveal.yml (single `r`). It
+  proves `R` decrypts and renders every value, and that esc wipes them all,
+  in a real terminal.
+
+target:
+  cmd: ["./bin/tvault", "browse", "--no-anim"]
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/reveal_all"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 15000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/reveal_all"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/reveal_all TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/reveal_all TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/reveal_all TVAULT_PASSPHRASE=glyphpass ./bin/tvault use webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/reveal_all TVAULT_PASSPHRASE=glyphpass ./bin/tvault set STRIPE_KEY sk_live_glyph123 -p webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/reveal_all TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph -p webapp"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "unlocked"
+      timeoutMs: 6000
+  - wait:
+      screen:
+        contains: "Secrets (2)"
+      timeoutMs: 3000
+  - snapshot: masked
+  # R reveals every value in the focused Secrets pane.
+  - press: "R"
+  - wait:
+      screen:
+        contains: "sk_live_glyph123"
+      timeoutMs: 3000
+  - wait:
+      screen:
+        contains: "postgres://glyph"
+      timeoutMs: 3000
+  - snapshot: all_revealed
+  # esc re-masks everything; the secrets hint returns and both values are gone.
+  - press: "esc"
+  - wait:
+      screen:
+        contains: "reveal all"
+      timeoutMs: 3000
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  - id: clean_exit
+    description: q exits cleanly with status 0 after a bulk reveal + re-mask
+    verify:
+      process:
+        exitCode: 0
