@@ -68,6 +68,22 @@ Security Scan, Build**. All four must be green.
   input through (no double-encrypt), and in **locked mode** (no identity) the
   smudge filter passes ciphertext through instead of failing checkout.
 
+## Versioned secrets & rollback
+
+- Prior values live in the `secret_versions` bbolt bucket, keyed
+  `projectID/key/%010d(version)` (current value stays in `secrets`). `SetSecret`
+  **archives the old entry before overwriting, in the same transaction** — keep
+  that all-or-nothing invariant. `DeleteSecret` purges a key's history.
+- Surfaces: `tvault history` / `tvault get --version N` / `tvault rollback --to N`
+  (CLI), `vault_secret_history` / `vault_rollback_secret` (MCP, **never return a
+  value**). Rollback is non-destructive — it re-stores an old version as a new
+  one; version numbers are monotonic, never reused.
+- **Invariant:** history is encrypted with the project DEK, so any DEK rotation
+  must re-encrypt it. `UnshareProject` feeds `ListSecretVersionEntries` through
+  the re-encrypt loop into `RekeyProject` (which writes current + history
+  atomically). `TestUnshareReEncryptsHistory` guards this — keep it passing.
+  KEK rotation (`tvault key rotate`) doesn't touch values, so history is safe.
+
 ## The interactive browser (`tvault browse`)
 
 - Lives in `cmd/tvault/cmd/browse/` — the **only** package that imports

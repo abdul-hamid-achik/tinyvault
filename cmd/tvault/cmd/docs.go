@@ -265,7 +265,7 @@ func fullCatalog() docsCatalog {
 			},
 			{
 				Name:        "mcp-server",
-				Summary:     "MCP server over stdio with 19 tools, 2 prompts, 3 resources.",
+				Summary:     "MCP server over stdio with 21 tools, 2 prompts, 3 resources.",
 				Commands:    []string{"tvault mcp-server"},
 				Description: "Agents can manage secrets without the values ever entering the model context: vault_run_with_secrets injects env vars, vault_export_env writes to disk and returns the path, vault_generate_secret returns only {stored: true}.",
 			},
@@ -326,8 +326,21 @@ func fullCatalog() docsCatalog {
 				Commands:    []string{"tvault doctor", "tvault doctor --json"},
 				Description: "`tvault doctor` checks the vault directory + permissions, vault validity, lock state, project/secret counts, the config and MCP-policy files, environment, and terminal — without unlocking. Exit code is non-zero if any check fails (warnings don't fail), so scripts can gate on it. Optional ~/.tvault/config.yaml supplies a `browse:` block (no_anim, single_pane, audit_limit) as defaults for the interactive browser; explicit flags win.",
 			},
+			{
+				Name:        "secret-versioning",
+				Summary:     "Every overwrite archives the prior value; inspect history and roll back.",
+				Commands:    []string{"tvault history <key>", "tvault get <key> --version N", "tvault rollback <key> --to N"},
+				SeeAlso:     []string{"tvault docs versioning"},
+				Description: "Each `set` archives the prior value as a version in the secret_versions bucket. `tvault history` lists every version (metadata only — no values, no unlock); `tvault get --version N` prints a past value; `tvault rollback --to N` restores an earlier version as a NEW version (non-destructive — the replaced value is itself archived, and version numbers are never reused). History is encrypted with the project DEK, so it survives passphrase rotation and recipient revocation (the DEK rotates and every version is re-encrypted). `tvault delete` purges a key's history. Over MCP, vault_secret_history and vault_rollback_secret expose the same — neither ever returns a value.",
+			},
 		},
 		Topics: []docsTopic{
+			{
+				Slug:        "versioning",
+				Title:       "Secret history & rollback",
+				Description: "Every overwrite of a secret archives the prior value as a version (the secret_versions bucket), so values are recoverable. `tvault history KEY` lists versions (metadata only, no unlock); `tvault get KEY --version N` prints a past value; `tvault rollback KEY --to N` restores an earlier version as a new version (non-destructive; numbers never reused). History is encrypted with the project key and survives passphrase rotation and recipient revocation. MCP: vault_secret_history (no values) and vault_rollback_secret (version numbers only).",
+				Example:     "  tvault set API_KEY v1 && tvault set API_KEY v2\n  tvault history API_KEY\n  tvault get API_KEY --version 1\n  tvault rollback API_KEY --to 1",
+			},
 			{
 				Slug:        "run",
 				Title:       "tvault run",
@@ -337,7 +350,7 @@ func fullCatalog() docsCatalog {
 			{
 				Slug:        "mcp",
 				Title:       "MCP server",
-				Description: "Starts a Model Context Protocol server on stdio. Add to your MCP host config with command=tvault args=[mcp-server] env={TVAULT_PASSPHRASE:...}. The server exposes 19 tools, 2 prompts, and 3 resources. The model never needs to see secret values: prefer vault_run_with_secrets and vault_export_env over vault_get_secret.",
+				Description: "Starts a Model Context Protocol server on stdio. Add to your MCP host config with command=tvault args=[mcp-server] env={TVAULT_PASSPHRASE:...}. The server exposes 21 tools, 2 prompts, and 3 resources. The model never needs to see secret values: prefer vault_run_with_secrets and vault_export_env over vault_get_secret. vault_secret_history and vault_rollback_secret manage version history without ever returning a value.",
 			},
 			{
 				Slug:        "interpolate",

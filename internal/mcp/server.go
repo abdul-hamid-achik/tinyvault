@@ -35,7 +35,9 @@ func NewVaultMCPServer(v *vault.Vault, policy *AccessPolicy) *VaultMCPServer {
 			Instructions: "TinyVault provides secure local secret management. " +
 				"Prefer vault_run_with_secrets over vault_get_secret to avoid exposing secret values. " +
 				"Use vault_search_secrets and vault_list_secrets_by_prefix to find keys by " +
-				"project, prefix, name pattern, or update time -- never iterate values.",
+				"project, prefix, name pattern, or update time -- never iterate values. " +
+				"Use vault_secret_history to view a secret's version metadata (no values) and " +
+				"vault_rollback_secret to restore an older version (creates a new version; never returns a value).",
 		},
 	)
 
@@ -48,6 +50,7 @@ func NewVaultMCPServer(v *vault.Vault, policy *AccessPolicy) *VaultMCPServer {
 	s.registerGenerateTools()
 	s.registerQueryTools()
 	s.registerSealTools()
+	s.registerVersionTools()
 	s.registerResources()
 	s.registerPrompts()
 

@@ -56,8 +56,9 @@ cmd/tvault/
     init.go                  # tvault init
     unlock.go / lock.go      # tvault unlock / tvault lock
     status.go                # tvault status
-    get.go / set.go          # tvault get KEY / tvault set KEY VALUE (with --from-env / --from-file)
-    list.go / delete.go      # tvault list / tvault delete KEY (list supports --prefix)
+    get.go / set.go          # tvault get KEY (--version N) / tvault set KEY VALUE (with --from-env / --from-file)
+    history.go / rollback.go # tvault history KEY / tvault rollback KEY --to N (secret version history)
+    list.go / delete.go      # tvault list / tvault delete KEY (list supports --prefix; delete purges history)
     run.go                   # tvault run -- CMD; --env-file + ${tvault://...} interpolation
     env.go                   # tvault env (export in shell/dotenv/json/yaml/k8s format)
     export.go                # tvault export (write secrets to file)
@@ -103,14 +104,20 @@ internal/
     store.go                 # SQL-shaped tabular Store interface
                              # (MetaStore, ConfigStore, ProjectStore,
                              #  SecretStore, AuditStore) and row types
-    bbolt.go                 # BoltStore: bbolt-backed implementation
+    bbolt.go                 # BoltStore: bbolt-backed impl; buckets incl.
+                             #  secrets (current) + secret_versions (history).
+                             #  GetSecretVersion / ListSecretVersions /
+                             #  ListSecretVersionEntries; RekeyProject re-keys
+                             #  current + history atomically.
     bbolt_test.go            # bbolt integration tests
+    version_test.go          # secret-version archive / rollback / purge tests
     query_test.go            # Relational query tests
   vault/
     vault.go                 # Create, Open, Unlock, Lock, RotatePassphrase, KEK()
     project.go               # CreateProject, ListProjects, SetCurrentProject
     secret.go                # SetSecret, GetSecret, ListSecrets, DeleteSecret,
-                             # GetAllSecrets, ListSecretMetadata
+                             # GetAllSecrets, ListSecretMetadata,
+                             # ListSecretVersions, GetSecretVersionValue, RollbackSecret
     query.go                 # Relational query layer (Search, CountSecrets,
                              # SearchProjects, ListAudit, SnapshotProjects)
     sharing.go               # ShareProject/UnshareProject (DEK re-key on revoke),

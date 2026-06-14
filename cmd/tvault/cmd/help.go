@@ -381,6 +381,17 @@ func helpContent() HelpContent {
 					"passphrase. decrypt-env / open / git-filter all use it automatically when no key file is present.",
 			},
 			{
+				Name: "Inspect and roll back a secret's history",
+				Commands: []string{
+					"tvault history DATABASE_URL",
+					"tvault get DATABASE_URL --version 2",
+					"tvault rollback DATABASE_URL --to 2",
+				},
+				Description: "Every overwrite archives the prior value. history lists versions (no values), " +
+					"get --version prints one, and rollback restores an earlier version as a new version " +
+					"(non-destructive). History survives key rotation.",
+			},
+			{
 				Name:        "Audit log for the last hour",
 				Commands:    []string{"tvault audit log --since 2026-06-13T18:00:00Z --json"},
 				Description: "Find out which secret was read, when, and by which tool.",

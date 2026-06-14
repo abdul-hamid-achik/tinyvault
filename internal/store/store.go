@@ -116,11 +116,13 @@ type ProjectStore interface {
 	ListProjectsFiltered(filter ProjectFilter) ([]*Project, error)
 
 	// RekeyProject atomically replaces a project's record AND rewrites all
-	// of its secret entries (verbatim, no version bump) in a single
-	// transaction. Used when revoking a recipient: the DEK is rotated and
-	// every value re-encrypted, which must be all-or-nothing so a failure
-	// can never leave secrets encrypted under a mix of old and new keys.
-	RekeyProject(project *Project, secrets map[string]*SecretEntry) error
+	// of its current secret entries plus its archived version history
+	// (verbatim, no version bump) in a single transaction. Used when revoking
+	// a recipient: the DEK is rotated and every value — current and historical
+	// — re-encrypted, which must be all-or-nothing so a failure can never
+	// leave secrets encrypted under a mix of old and new keys (and so a
+	// rollback to a pre-rotation version still decrypts).
+	RekeyProject(project *Project, secrets map[string]*SecretEntry, history []VersionedSecret) error
 }
 
 // ProjectFilter narrows a ListProjects call.
@@ -144,10 +146,26 @@ type SecretStore interface {
 	// exists, the version is auto-incremented (upsert semantics).
 	SetSecret(projectID uuid.UUID, key string, entry *SecretEntry) error
 
-	// GetSecret retrieves a single secret by project and key.
+	// GetSecret retrieves a single secret by project and key (current version).
 	GetSecret(projectID uuid.UUID, key string) (*SecretEntry, error)
 
-	// DeleteSecret removes a secret by project and key.
+	// GetSecretVersion retrieves a specific version of a secret: the current
+	// entry when version matches it, otherwise an archived version. Returns
+	// ErrSecretNotFound if neither the key nor that version exists.
+	GetSecretVersion(projectID uuid.UUID, key string, version int) (*SecretEntry, error)
+
+	// ListSecretVersions returns metadata for every version of a key (archived
+	// + current), ascending by version, WITHOUT decrypting. Returns
+	// ErrSecretNotFound if the key has neither a current nor an archived entry.
+	ListSecretVersions(projectID uuid.UUID, key string) ([]SecretVersion, error)
+
+	// ListSecretVersionEntries returns every ARCHIVED version (with ciphertext)
+	// in a project, for bulk re-encryption during a DEK rotation. The current
+	// entries come from ListSecrets; this returns only the history.
+	ListSecretVersionEntries(projectID uuid.UUID) ([]VersionedSecret, error)
+
+	// DeleteSecret removes a secret by project and key, purging all of its
+	// archived versions in the same transaction (a clean slate).
 	DeleteSecret(projectID uuid.UUID, key string) error
 
 	// ListSecretKeys returns just the secret key names for a project.
@@ -274,12 +292,31 @@ type DEKWrap struct {
 //
 // EncryptedValue is the AES-256-GCM ciphertext (nonce || ct || tag)
 // produced by the project's DEK. The Version field tracks the
-// number of times this row has been overwritten.
+// number of times this row has been overwritten. Prior versions are
+// archived (see SecretVersion / GetSecretVersion) so values can be
+// rolled back.
 type SecretEntry struct {
 	EncryptedValue []byte    `json:"encrypted_value"`
 	Version        int       `json:"version"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// SecretVersion is metadata-only history of one secret version. It carries
+// NO ciphertext and NO plaintext, so it is safe to return from listing APIs
+// without unlocking the vault.
+type SecretVersion struct {
+	Version   int       `json:"version"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// VersionedSecret carries an archived secret entry WITH its ciphertext,
+// tagged with the secret key. It is used for bulk re-encryption of history
+// during a DEK rotation. Entry.Version identifies the archived version.
+type VersionedSecret struct {
+	Key   string
+	Entry *SecretEntry
 }
 
 // AuditEntry represents a local audit log entry.

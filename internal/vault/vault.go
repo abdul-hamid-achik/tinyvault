@@ -250,6 +250,10 @@ func (v *Vault) RotatePassphrase(oldPassphrase, newPassphrase string) error {
 		return fmt.Errorf("list projects: %w", err)
 	}
 
+	// Only the per-project DEK wrapping changes here. Secret values — current
+	// AND archived version history (the secret_versions bucket) — are
+	// encrypted with the DEK, not the KEK, so they are untouched and stay
+	// readable (and rollback-able) after a passphrase rotation.
 	for _, p := range projects {
 		// Decrypt DEK with old KEK.
 		var dek []byte
