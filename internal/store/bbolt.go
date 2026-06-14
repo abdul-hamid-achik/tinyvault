@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,12 +25,13 @@ var (
 
 // Bucket names used in the bbolt database.
 var (
-	bucketMeta         = []byte("_meta")
-	bucketConfig       = []byte("_config")
-	bucketProjects     = []byte("projects")
-	bucketSecrets      = []byte("secrets")
-	bucketProjectNames = []byte("project_names")
-	bucketAudit        = []byte("audit")
+	bucketMeta           = []byte("_meta")
+	bucketConfig         = []byte("_config")
+	bucketProjects       = []byte("projects")
+	bucketSecrets        = []byte("secrets")
+	bucketSecretVersions = []byte("secret_versions")
+	bucketProjectNames   = []byte("project_names")
+	bucketAudit          = []byte("audit")
 )
 
 // BoltStore is the bbolt-backed implementation of Store.
@@ -61,6 +63,7 @@ func NewBoltStore(path string) (*BoltStore, error) {
 			bucketConfig,
 			bucketProjects,
 			bucketSecrets,
+			bucketSecretVersions,
 			bucketProjectNames,
 			bucketAudit,
 		} {
@@ -295,7 +298,7 @@ func (s *BoltStore) UpdateProject(project *Project) error {
 // has already rotated the DEK and re-encrypted every value; this persists
 // the result all-or-nothing. Entries are written exactly as given (no
 // version increment) since the plaintext values are unchanged.
-func (s *BoltStore) RekeyProject(project *Project, secrets map[string]*SecretEntry) error {
+func (s *BoltStore) RekeyProject(project *Project, secrets map[string]*SecretEntry, history []VersionedSecret) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		projects := tx.Bucket(bucketProjects)
 		idKey := []byte(project.ID.String())
@@ -309,19 +312,39 @@ func (s *BoltStore) RekeyProject(project *Project, secrets map[string]*SecretEnt
 		if err := projects.Put(idKey, pdata); err != nil {
 			return err
 		}
-
-		secretsBucket := tx.Bucket(bucketSecrets)
-		for key, entry := range secrets {
-			sdata, err := json.Marshal(entry)
-			if err != nil {
-				return fmt.Errorf("marshal secret %s: %w", key, err)
-			}
-			if err := secretsBucket.Put(secretKey(project.ID, key), sdata); err != nil {
-				return err
-			}
+		if err := putCurrentSecrets(tx.Bucket(bucketSecrets), project.ID, secrets); err != nil {
+			return err
 		}
-		return nil
+		// Rewrite the re-encrypted archived versions too, so a rollback to a
+		// pre-rotation version still decrypts under the new DEK.
+		return putVersionedSecrets(tx.Bucket(bucketSecretVersions), project.ID, history)
 	})
+}
+
+func putCurrentSecrets(b *bolt.Bucket, projectID uuid.UUID, secrets map[string]*SecretEntry) error {
+	for key, entry := range secrets {
+		data, err := json.Marshal(entry)
+		if err != nil {
+			return fmt.Errorf("marshal secret %s: %w", key, err)
+		}
+		if err := b.Put(secretKey(projectID, key), data); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func putVersionedSecrets(b *bolt.Bucket, projectID uuid.UUID, history []VersionedSecret) error {
+	for _, h := range history {
+		data, err := json.Marshal(h.Entry)
+		if err != nil {
+			return fmt.Errorf("marshal history %s v%d: %w", h.Key, h.Entry.Version, err)
+		}
+		if err := b.Put(secretVersionKey(projectID, h.Key, h.Entry.Version), data); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *BoltStore) DeleteProject(id uuid.UUID) error {
@@ -366,6 +389,25 @@ func secretPrefix(projectID uuid.UUID) string {
 	return projectID.String() + "/"
 }
 
+// secretVersionKey is the bbolt key for an ARCHIVED secret version in
+// bucketSecretVersions: projectID + "/" + key + "/" + %010d(version).
+//
+// Secret keys are validated by validation.SecretKey (regex
+// ^[a-zA-Z_][a-zA-Z0-9_]*$) and can never contain "/", so the layout is
+// unambiguous against the current-secret key (projectID + "/" + key). The "/"
+// delimiter between key and version is what isolates one key's versions on a
+// prefix scan: scanning "<pid>/A/" matches "<pid>/A/0000000001" but NOT
+// "<pid>/AB/0000000001" (the byte after "A" is "/", not "B"). %010d zero-pads
+// so versions sort lexicographically the same as numerically (up to ~10^10
+// versions per key — decades of daily edits).
+func secretVersionKey(projectID uuid.UUID, key string, version int) []byte {
+	return fmt.Appendf(nil, "%s/%s/%010d", projectID.String(), key, version)
+}
+
+func secretVersionPrefix(projectID uuid.UUID, key string) []byte {
+	return []byte(projectID.String() + "/" + key + "/")
+}
+
 func (s *BoltStore) SetSecret(projectID uuid.UUID, key string, entry *SecretEntry) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(bucketSecrets)
@@ -376,8 +418,17 @@ func (s *BoltStore) SetSecret(projectID uuid.UUID, key string, entry *SecretEntr
 			if err := json.Unmarshal(existing, &old); err != nil {
 				return fmt.Errorf("unmarshal existing secret: %w", err)
 			}
+			// Archive the OLD entry verbatim BEFORE overwriting. Same tx =>
+			// all-or-nothing: the prior ciphertext can never be lost mid-write.
+			// Reuse the raw stored bytes (no re-marshal).
+			if err := tx.Bucket(bucketSecretVersions).Put(
+				secretVersionKey(projectID, key, old.Version), existing); err != nil {
+				return err
+			}
 			entry.Version = old.Version + 1
 			entry.CreatedAt = old.CreatedAt
+		} else {
+			entry.Version = 1 // new key: the store is authoritative about v1
 		}
 
 		data, err := json.Marshal(entry)
@@ -386,6 +437,101 @@ func (s *BoltStore) SetSecret(projectID uuid.UUID, key string, entry *SecretEntr
 		}
 		return bucket.Put(compositeKey, data)
 	})
+}
+
+// GetSecretVersion returns a specific version of a secret: the current entry
+// when version matches it, otherwise an archived version.
+func (s *BoltStore) GetSecretVersion(projectID uuid.UUID, key string, version int) (*SecretEntry, error) {
+	var entry SecretEntry
+	err := s.db.View(func(tx *bolt.Tx) error {
+		if cur := tx.Bucket(bucketSecrets).Get(secretKey(projectID, key)); cur != nil {
+			var c SecretEntry
+			if uerr := json.Unmarshal(cur, &c); uerr != nil {
+				return fmt.Errorf("unmarshal current secret: %w", uerr)
+			}
+			if c.Version == version {
+				entry = c
+				return nil
+			}
+		}
+		v := tx.Bucket(bucketSecretVersions).Get(secretVersionKey(projectID, key, version))
+		if v == nil {
+			return ErrSecretNotFound
+		}
+		if uerr := json.Unmarshal(v, &entry); uerr != nil {
+			return fmt.Errorf("corrupt version %d for %s/%s: %w", version, projectID, key, uerr)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &entry, nil
+}
+
+// ListSecretVersions returns metadata for every version of a key (archived +
+// current), ascending by version, without decrypting any value.
+func (s *BoltStore) ListSecretVersions(projectID uuid.UUID, key string) ([]SecretVersion, error) {
+	var out []SecretVersion
+	err := s.db.View(func(tx *bolt.Tx) error {
+		prefix := secretVersionPrefix(projectID, key)
+		c := tx.Bucket(bucketSecretVersions).Cursor()
+		for k, v := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = c.Next() {
+			var e SecretEntry
+			if uerr := json.Unmarshal(v, &e); uerr != nil {
+				return fmt.Errorf("corrupt version for %s/%s: %w", projectID, key, uerr)
+			}
+			out = append(out, SecretVersion{Version: e.Version, CreatedAt: e.CreatedAt, UpdatedAt: e.UpdatedAt})
+		}
+		if cur := tx.Bucket(bucketSecrets).Get(secretKey(projectID, key)); cur != nil {
+			var e SecretEntry
+			if uerr := json.Unmarshal(cur, &e); uerr != nil {
+				return fmt.Errorf("unmarshal current secret: %w", uerr)
+			}
+			out = append(out, SecretVersion{Version: e.Version, CreatedAt: e.CreatedAt, UpdatedAt: e.UpdatedAt})
+		}
+		if len(out) == 0 {
+			return ErrSecretNotFound
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Version < out[j].Version })
+	return out, nil
+}
+
+// ListSecretVersionEntries returns every archived version (with ciphertext) in
+// a project, for bulk re-encryption on a DEK rotation. Current entries come
+// from ListSecrets; this returns only the history.
+func (s *BoltStore) ListSecretVersionEntries(projectID uuid.UUID) ([]VersionedSecret, error) {
+	var out []VersionedSecret
+	err := s.db.View(func(tx *bolt.Tx) error {
+		prefix := []byte(secretPrefix(projectID))
+		c := tx.Bucket(bucketSecretVersions).Cursor()
+		for k, v := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = c.Next() {
+			// k = <pid>/<key>/<version>; recover <key> between the pid prefix
+			// and the trailing /<version>.
+			rest := string(k[len(prefix):])
+			slash := strings.LastIndex(rest, "/")
+			if slash < 0 {
+				continue
+			}
+			secretName := rest[:slash]
+			var e SecretEntry
+			if uerr := json.Unmarshal(v, &e); uerr != nil {
+				return fmt.Errorf("corrupt version %s: %w", k, uerr)
+			}
+			entry := e
+			out = append(out, VersionedSecret{Key: secretName, Entry: &entry})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (s *BoltStore) GetSecret(projectID uuid.UUID, key string) (*SecretEntry, error) {
@@ -410,7 +556,26 @@ func (s *BoltStore) DeleteSecret(projectID uuid.UUID, key string) error {
 		if bucket.Get(compositeKey) == nil {
 			return ErrSecretNotFound
 		}
-		return bucket.Delete(compositeKey)
+		if err := bucket.Delete(compositeKey); err != nil {
+			return err
+		}
+		// Purge all archived versions in the same tx (clean slate). Collect
+		// keys first, then delete — bbolt forbids mutating during iteration.
+		vb := tx.Bucket(bucketSecretVersions)
+		prefix := secretVersionPrefix(projectID, key)
+		c := vb.Cursor()
+		var toDelete [][]byte
+		for k, _ := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, _ = c.Next() {
+			kc := make([]byte, len(k))
+			copy(kc, k)
+			toDelete = append(toDelete, kc)
+		}
+		for _, k := range toDelete {
+			if err := vb.Delete(k); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 

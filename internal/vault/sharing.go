@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/abdul-hamid-achik/tinyvault/internal/crypto"
 	"github.com/abdul-hamid-achik/tinyvault/internal/store"
 )
@@ -80,12 +82,6 @@ func (v *Vault) UnshareProject(name string, recipientPub []byte) error {
 	if err != nil {
 		return err
 	}
-	entries, err := v.store.ListSecrets(project.ID)
-	if err != nil {
-		crypto.ZeroBytes(oldDEK)
-		return mapStoreError(err)
-	}
-
 	newDEK, err := crypto.GenerateKey()
 	if err != nil {
 		crypto.ZeroBytes(oldDEK)
@@ -93,23 +89,18 @@ func (v *Vault) UnshareProject(name string, recipientPub []byte) error {
 	}
 	defer crypto.ZeroBytes(newDEK)
 
-	// Re-encrypt every value: old DEK -> new DEK. Version/timestamps are
-	// preserved (the plaintext is unchanged; only the wrapping key rotates).
-	reEncrypted := make(map[string]*store.SecretEntry, len(entries))
-	for key, e := range entries {
-		pt, derr := crypto.Decrypt(oldDEK, e.EncryptedValue)
-		if derr != nil {
-			crypto.ZeroBytes(oldDEK)
-			return fmt.Errorf("rekey: decrypt %s: %w", key, derr)
-		}
-		ct, eerr := crypto.Encrypt(newDEK, pt)
-		crypto.ZeroBytes(pt)
-		if eerr != nil {
-			crypto.ZeroBytes(oldDEK)
-			return fmt.Errorf("rekey: re-encrypt %s: %w", key, eerr)
-		}
-		e.EncryptedValue = ct
-		reEncrypted[key] = e
+	// Re-encrypt every value (old DEK -> new DEK), then the archived version
+	// history too — or a rollback to a pre-revocation version would be
+	// undecryptable under the rotated DEK. Version/timestamps are preserved.
+	reEncrypted, err := v.reEncryptCurrentSecrets(project.ID, oldDEK, newDEK)
+	if err != nil {
+		crypto.ZeroBytes(oldDEK)
+		return err
+	}
+	reEncHistory, err := v.reEncryptHistory(project.ID, oldDEK, newDEK)
+	if err != nil {
+		crypto.ZeroBytes(oldDEK)
+		return err
 	}
 	crypto.ZeroBytes(oldDEK)
 
@@ -131,7 +122,56 @@ func (v *Vault) UnshareProject(name string, recipientPub []byte) error {
 	project.EncryptedDEK = newEncDEK
 	project.RecipientWraps = rewrapped
 	project.UpdatedAt = time.Now().UTC()
-	return mapStoreError(v.store.RekeyProject(project, reEncrypted))
+	return mapStoreError(v.store.RekeyProject(project, reEncrypted, reEncHistory))
+}
+
+// reEncryptCurrentSecrets decrypts every current secret with oldDEK and
+// re-encrypts it with newDEK, returning the rewritten map for RekeyProject.
+func (v *Vault) reEncryptCurrentSecrets(projectID uuid.UUID, oldDEK, newDEK []byte) (map[string]*store.SecretEntry, error) {
+	entries, err := v.store.ListSecrets(projectID)
+	if err != nil {
+		return nil, mapStoreError(err)
+	}
+	out := make(map[string]*store.SecretEntry, len(entries))
+	for key, e := range entries {
+		pt, derr := crypto.Decrypt(oldDEK, e.EncryptedValue)
+		if derr != nil {
+			return nil, fmt.Errorf("rekey: decrypt %s: %w", key, derr)
+		}
+		ct, eerr := crypto.Encrypt(newDEK, pt)
+		crypto.ZeroBytes(pt)
+		if eerr != nil {
+			return nil, fmt.Errorf("rekey: re-encrypt %s: %w", key, eerr)
+		}
+		e.EncryptedValue = ct
+		out[key] = e
+	}
+	return out, nil
+}
+
+// reEncryptHistory decrypts every archived secret version with oldDEK and
+// re-encrypts it with newDEK, returning the rewritten history for RekeyProject.
+// It maps store errors but otherwise leaves DEK lifecycle to the caller.
+func (v *Vault) reEncryptHistory(projectID uuid.UUID, oldDEK, newDEK []byte) ([]store.VersionedSecret, error) {
+	entries, err := v.store.ListSecretVersionEntries(projectID)
+	if err != nil {
+		return nil, mapStoreError(err)
+	}
+	out := make([]store.VersionedSecret, 0, len(entries))
+	for _, h := range entries {
+		pt, derr := crypto.Decrypt(oldDEK, h.Entry.EncryptedValue)
+		if derr != nil {
+			return nil, fmt.Errorf("rekey history: decrypt %s v%d: %w", h.Key, h.Entry.Version, derr)
+		}
+		ct, eerr := crypto.Encrypt(newDEK, pt)
+		crypto.ZeroBytes(pt)
+		if eerr != nil {
+			return nil, fmt.Errorf("rekey history: re-encrypt %s v%d: %w", h.Key, h.Entry.Version, eerr)
+		}
+		h.Entry.EncryptedValue = ct
+		out = append(out, h)
+	}
+	return out, nil
 }
 
 // ProjectRecipients returns the X25519 public keys a project is shared with.

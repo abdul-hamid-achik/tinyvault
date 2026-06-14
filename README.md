@@ -14,10 +14,11 @@ TinyVault is a single-binary CLI tool and [MCP server](https://modelcontextproto
 - **AES-256-GCM Encryption** -- Two-tier key hierarchy with per-project data encryption keys
 - **Argon2id Key Derivation** -- Memory-hard passphrase hashing resistant to GPU/ASIC attacks
 - **Single Binary** -- One `tvault` binary for CLI use and MCP server mode
-- **MCP Server** -- 19 tools: AI agents can manage secrets via the Model Context Protocol (stdio) without the values ever entering the model context
+- **MCP Server** -- 21 tools: AI agents can manage secrets via the Model Context Protocol (stdio) without the values ever entering the model context
 - **Multi-Project** -- Organize secrets into projects with independent encryption keys
 - **.env Ecosystem** -- Safe dotenv parser (no shell expansion), `tvault://` placeholder interpolation, two-way sync (pull/push/mirror), and `.env.encrypted` files (Rails credentials pattern, safe to commit)
 - **Share & commit secrets** -- X25519 recipients (age-style): share a project without the passphrase, commit self-decrypting secrets via `git-filter` (transparent clean/smudge) or v2 `.env.encrypted`, and seal for recipients over MCP. Revocation rotates the key and re-encrypts.
+- **Versioned secrets** -- every overwrite archives the prior value; `tvault history`, `tvault get --version N`, and `tvault rollback --to N` (also over MCP) let you inspect and restore past values. History survives key rotation.
 - **Relational Search** -- `tvault search` and `vault_search_secrets` for prefix, name glob, time-range, version, and cross-project queries
 - **Interactive Browser** -- `tvault browse`: a full-screen terminal UI (Bubble Tea v2) to browse status, projects, secrets, and audit — with a live filter and reveal-on-demand (`r` shows a value, `esc` re-masks). Read-only by default; `--rw` enables audited in-app new/edit/delete
 - **Output Redaction** -- MCP server automatically redacts secret values from command output
@@ -144,6 +145,24 @@ tvault use default
 tvault projects list
 ```
 
+## Secret history & rollback
+
+Every time you overwrite a secret, the prior value is archived as a version —
+so a fat-fingered `set` or a bad rotation is always recoverable:
+
+```bash
+tvault set API_KEY v1 && tvault set API_KEY v2 && tvault set API_KEY v3
+tvault history API_KEY            # v1, v2, v3 (metadata only — no values, no unlock)
+tvault get API_KEY --version 1    # print a specific past value
+tvault rollback API_KEY --to 1    # restore v1 as a new v4 (non-destructive)
+```
+
+Rollback is non-destructive: the value it replaces is itself archived, and
+version numbers are never reused. History is encrypted with the project key, so
+it survives passphrase rotation and recipient revocation (the key rotates and
+every version is re-encrypted). Agents get the same via the `vault_secret_history`
+and `vault_rollback_secret` MCP tools — neither ever returns a value.
+
 ## Sharing secrets (without sharing the passphrase)
 
 Share a project with a teammate, a CI runner, or an agent using **X25519
@@ -256,6 +275,8 @@ Add to `.claude/settings.local.json`:
 | `vault_audit_log` | Recent audit entries (newest first) |
 | `vault_audit_log_since` | Time-range + action-filtered audit log |
 | `vault_seal_for_recipients` | Seal secrets to X25519 recipients (returns ciphertext only; openable with `decrypt-env --identity`) |
+| `vault_secret_history` | List a secret's version history (metadata only, never values) |
+| `vault_rollback_secret` | Restore an earlier version as a new version (returns version numbers only) |
 
 The recommended pattern for an agent is to discover the surface once via
 `tvault docs features`, then use the relational tools
@@ -387,7 +408,7 @@ tvault (single binary)
     crypto/         # AES-256-GCM, Argon2id, key generation
     store/          # bbolt storage layer
     vault/          # High-level vault operations
-    mcp/            # MCP server (19 tools, access policy, redaction)
+    mcp/            # MCP server (21 tools, access policy, redaction)
     validation/     # Input validation
 ```
 

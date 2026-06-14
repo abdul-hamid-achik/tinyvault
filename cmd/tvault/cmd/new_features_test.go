@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -278,16 +279,21 @@ func TestRunDocsFeaturesIsValidJSON(t *testing.T) {
 	os.Stdout = w
 	defer func() { os.Stdout = oldStdout }()
 
+	// Drain concurrently: the full catalog can exceed the pipe buffer.
+	done := make(chan []byte, 1)
+	go func() {
+		b, _ := io.ReadAll(r)
+		done <- b
+	}()
 	if err := runDocs(nil, nil); err != nil {
 		t.Fatalf("runDocs: %v", err)
 	}
 	_ = w.Close()
+	out := <-done
 
-	buf := make([]byte, 16*1024)
-	n, _ := r.Read(buf)
 	var doc map[string]any
-	if err := json.Unmarshal(buf[:n], &doc); err != nil {
-		t.Fatalf("output is not valid JSON: %v\n%s", err, buf[:n])
+	if err := json.Unmarshal(out, &doc); err != nil {
+		t.Fatalf("output is not valid JSON: %v\n%s", err, out)
 	}
 	if _, ok := doc["features"]; !ok {
 		t.Error("catalog missing features key")

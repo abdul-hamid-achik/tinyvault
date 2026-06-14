@@ -10,7 +10,10 @@ import (
 	"github.com/abdul-hamid-achik/tinyvault/internal/dotenv"
 )
 
-var getFromFile string
+var (
+	getFromFile string
+	getVersion  int
+)
 
 var getCmd = &cobra.Command{
 	Use:   "get <key>",
@@ -24,10 +27,13 @@ When --from is used, the value is read from a dotenv file instead of
 the vault. The file does not need to be unlocked; the value is read
 verbatim (no interpolation). Use tvault run for ${tvault://...} resolution.
 
+Pass --version N to print a specific historical version (see tvault history).
+
 Examples:
   tvault get DATABASE_URL
   tvault get API_KEY --json
   tvault get DATABASE_URL --from .env
+  tvault get API_KEY --version 2
   DB_URL=$(tvault get DATABASE_URL)`,
 	Aliases: []string{"g"},
 	Args:    cobra.ExactArgs(1),
@@ -37,12 +43,16 @@ Examples:
 func init() {
 	rootCmd.AddCommand(getCmd)
 	getCmd.Flags().StringVarP(&getFromFile, "from", "", "", "Read value from a dotenv file instead of the vault")
+	getCmd.Flags().IntVar(&getVersion, "version", 0, "Print a specific historical version (default: current)")
 }
 
 func runGet(_ *cobra.Command, args []string) error {
 	key := args[0]
 
 	if getFromFile != "" {
+		if getVersion > 0 {
+			return fmt.Errorf("--from and --version are mutually exclusive")
+		}
 		value, err := getFromDotenv(getFromFile, key)
 		if err != nil {
 			return err
@@ -64,19 +74,29 @@ func runGet(_ *cobra.Command, args []string) error {
 
 	project := resolveProject(v, projectName)
 
-	value, err := v.GetSecret(project, key)
-	if err != nil {
-		return fmt.Errorf("failed to get secret: %w", err)
+	var value string
+	if getVersion > 0 {
+		value, err = v.GetSecretVersionValue(project, key, getVersion)
+		if err != nil {
+			return fmt.Errorf("failed to get secret version %d: %w", getVersion, err)
+		}
+		recordAudit(v, "secret.read", "secret", key, map[string]any{"project": project, "version": getVersion, "source": "version"})
+	} else {
+		value, err = v.GetSecret(project, key)
+		if err != nil {
+			return fmt.Errorf("failed to get secret: %w", err)
+		}
+		recordAudit(v, "secret.read", "secret", key, map[string]any{"project": project})
 	}
-	recordAudit(v, "secret.read", "secret", key, map[string]any{"project": project})
 
 	if jsonOutput {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(map[string]string{
-			"key":   key,
-			"value": value,
-		})
+		out := map[string]any{"key": key, "value": value}
+		if getVersion > 0 {
+			out["version"] = getVersion
+		}
+		return enc.Encode(out)
 	}
 
 	fmt.Print(value)

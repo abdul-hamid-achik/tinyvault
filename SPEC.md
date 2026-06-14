@@ -130,6 +130,33 @@ The CLI surfaces these as `tvault search` (secret metadata) and
 `vault_search_secrets`, `vault_list_secrets_by_prefix`, and
 `vault_audit_log_since`.
 
+### Secret version history & rollback
+
+A second bucket, `secret_versions`, holds the prior values of every secret so
+they can be inspected and rolled back. The current value lives in `secrets`
+keyed `projectID/key`; archived versions live in `secret_versions` keyed
+`projectID/key/%010d(version)` (secret keys are validated to exclude `/`, so
+the `/`-delimited layout is unambiguous and a single key's versions are an
+exact prefix scan). On every overwrite, `SetSecret` archives the prior entry
+verbatim **before** writing the new one, in the same bbolt transaction —
+all-or-nothing, so a prior ciphertext can never be lost mid-write. `DeleteSecret`
+purges a key's history in the same transaction (a clean slate). Listing history
+(`ListSecretVersions`) is metadata-only and never decrypts; it works on a
+locked vault. **Rollback is non-destructive**: it decrypts the target version
+and re-stores it via `SetSecret`, which archives the current value and assigns
+`version = current+1` — version numbers are monotonic and never reused.
+
+History is encrypted with the **project DEK** (like current values), so it
+survives passphrase rotation untouched (`RotatePassphrase` only re-wraps the
+DEK). On a **DEK rotation** — recipient revocation via `UnshareProject` —
+`RekeyProject` re-encrypts the history alongside the current values in one
+transaction (`ListSecretVersionEntries` feeds the bulk re-encrypt), so a
+rollback to a pre-revocation version still decrypts. Old vaults that predate
+the bucket get it created on open (`CreateBucketIfNotExists`); their existing
+secrets simply show a single current version until the next overwrite. History
+growth is unbounded by design (consistent with the no-GC philosophy); pruning
+is a deferred follow-up.
+
 ### 2.2 Cryptography
 
 All cryptography lives in `internal/crypto`. Only standard library primitives
@@ -236,7 +263,8 @@ cmd/tvault/
 
 internal/
   crypto/         AES-256-GCM, Argon2id, token helpers, password hashing
-  store/          SQL-shaped tabular Store interface + BoltStore (bbolt)
+  store/          SQL-shaped tabular Store interface + BoltStore (bbolt);
+                  buckets incl. secrets (current) + secret_versions (history)
   vault/          high-level vault ops + relational query layer
                   (Create/Open/Unlock/Lock, project, secret, Search, ...)
   dotenv/         safe dotenv parser, name allowlist, tvault:// interpolation
@@ -329,7 +357,7 @@ The MCP server is the most security-sensitive surface. The design rules:
 
 ## 4. The MCP surface
 
-19 tools, 2 prompts, 3 resources. All registered through
+21 tools, 2 prompts, 3 resources. All registered through
 `github.com/modelcontextprotocol/go-sdk` v1.4.1.
 
 ### 4.1 Tools
@@ -355,6 +383,8 @@ The MCP server is the most security-sensitive surface. The design rules:
 | `vault_preview_env_import`    | no            | no             | no                 | always allowed        |
 | `vault_import_env_files`      | no            | yes            | no                 | `CanWrite`            |
 | `vault_seal_for_recipients`   | no (ciphertext out) | no       | no                 | `CanAccessProject` + `CanAccessSecret` |
+| `vault_secret_history`        | no            | no             | no                 | `CanAccessProject` + `CanAccessSecret` |
+| `vault_rollback_secret`       | no            | yes            | no                 | `CanWrite` + `CanAccessProject` + `CanAccessSecret` |
 
 The value-returning tools are deliberately few and each returns the value
 only when the agent has no alternative. `vault_seal_for_recipients` is the
@@ -430,8 +460,11 @@ tvault set KEY VALUE              # store a secret in the current project
 tvault set KEY --from-env .env    # set KEY from a dotenv file (use --key for source)
 tvault get KEY                    # print a secret to stdout
 tvault get KEY --from .env        # read a value from a dotenv file (no unlock)
+tvault get KEY --version 2        # print a specific historical version
+tvault history KEY                # list every version (metadata only, no unlock)
+tvault rollback KEY --to 2        # restore an earlier version as a new version
 tvault list                       # list all secret keys in the current project
-tvault delete KEY                 # remove a secret
+tvault delete KEY                 # remove a secret (purges its version history)
 
 tvault run -- <cmd> [args...]     # run cmd with project secrets as env vars
 tvault run --env-file .env -- CMD # merge .env with vault; resolve ${tvault://...}
@@ -753,9 +786,11 @@ they are sketches of where the product could go.
 
 ### Tier 2 — Agent-first differentiators
 
-- **Versioned secrets with diff and rollback.** `Version` is already
-  tracked in `SecretEntry`; expose it via `vault_diff`, `vault_snapshot`,
-  `vault_rollback`. (Medium.)
+- ✅ **Versioned secrets with rollback.** Shipped: prior values are archived in
+  the `secret_versions` bucket; `tvault history` / `get --version N` /
+  `rollback --to N` and MCP `vault_secret_history` / `vault_rollback_secret`
+  (value-free) inspect and restore them. See §2.1. Still open: a richer
+  `vault_diff` / named `vault_snapshot` across many keys. (Medium.)
 - **Time-bound project switching.** `tvault use staging --ttl 1h` —
   auto-switches back. Useful for "I'm about to do something risky."
   (Small.)

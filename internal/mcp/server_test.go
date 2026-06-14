@@ -273,8 +273,8 @@ func TestMCPServerIntegration(t *testing.T) {
 			}
 			tools = append(tools, tool)
 		}
-		if len(tools) != 19 {
-			t.Errorf("expected 19 tools, got %d", len(tools))
+		if len(tools) != 21 {
+			t.Errorf("expected 21 tools, got %d", len(tools))
 		}
 		toolNames := make(map[string]bool)
 		for _, tool := range tools {
@@ -300,6 +300,8 @@ func TestMCPServerIntegration(t *testing.T) {
 			"vault_list_secrets_by_prefix",
 			"vault_audit_log_since",
 			"vault_seal_for_recipients",
+			"vault_secret_history",
+			"vault_rollback_secret",
 		} {
 			if !toolNames[name] {
 				t.Errorf("missing tool: %s", name)
