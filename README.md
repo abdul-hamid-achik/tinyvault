@@ -86,8 +86,10 @@ tvault search --since 2026-01-01T00:00:00Z
 tvault list --prefix STRIPE_                    # project-scoped shortcut
 
 # Encrypted .env files (Rails credentials pattern; safe to commit)
-tvault encrypt-env --in .env --out .env.encrypted
+tvault encrypt-env --in .env --out .env.encrypted          # tied to the passphrase
 tvault decrypt-env --in .env.encrypted --out .env
+tvault encrypt-env --in .env --recipient tvault1… --out .env.encrypted  # commit-safe, no passphrase
+tvault decrypt-env --in .env.encrypted --identity ci --out .env
 
 # Read a value from a .env file without unlocking the vault
 tvault get API_KEY --from .env
@@ -164,8 +166,44 @@ tvault projects unshare tvault1…
 
 The data key is wrapped per-recipient (X25519 → HKDF-SHA256 →
 ChaCha20-Poly1305); secret values stay encrypted under the project key.
-This is the foundation for committing self-decrypting secrets to a repo
-(coming next). See `tvault docs secret-sharing`.
+This is also the foundation for committing self-decrypting secrets to a
+repo (below). See `tvault docs secret-sharing`.
+
+## Committing secrets to your repo
+
+Two ways to keep secrets *in* the repo while keeping them encrypted in
+history — both keyed by the same X25519 recipients, so no passphrase ever
+touches the files.
+
+**1. Standalone encrypted files** (`encrypt-env --recipient`). A
+self-contained `.env.encrypted` (v2 format) that anyone holding a matching
+identity can open — a teammate, CI, or an agent — with no vault unlock, and
+rotating the vault passphrase doesn't invalidate it:
+
+```bash
+tvault encrypt-env --in .env --recipient tvault1… --out .env.encrypted
+tvault decrypt-env --in .env.encrypted --identity ci          # no passphrase
+```
+
+**2. Transparent git filters** (`git-filter`) — secrets look like plaintext
+in your working tree but are stored encrypted in history, git-crypt style:
+
+```bash
+tvault identity new                                   # if you don't have one
+tvault git-filter install --recipient tvault1…        # configure this repo
+tvault git-filter track .env 'secrets/*.env'          # what to encrypt
+git add .gitattributes .tvault-recipients && git commit -m "enable tvault"
+
+# A teammate / CI / agent who holds a recipient identity:
+git clone … && cd … && tvault git-filter install      # decrypts the working tree
+```
+
+Recipients live in a committed `.tvault-recipients` file (public keys only),
+so the read-set travels with the repo — add a teammate by appending their
+recipient and committing. Anyone without an identity sees only ciphertext
+("locked"), and the clean filter re-emits unchanged blobs so `git status`
+stays quiet. `tvault git-filter status` shows config, recipients, and
+whether your identity is available. See `tvault docs committable-secrets`.
 
 ## MCP Server (AI Agent Integration)
 
