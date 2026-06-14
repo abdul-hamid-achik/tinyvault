@@ -263,6 +263,8 @@ cmd/tvault/
 
 internal/
   crypto/         AES-256-GCM, Argon2id, token helpers, password hashing
+  agent/          local unlock-once agent: unix-socket server + client,
+                  per-OS peer-credential check (build-tagged), !unix stub
   store/          SQL-shaped tabular Store interface + BoltStore (bbolt);
                   buckets incl. secrets (current) + secret_versions (history)
   vault/          high-level vault ops + relational query layer
@@ -529,6 +531,10 @@ tvault ci init --provider=github-actions
 tvault ci init --provider=gitlab
 tvault ci init --provider=github-actions --mode=identity   # CI decrypts with TVAULT_IDENTITY_KEY, no passphrase
 
+tvault agent start                # unlock once; serve reads over a unix socket (foreground)
+tvault agent status / stop        # query / stop the running agent
+tvault hook zsh                   # print a shell/direnv snippet (tvault_load) using the agent
+
 tvault mcp-server                 # start the MCP server on stdio
 tvault completion bash|zsh|...    # shell completion
 ```
@@ -738,6 +744,46 @@ subcommand; no other command imports those libraries. Adding the stack
 takes the binary from ~12 MB to ~24 MB uncompressed. No `harmonica` —
 animations are hand-rolled easing — and no `huh`, keeping the dependency
 set strictly to the v2 line.
+
+### 5.5 The local agent (`tvault agent`) + hooks
+
+`internal/agent` is an opt-in, unix-only daemon that removes the per-command
+passphrase prompt and the ~200 ms Argon2id derivation for daily use.
+
+- **KEK-only, reopen-per-request.** bbolt takes an exclusive file lock, so a
+  process that held the database open would block every other `tvault`
+  invocation (writes, the `--no-agent` fallback). The agent therefore caches
+  **only the KEK** and reopens the vault per request (`vault.UnlockWithKEK`
+  validates the cached KEK against the verifier — no Argon2id), serialized by a
+  mutex so only one bbolt handle exists at a time and direct CLI access keeps
+  working between requests. A rotated passphrase makes the cached KEK fail
+  verification → the agent reports it (restart to refresh).
+- **No daemonization.** Forking a live Go runtime is unsafe, so `agent start`
+  runs in the **foreground**; backgrounding is the user's job (`&`, `nohup`,
+  systemd `Type=simple`, launchd). A `flock`-held lockfile is the authoritative
+  single-instance guard (the pidfile is diagnostics only).
+- **Socket security.** The socket is created `0600` (tight umask, no
+  listen→chmod window) inside the `0700` vault dir, with stale-socket cleanup
+  that refuses a path of a different owner/type. Every connection is
+  **peer-credential checked** — `LOCAL_PEERCRED` (darwin) / `SO_PEERCRED`
+  (linux) via `x/sys/unix` — and rejected unless the peer uid equals the
+  agent's; platforms without a peer-cred implementation fail closed. The wire
+  protocol is newline-delimited JSON, one request per connection, version- and
+  size-checked (64 KB request cap), with read/write deadlines. Ops are
+  read-only: `get` / `getall` / `status` / `stop`.
+- **KEK lifetime.** This is the one threat-model change: the KEK lives in RAM
+  for the agent's lifetime rather than a single command. Mitigations: idle
+  auto-lock (default 15 m, `--idle 0` disables), explicit `stop`, and KEK
+  zeroing on every exit path (signal, idle, stop, panic-recovery). A `SIGKILL`
+  cannot zero the KEK — the accepted residual risk, like any agent
+  (ssh-agent / gpg-agent). The agent is **off by default and opt-in**.
+- **CLI routing.** `get`/`env`/`run` try the agent first and silently fall back
+  to a direct unlock if it is absent or unreachable; `--no-agent` /
+  `TVAULT_NO_AGENT` force direct. Agent-served reads are audited with
+  `via:agent` and the peer uid/pid. `tvault hook <bash|zsh|fish|direnv>` prints
+  a `tvault_load` snippet that sources `tvault env` output (already shell-quoted
+  — no value is interpolated into the hook text). **Windows** is unsupported
+  (the command reports it clearly); use the direct CLI or `mcp-server`.
 
 ---
 

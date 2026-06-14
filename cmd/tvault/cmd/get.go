@@ -66,6 +66,20 @@ func runGet(_ *cobra.Command, args []string) error {
 		return nil
 	}
 
+	// Fast path: a running agent serves current-version reads with no prompt
+	// and no Argon2id. Historical versions (--version) always go direct.
+	if getVersion == 0 {
+		if value, ok := agentGetSecret(projectName, key); ok {
+			if jsonOutput {
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				return enc.Encode(map[string]any{"key": key, "value": value})
+			}
+			fmt.Print(value)
+			return nil
+		}
+	}
+
 	v, err := openAndUnlockVault()
 	if err != nil {
 		return err

@@ -19,6 +19,7 @@ TinyVault is a single-binary CLI tool and [MCP server](https://modelcontextproto
 - **.env Ecosystem** -- Safe dotenv parser (no shell expansion), `tvault://` placeholder interpolation, two-way sync (pull/push/mirror), and `.env.encrypted` files (Rails credentials pattern, safe to commit)
 - **Share & commit secrets** -- X25519 recipients (age-style): share a project without the passphrase, commit self-decrypting secrets via `git-filter` (transparent clean/smudge) or v2 `.env.encrypted`, and seal for recipients over MCP. Revocation rotates the key and re-encrypts.
 - **Versioned secrets** -- every overwrite archives the prior value; `tvault history`, `tvault get --version N`, and `tvault rollback --to N` (also over MCP) let you inspect and restore past values. History survives key rotation.
+- **Local agent (unix)** -- `tvault agent` holds the vault unlocked over a private 0600 socket so daily `get/env/run` skip the passphrase prompt and Argon2id; `tvault hook` wires it into bash/zsh/fish/direnv. Auto-locks when idle.
 - **Relational Search** -- `tvault search` and `vault_search_secrets` for prefix, name glob, time-range, version, and cross-project queries
 - **Interactive Browser** -- `tvault browse`: a full-screen terminal UI (Bubble Tea v2) to browse status, projects, secrets, and audit — with a live filter and reveal-on-demand (`r` shows a value, `esc` re-masks). Read-only by default; `--rw` enables audited in-app new/edit/delete
 - **Output Redaction** -- MCP server automatically redacts secret values from command output
@@ -144,6 +145,28 @@ tvault use default
 # List all projects
 tvault projects list
 ```
+
+## Local agent (unlock once)
+
+Re-entering the passphrase (and paying ~200ms of Argon2id) on every command
+gets old. The agent (unix: linux/macOS) unlocks once and serves reads over a
+private socket, so `get`/`env`/`run` are instant and prompt-free:
+
+```bash
+tvault agent start &                 # unlock once; runs in the foreground (background it)
+eval "$(tvault hook zsh)"            # add to ~/.zshrc; defines tvault_load
+tvault get DATABASE_URL              # no prompt — served by the agent
+tvault_load                          # load the current project's secrets into the shell
+tvault agent status
+tvault agent stop                    # zeroes the KEK
+```
+
+The socket is `0600` inside the `0700` vault dir and accepts only same-uid
+peers; the agent caches **only the KEK** (not an open database), so direct CLI
+access keeps working between requests, and it **auto-locks after 15m idle**
+(`--idle`), zeroing the KEK on stop/idle/signal. Bypass it any time with
+`--no-agent` or `TVAULT_NO_AGENT=1`. Not available on Windows (use the direct
+CLI or `mcp-server`). See `tvault docs agent`.
 
 ## Secret history & rollback
 
@@ -417,6 +440,7 @@ tvault (single binary)
 | Variable | Description |
 |----------|-------------|
 | `TVAULT_PASSPHRASE` | Vault passphrase (for CI/CD, skips interactive prompt) |
+| `TVAULT_NO_AGENT` | Set to bypass a running `tvault agent` and unlock the vault directly |
 | `TVAULT_IDENTITY_KEY` | A private identity (`tvault-key1…`) for passphrase-free decrypt in CI/ssh/agents; a local identity file takes precedence |
 | `TVAULT_IDENTITY` | Default identity name for git filters / recipient reads (default: `default`) |
 | `TVAULT_DIR` | Vault directory (default: `~/.tvault`) |

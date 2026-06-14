@@ -150,6 +150,29 @@ func (v *Vault) Unlock(passphrase string) error {
 	return nil
 }
 
+// UnlockWithKEK unlocks the vault with an already-derived KEK — the agent
+// caches the KEK so per-request vault opens skip the Argon2id derivation (and
+// the passphrase prompt). It still validates the KEK against the stored
+// verifier, so a stale KEK (e.g. after a passphrase rotation) is rejected with
+// ErrWrongPassphrase. The vault keeps its own copy; the caller retains kek.
+func (v *Vault) UnlockWithKEK(kek []byte) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	meta, err := v.store.GetMeta()
+	if err != nil {
+		return fmt.Errorf("get meta: %w", err)
+	}
+	plaintext, err := crypto.Decrypt(kek, meta.Verifier)
+	if err != nil || string(plaintext) != verifyText {
+		return ErrWrongPassphrase
+	}
+	out := make([]byte, len(kek))
+	copy(out, kek)
+	v.kek = out
+	return nil
+}
+
 // Lock zeros the KEK and transitions the vault to locked state.
 func (v *Vault) Lock() {
 	v.mu.Lock()

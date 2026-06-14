@@ -217,6 +217,7 @@ func helpContent() HelpContent {
 			},
 			EnvVars: []string{
 				"TVAULT_PASSPHRASE     vault passphrase; skips the interactive prompt",
+				"TVAULT_NO_AGENT       set to bypass a running `tvault agent` and unlock directly",
 				"TVAULT_IDENTITY_KEY   a private identity (tvault-key1…) for passphrase-free decrypt in CI/ssh; a local identity file takes precedence",
 				"TVAULT_IDENTITY       default identity name for git filters / recipient reads; default 'default'",
 				"TVAULT_DIR            vault directory; default ~/.tvault",
@@ -390,6 +391,17 @@ func helpContent() HelpContent {
 				Description: "Every overwrite archives the prior value. history lists versions (no values), " +
 					"get --version prints one, and rollback restores an earlier version as a new version " +
 					"(non-destructive). History survives key rotation.",
+			},
+			{
+				Name: "Unlock once for prompt-free daily use (agent + hook)",
+				Commands: []string{
+					"tvault agent start &",
+					`eval "$(tvault hook zsh)"`,
+					"tvault_load   # loads the current project's secrets, no prompt",
+				},
+				Description: "The agent (unix only) holds the vault unlocked over a private 0600 socket so " +
+					"get/env/run skip the passphrase prompt and Argon2id. It auto-locks when idle; " +
+					"use --no-agent to bypass it.",
 			},
 			{
 				Name:        "Audit log for the last hour",
