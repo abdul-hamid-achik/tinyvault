@@ -55,12 +55,9 @@ Get started:
   tvault get KEY           Get a secret value
   tvault run -- CMD        Run command with secrets as env vars
 
-Examples:
-  tvault init
-  tvault set DATABASE_URL "postgres://..."
-  tvault get DATABASE_URL
-  tvault run -- npm start
-  tvault env --format dotenv > .env`,
+For a long-form user manual (lifecycle, conventions, recipes, safety,
+agent patterns, troubleshooting), see 'tvault help' or
+'tvault help <topic>'.`,
 	SilenceUsage: true,
 	// Version is set at init() time below using the package-level
 	// buildVersion default ("dev"); main.go calls SetVersionInfo
@@ -85,6 +82,11 @@ func init() {
 	viper.BindPFlag("vault", rootCmd.PersistentFlags().Lookup("vault"))
 	viper.BindPFlag("project", rootCmd.PersistentFlags().Lookup("project"))
 	viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
+
+	// Replace cobra's auto-generated 'help' with our long-form manual.
+	// Without this, 'tvault help' would just print the cobra command
+	// listing; with it, the user gets the manual.
+	rootCmd.SetHelpCommand(helpCmd)
 }
 
 func initConfig() {
