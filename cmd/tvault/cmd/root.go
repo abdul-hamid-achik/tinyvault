@@ -16,7 +16,32 @@ var (
 	projectName string
 	jsonOutput  bool
 	verbose     bool
+
+	// Build-time metadata, set by main.go before Execute().
+	// Default values are used during `go test`.
+	buildVersion = "dev"
+	buildCommit  = "none"
+	buildDate    = "unknown"
 )
+
+// SetVersionInfo is called from main.go with build-time values
+// (injected by goreleaser via -ldflags "-X main.version=...").
+// It must be called before Execute().
+func SetVersionInfo(version, commit, date string) {
+	buildVersion = version
+	buildCommit = commit
+	buildDate = date
+	rootCmd.Version = formatVersion()
+}
+
+// Version returns the build-time version string.
+func Version() string { return buildVersion }
+
+// formatVersion builds the "version (commit date)" string that
+// `tvault --version` prints.
+func formatVersion() string {
+	return fmt.Sprintf("%s (commit %s, built %s)", buildVersion, buildCommit, buildDate)
+}
 
 // rootCmd represents the base command.
 var rootCmd = &cobra.Command{
@@ -37,6 +62,10 @@ Examples:
   tvault run -- npm start
   tvault env --format dotenv > .env`,
 	SilenceUsage: true,
+	// Version is set at init() time below using the package-level
+	// buildVersion default ("dev"); main.go calls SetVersionInfo
+	// before Execute() to override it with build-time values.
+	Version: formatVersion(),
 }
 
 // Execute runs the root command.
