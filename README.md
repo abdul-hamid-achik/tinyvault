@@ -14,9 +14,10 @@ TinyVault is a single-binary CLI tool and [MCP server](https://modelcontextproto
 - **AES-256-GCM Encryption** -- Two-tier key hierarchy with per-project data encryption keys
 - **Argon2id Key Derivation** -- Memory-hard passphrase hashing resistant to GPU/ASIC attacks
 - **Single Binary** -- One `tvault` binary for CLI use and MCP server mode
-- **MCP Server** -- 18 tools: AI agents can manage secrets via the Model Context Protocol (stdio) without the values ever entering the model context
+- **MCP Server** -- 19 tools: AI agents can manage secrets via the Model Context Protocol (stdio) without the values ever entering the model context
 - **Multi-Project** -- Organize secrets into projects with independent encryption keys
-- **.env Ecosystem** -- Safe dotenv parser (no shell expansion), `tvault://` placeholder interpolation, two-way sync (pull/push/mirror), and `.env.encrypted` files (Rails credentials pattern, KEK-tied, safe to commit)
+- **.env Ecosystem** -- Safe dotenv parser (no shell expansion), `tvault://` placeholder interpolation, two-way sync (pull/push/mirror), and `.env.encrypted` files (Rails credentials pattern, safe to commit)
+- **Share & commit secrets** -- X25519 recipients (age-style): share a project without the passphrase, commit self-decrypting secrets via `git-filter` (transparent clean/smudge) or v2 `.env.encrypted`, and seal for recipients over MCP. Revocation rotates the key and re-encrypts.
 - **Relational Search** -- `tvault search` and `vault_search_secrets` for prefix, name glob, time-range, version, and cross-project queries
 - **Interactive Browser** -- `tvault browse`: a full-screen terminal UI (Bubble Tea v2) to browse status, projects, secrets, and audit — with a live filter and reveal-on-demand (`r` shows a value, `esc` re-masks). Read-only by default; `--rw` enables audited in-app new/edit/delete
 - **Output Redaction** -- MCP server automatically redacts secret values from command output
@@ -249,6 +250,7 @@ Add to `.claude/settings.local.json`:
 | `vault_status` | Vault metadata + lock state |
 | `vault_audit_log` | Recent audit entries (newest first) |
 | `vault_audit_log_since` | Time-range + action-filtered audit log |
+| `vault_seal_for_recipients` | Seal secrets to X25519 recipients (returns ciphertext only; openable with `decrypt-env --identity`) |
 
 The recommended pattern for an agent is to discover the surface once via
 `tvault docs features`, then use the relational tools
@@ -359,7 +361,7 @@ tvault (single binary)
     crypto/         # AES-256-GCM, Argon2id, key generation
     store/          # bbolt storage layer
     vault/          # High-level vault operations
-    mcp/            # MCP server (18 tools, access policy, redaction)
+    mcp/            # MCP server (19 tools, access policy, redaction)
     validation/     # Input validation
 ```
 
