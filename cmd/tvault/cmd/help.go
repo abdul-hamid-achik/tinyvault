@@ -280,9 +280,11 @@ func helpContent() HelpContent {
 				"Run 'tvault unlock' and walk away from the terminal",
 			},
 			EncryptedEnvNote: ".env.encrypted files (tvault encrypt-env) are safe to commit. " +
-				"They are tied to the vault KEK; passphrase rotation invalidates them. " +
-				"If you need to share them across team members with different passphrases, " +
-				"each person needs their own copy after the rotation.",
+				"v1 (default) is tied to the vault KEK, so passphrase rotation invalidates it. " +
+				"For sharing across a team, use v2: `encrypt-env --recipient tvault1…` wraps " +
+				"the file to X25519 recipients, so each holder of a matching identity decrypts " +
+				"it with `decrypt-env --identity` (no passphrase) and rotation does not invalidate " +
+				"it. `tvault git-filter` automates this on commit/checkout.",
 		},
 
 		Recipes: []HelpRecipe{
@@ -338,12 +340,33 @@ func helpContent() HelpContent {
 				Description: "Project listing with secret counts.",
 			},
 			{
-				Name: "Encrypt a .env for committing",
+				Name: "Encrypt a .env for committing (passphrase)",
 				Commands: []string{
 					"tvault encrypt-env --in .env --out .env.encrypted",
 					"git add .env.encrypted",
 				},
-				Description: "Commit the encrypted file. Teammates can decrypt if they share the passphrase.",
+				Description: "v1 file, tied to the vault KEK. Anyone with the passphrase decrypts it.",
+			},
+			{
+				Name: "Share a project without the passphrase",
+				Commands: []string{
+					"tvault identity new ci          # teammate/CI: prints a tvault1… recipient",
+					"tvault projects share tvault1…  # owner: grant that recipient access",
+					"tvault env --identity ci --format dotenv   # recipient reads it, no passphrase",
+					"tvault projects unshare tvault1…           # revoke: rotates the key + re-encrypts",
+				},
+				Description: "X25519 recipients (age-style). Revocation truly removes access, even from an old vault copy.",
+			},
+			{
+				Name: "Commit self-decrypting secrets (git filters)",
+				Commands: []string{
+					"tvault identity new",
+					"tvault git-filter install --recipient tvault1…",
+					"tvault git-filter track .env",
+					"git add .gitattributes .tvault-recipients .env && git commit -m \"enable tvault\"",
+				},
+				Description: "Files are ciphertext in history, plaintext in the working tree for identity holders. " +
+					"After cloning, run `tvault git-filter install` to decrypt the working tree.",
 			},
 			{
 				Name:        "Audit log for the last hour",
