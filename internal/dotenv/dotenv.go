@@ -2,6 +2,7 @@ package dotenv
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -181,6 +182,24 @@ func ParseFile(path string) (ParsedFile, error) {
 	parsed.Diagnostics = diagnostics
 	parsed.Entries = buildOrderedEntries(entriesByKey)
 
+	return parsed, nil
+}
+
+// ParseBytes parses dotenv-formatted bytes without enforcing the
+// file-name allowlist. Used by sync and the encrypted-env format,
+// both of which need to parse contents that are dotenv-shaped but
+// may not live in a file named exactly ".env".
+func ParseBytes(name string, data []byte) (ParsedFile, error) {
+	parsed := ParsedFile{
+		Name: name,
+		Path: name,
+	}
+	entriesByKey, diagnostics, err := parseEntries(name, bytes.NewReader(data))
+	if err != nil {
+		return parsed, err
+	}
+	parsed.Diagnostics = diagnostics
+	parsed.Entries = buildOrderedEntries(entriesByKey)
 	return parsed, nil
 }
 

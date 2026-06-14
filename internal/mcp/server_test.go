@@ -271,8 +271,8 @@ func TestMCPServerIntegration(t *testing.T) {
 			}
 			tools = append(tools, tool)
 		}
-		if len(tools) != 15 {
-			t.Errorf("expected 15 tools, got %d", len(tools))
+		if len(tools) != 18 {
+			t.Errorf("expected 18 tools, got %d", len(tools))
 		}
 		toolNames := make(map[string]bool)
 		for _, tool := range tools {

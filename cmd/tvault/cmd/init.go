@@ -35,7 +35,7 @@ func runInit(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("vault already exists at %s", dir)
 	}
 
-	passphrase, err := promptPassphraseConfirm()
+	passphrase, err := resolveInitPassphrase()
 	if err != nil {
 		return err
 	}

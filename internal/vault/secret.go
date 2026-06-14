@@ -140,3 +140,38 @@ func (v *Vault) GetAllSecrets(projectName string) (map[string]string, error) {
 
 	return result, nil
 }
+
+// SecretMeta is the per-key metadata exposed by ListSecretMetadata.
+// Values are intentionally absent: this method is designed for index
+// building, search, and listing, where leaking values is undesirable.
+type SecretMeta struct {
+	Key       string
+	Version   int
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// ListSecretMetadata returns metadata for every secret in a project
+// without decrypting the values. The vault does not need to be
+// unlocked; the metadata is stored in the clear alongside the
+// ciphertext.
+func (v *Vault) ListSecretMetadata(projectName string) ([]SecretMeta, error) {
+	project, err := v.store.GetProjectByName(projectName)
+	if err != nil {
+		return nil, mapStoreError(err)
+	}
+	entries, err := v.store.ListSecrets(project.ID)
+	if err != nil {
+		return nil, mapStoreError(err)
+	}
+	out := make([]SecretMeta, 0, len(entries))
+	for key, entry := range entries {
+		out = append(out, SecretMeta{
+			Key:       key,
+			Version:   entry.Version,
+			CreatedAt: entry.CreatedAt,
+			UpdatedAt: entry.UpdatedAt,
+		})
+	}
+	return out, nil
+}

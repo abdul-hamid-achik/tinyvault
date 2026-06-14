@@ -186,6 +186,22 @@ func (v *Vault) requireUnlocked() error {
 	return nil
 }
 
+// KEK returns a copy of the in-memory KEK for use by trusted internal
+// subsystems (encrypted-env encryption/decryption, hash derivation).
+// The caller is responsible for zeroing the returned slice after use.
+//
+// Returns ErrLocked if the vault is not unlocked.
+func (v *Vault) KEK() ([]byte, error) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	if v.kek == nil {
+		return nil, ErrLocked
+	}
+	out := make([]byte, len(v.kek))
+	copy(out, v.kek)
+	return out, nil
+}
+
 // RotatePassphrase re-encrypts all project DEKs under a new KEK derived from
 // newPassphrase. The old passphrase is verified first.
 func (v *Vault) RotatePassphrase(oldPassphrase, newPassphrase string) error {
@@ -326,10 +342,7 @@ func (v *Vault) AppendAudit(entry *store.AuditEntry) error {
 	return v.store.AppendAudit(entry)
 }
 
-// ListAudit returns the most recent audit entries, up to limit.
-func (v *Vault) ListAudit(limit int) ([]*store.AuditEntry, error) {
-	return v.store.ListAudit(limit)
-}
+// ListAudit is implemented in query.go (takes a store.AuditFilter).
 
 // mapStoreError translates store-level sentinel errors to vault-level errors.
 func mapStoreError(err error) error {

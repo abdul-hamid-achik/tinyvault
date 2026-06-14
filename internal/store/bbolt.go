@@ -4,12 +4,22 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	bolt "go.etcd.io/bbolt"
+)
+
+// Sentinel errors.
+var (
+	ErrNotFound             = errors.New("not found")
+	ErrProjectNotFound      = fmt.Errorf("project %w", ErrNotFound)
+	ErrSecretNotFound       = fmt.Errorf("secret %w", ErrNotFound)
+	ErrDuplicateProjectName = errors.New("project name already exists")
 )
 
 // Bucket names used in the bbolt database.
@@ -22,29 +32,30 @@ var (
 	bucketAudit        = []byte("audit")
 )
 
-// Sentinel errors returned by store operations.
-var (
-	ErrNotFound             = errors.New("not found")
-	ErrProjectNotFound      = fmt.Errorf("project %w", ErrNotFound)
-	ErrSecretNotFound       = fmt.Errorf("secret %w", ErrNotFound)
-	ErrDuplicateProjectName = errors.New("project name already exists")
-)
-
-// BoltStore implements Store using bbolt.
+// BoltStore is the bbolt-backed implementation of Store.
 type BoltStore struct {
 	db *bolt.DB
 }
 
-// NewBoltStore opens (or creates) a bbolt database at the given path and
-// ensures all required buckets exist. The file is created with 0600 permissions.
+// Compile-time interface check.
+var _ Store = (*BoltStore)(nil)
+
+// NewBoltStore opens (or creates) a bbolt database at path and ensures
+// all required buckets exist. The file is created with 0600
+// permissions.
 func NewBoltStore(path string) (*BoltStore, error) {
+	if dir := filepath.Dir(path); dir != "" {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return nil, fmt.Errorf("create dir: %w", err)
+		}
+	}
+
 	db, err := bolt.Open(path, 0o600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		return nil, fmt.Errorf("open bolt db: %w", err)
 	}
 
-	// Create all buckets if they do not exist.
-	if err = db.Update(func(tx *bolt.Tx) error {
+	if err := db.Update(func(tx *bolt.Tx) error {
 		for _, b := range [][]byte{
 			bucketMeta,
 			bucketConfig,
@@ -59,7 +70,7 @@ func NewBoltStore(path string) (*BoltStore, error) {
 		}
 		return nil
 	}); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("init buckets: %w", err)
 	}
 
@@ -67,17 +78,14 @@ func NewBoltStore(path string) (*BoltStore, error) {
 }
 
 // Close closes the underlying bbolt database.
-func (s *BoltStore) Close() error {
-	return s.db.Close()
-}
+func (s *BoltStore) Close() error { return s.db.Close() }
 
 // ---------------------------------------------------------------------------
-// Vault metadata
+// Meta
 // ---------------------------------------------------------------------------
 
 const metaKey = "vault_meta"
 
-// GetMeta returns the vault metadata, or ErrNotFound if not set.
 func (s *BoltStore) GetMeta() (*VaultMeta, error) {
 	var meta VaultMeta
 	err := s.db.View(func(tx *bolt.Tx) error {
@@ -94,7 +102,6 @@ func (s *BoltStore) GetMeta() (*VaultMeta, error) {
 	return &meta, nil
 }
 
-// SetMeta stores the vault metadata.
 func (s *BoltStore) SetMeta(meta *VaultMeta) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		data, err := json.Marshal(meta)
@@ -109,7 +116,6 @@ func (s *BoltStore) SetMeta(meta *VaultMeta) error {
 // Config
 // ---------------------------------------------------------------------------
 
-// GetConfig returns the config value for the given key, or ErrNotFound.
 func (s *BoltStore) GetConfig(key string) (string, error) {
 	var val string
 	err := s.db.View(func(tx *bolt.Tx) error {
@@ -123,10 +129,15 @@ func (s *BoltStore) GetConfig(key string) (string, error) {
 	return val, err
 }
 
-// SetConfig stores a config key-value pair.
 func (s *BoltStore) SetConfig(key, value string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		return tx.Bucket(bucketConfig).Put([]byte(key), []byte(value))
+	})
+}
+
+func (s *BoltStore) DeleteConfig(key string) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		return tx.Bucket(bucketConfig).Delete([]byte(key))
 	})
 }
 
@@ -134,21 +145,16 @@ func (s *BoltStore) SetConfig(key, value string) error {
 // Projects
 // ---------------------------------------------------------------------------
 
-// CreateProject stores a new project. It returns ErrDuplicateProjectName if a
-// project with the same name already exists (including soft-deleted projects
-// whose name index entry has not been cleared).
 func (s *BoltStore) CreateProject(project *Project) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		names := tx.Bucket(bucketProjectNames)
 		if existing := names.Get([]byte(project.Name)); existing != nil {
 			return ErrDuplicateProjectName
 		}
-
 		data, err := json.Marshal(project)
 		if err != nil {
 			return fmt.Errorf("marshal project: %w", err)
 		}
-
 		idKey := []byte(project.ID.String())
 		if err := tx.Bucket(bucketProjects).Put(idKey, data); err != nil {
 			return err
@@ -157,7 +163,6 @@ func (s *BoltStore) CreateProject(project *Project) error {
 	})
 }
 
-// GetProject retrieves a project by its UUID.
 func (s *BoltStore) GetProject(id uuid.UUID) (*Project, error) {
 	var project Project
 	err := s.db.View(func(tx *bolt.Tx) error {
@@ -173,7 +178,6 @@ func (s *BoltStore) GetProject(id uuid.UUID) (*Project, error) {
 	return &project, nil
 }
 
-// GetProjectByName retrieves a project by name using the name index.
 func (s *BoltStore) GetProjectByName(name string) (*Project, error) {
 	var project Project
 	err := s.db.View(func(tx *bolt.Tx) error {
@@ -193,8 +197,47 @@ func (s *BoltStore) GetProjectByName(name string) (*Project, error) {
 	return &project, nil
 }
 
-// ListProjects returns all non-deleted projects.
 func (s *BoltStore) ListProjects() ([]*Project, error) {
+	out, err := s.listProjects(false)
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+func (s *BoltStore) ListProjectsIncludingDeleted() ([]*Project, error) {
+	return s.listProjects(true)
+}
+
+func (s *BoltStore) ListProjectsFiltered(filter ProjectFilter) ([]*Project, error) {
+	all, err := s.ListProjects()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*Project, 0, len(all))
+	for _, p := range all {
+		if filter.NameLike != "" && !matchLike(p.Name, filter.NameLike) {
+			continue
+		}
+		if filter.DescriptionLike != "" && !matchLike(p.Description, filter.DescriptionLike) {
+			continue
+		}
+		out = append(out, p)
+	}
+	if filter.Offset > 0 {
+		if filter.Offset >= len(out) {
+			return nil, nil
+		}
+		out = out[filter.Offset:]
+	}
+	if filter.Limit > 0 && len(out) > filter.Limit {
+		out = out[:filter.Limit]
+	}
+	return out, nil
+}
+
+func (s *BoltStore) listProjects(includeDeleted bool) ([]*Project, error) {
 	var projects []*Project
 	err := s.db.View(func(tx *bolt.Tx) error {
 		return tx.Bucket(bucketProjects).ForEach(func(_, v []byte) error {
@@ -202,7 +245,7 @@ func (s *BoltStore) ListProjects() ([]*Project, error) {
 			if err := json.Unmarshal(v, &p); err != nil {
 				return err
 			}
-			if p.DeletedAt == nil {
+			if includeDeleted || p.DeletedAt == nil {
 				projects = append(projects, &p)
 			}
 			return nil
@@ -211,14 +254,11 @@ func (s *BoltStore) ListProjects() ([]*Project, error) {
 	return projects, err
 }
 
-// UpdateProject updates an existing project in-place. It also updates the name
-// index if the name has changed.
 func (s *BoltStore) UpdateProject(project *Project) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(bucketProjects)
 		idKey := []byte(project.ID.String())
 
-		// Load the existing project so we can detect name changes.
 		existing := bucket.Get(idKey)
 		if existing == nil {
 			return ErrProjectNotFound
@@ -229,7 +269,6 @@ func (s *BoltStore) UpdateProject(project *Project) error {
 			return fmt.Errorf("unmarshal old project: %w", err)
 		}
 
-		// Handle name change: remove old index entry, check for conflicts, add new.
 		names := tx.Bucket(bucketProjectNames)
 		if old.Name != project.Name {
 			if dup := names.Get([]byte(project.Name)); dup != nil {
@@ -251,8 +290,6 @@ func (s *BoltStore) UpdateProject(project *Project) error {
 	})
 }
 
-// DeleteProject performs a soft-delete by setting DeletedAt on the project. It
-// also removes the name index entry so the name can be reused.
 func (s *BoltStore) DeleteProject(id uuid.UUID) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(bucketProjects)
@@ -279,8 +316,6 @@ func (s *BoltStore) DeleteProject(id uuid.UUID) error {
 		if err := bucket.Put(idKey, data); err != nil {
 			return err
 		}
-
-		// Remove name index so the name can be reused.
 		return tx.Bucket(bucketProjectNames).Delete([]byte(project.Name))
 	})
 }
@@ -289,24 +324,19 @@ func (s *BoltStore) DeleteProject(id uuid.UUID) error {
 // Secrets
 // ---------------------------------------------------------------------------
 
-// secretKey builds the composite key: "projectUUID/secretKey".
 func secretKey(projectID uuid.UUID, key string) []byte {
 	return []byte(projectID.String() + "/" + key)
 }
 
-// secretPrefix returns the prefix for all secrets of a project.
 func secretPrefix(projectID uuid.UUID) string {
 	return projectID.String() + "/"
 }
 
-// SetSecret stores or updates a secret. If the key already exists, the version
-// is auto-incremented (upsert semantics).
 func (s *BoltStore) SetSecret(projectID uuid.UUID, key string, entry *SecretEntry) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket(bucketSecrets)
 		compositeKey := secretKey(projectID, key)
 
-		// Check for existing entry to handle version auto-increment.
 		if existing := bucket.Get(compositeKey); existing != nil {
 			var old SecretEntry
 			if err := json.Unmarshal(existing, &old); err != nil {
@@ -324,7 +354,6 @@ func (s *BoltStore) SetSecret(projectID uuid.UUID, key string, entry *SecretEntr
 	})
 }
 
-// GetSecret retrieves a single secret by project ID and key.
 func (s *BoltStore) GetSecret(projectID uuid.UUID, key string) (*SecretEntry, error) {
 	var entry SecretEntry
 	err := s.db.View(func(tx *bolt.Tx) error {
@@ -340,42 +369,6 @@ func (s *BoltStore) GetSecret(projectID uuid.UUID, key string) (*SecretEntry, er
 	return &entry, nil
 }
 
-// ListSecretKeys returns the secret key names for a given project.
-func (s *BoltStore) ListSecretKeys(projectID uuid.UUID) ([]string, error) {
-	prefix := secretPrefix(projectID)
-	var keys []string
-	err := s.db.View(func(tx *bolt.Tx) error {
-		c := tx.Bucket(bucketSecrets).Cursor()
-		prefixBytes := []byte(prefix)
-		for k, _ := c.Seek(prefixBytes); k != nil && strings.HasPrefix(string(k), prefix); k, _ = c.Next() {
-			keys = append(keys, strings.TrimPrefix(string(k), prefix))
-		}
-		return nil
-	})
-	return keys, err
-}
-
-// ListSecrets returns all secrets for a given project as a map of key -> entry.
-func (s *BoltStore) ListSecrets(projectID uuid.UUID) (map[string]*SecretEntry, error) {
-	prefix := secretPrefix(projectID)
-	secrets := make(map[string]*SecretEntry)
-	err := s.db.View(func(tx *bolt.Tx) error {
-		c := tx.Bucket(bucketSecrets).Cursor()
-		prefixBytes := []byte(prefix)
-		for k, v := c.Seek(prefixBytes); k != nil && strings.HasPrefix(string(k), prefix); k, v = c.Next() {
-			var entry SecretEntry
-			if err := json.Unmarshal(v, &entry); err != nil {
-				return err
-			}
-			name := strings.TrimPrefix(string(k), prefix)
-			secrets[name] = &entry
-		}
-		return nil
-	})
-	return secrets, err
-}
-
-// DeleteSecret removes a secret by project ID and key.
 func (s *BoltStore) DeleteSecret(projectID uuid.UUID, key string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		compositeKey := secretKey(projectID, key)
@@ -387,31 +380,145 @@ func (s *BoltStore) DeleteSecret(projectID uuid.UUID, key string) error {
 	})
 }
 
+func (s *BoltStore) ListSecretKeys(projectID uuid.UUID) ([]string, error) {
+	return s.scanSecretKeys(projectID, SecretFilter{})
+}
+
+func (s *BoltStore) ListSecretKeysFiltered(projectID uuid.UUID, filter SecretFilter) ([]string, error) {
+	return s.scanSecretKeys(projectID, filter)
+}
+
+func (s *BoltStore) scanSecretKeys(projectID uuid.UUID, filter SecretFilter) ([]string, error) {
+	prefix := []byte(secretPrefix(projectID))
+	var keys []string
+	err := s.db.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket(bucketSecrets).Cursor()
+		for k, v := c.Seek(prefix); k != nil && hasPrefix(k, prefix); k, v = c.Next() {
+			entry, err := decodeSecretValue(v)
+			if err != nil {
+				return err
+			}
+			name := strings.TrimPrefix(string(k), string(prefix))
+			if !secretMatchesFilter(name, entry, filter) {
+				continue
+			}
+			keys = append(keys, name)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(keys)
+	return applyLimitOffset(keys, filter.Limit, filter.Offset), nil
+}
+
+func (s *BoltStore) ListSecrets(projectID uuid.UUID) (map[string]*SecretEntry, error) {
+	prefix := []byte(secretPrefix(projectID))
+	secrets := make(map[string]*SecretEntry)
+	err := s.db.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket(bucketSecrets).Cursor()
+		for k, v := c.Seek(prefix); k != nil && hasPrefix(k, prefix); k, v = c.Next() {
+			entry, err := decodeSecretValue(v)
+			if err != nil {
+				return err
+			}
+			secrets[strings.TrimPrefix(string(k), string(prefix))] = entry
+		}
+		return nil
+	})
+	return secrets, err
+}
+
+// ListSecretsByProject scans every project's secrets, applying the
+// filter. This is O(P*K) where P = project count and K = keys per
+// project; for the expected scale (low thousands of secrets total)
+// this is fine and avoids the maintenance cost of a separate index.
+func (s *BoltStore) ListSecretsByProject(filter SecretFilter) ([]SecretLocation, error) {
+	projects, err := s.ListProjects()
+	if err != nil {
+		return nil, err
+	}
+	var out []SecretLocation
+	for _, p := range projects {
+		err := s.db.View(func(tx *bolt.Tx) error {
+			prefix := []byte(secretPrefix(p.ID))
+			c := tx.Bucket(bucketSecrets).Cursor()
+			for k, v := c.Seek(prefix); k != nil && hasPrefix(k, prefix); k, v = c.Next() {
+				entry, err := decodeSecretValue(v)
+				if err != nil {
+					return err
+				}
+				name := strings.TrimPrefix(string(k), string(prefix))
+				if !secretMatchesFilter(name, entry, filter) {
+					continue
+				}
+				out = append(out, SecretLocation{
+					ProjectID:   p.ID,
+					ProjectName: p.Name,
+					Key:         name,
+					Version:     entry.Version,
+					UpdatedAt:   entry.UpdatedAt,
+				})
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].ProjectName != out[j].ProjectName {
+			return out[i].ProjectName < out[j].ProjectName
+		}
+		return out[i].Key < out[j].Key
+	})
+	return applyLimitOffset(out, filter.Limit, filter.Offset), nil
+}
+
+func (s *BoltStore) CountSecrets(projectID uuid.UUID) (int, error) {
+	prefix := []byte(secretPrefix(projectID))
+	count := 0
+	err := s.db.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket(bucketSecrets).Cursor()
+		for k, _ := c.Seek(prefix); k != nil && hasPrefix(k, prefix); k, _ = c.Next() {
+			count++
+		}
+		return nil
+	})
+	return count, err
+}
+
 // ---------------------------------------------------------------------------
 // Audit
 // ---------------------------------------------------------------------------
 
-// AppendAudit appends an audit entry. Entries are keyed by timestamp + UUID
-// for ordering and uniqueness.
 func (s *BoltStore) AppendAudit(entry *AuditEntry) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
-		key := fmt.Sprintf("%s_%s", entry.Timestamp.UTC().Format(time.RFC3339Nano), uuid.New().String())
+		key := []byte(fmt.Sprintf("%s_%s",
+			entry.Timestamp.UTC().Format(time.RFC3339Nano),
+			uuid.New().String()))
 		data, err := json.Marshal(entry)
 		if err != nil {
 			return fmt.Errorf("marshal audit entry: %w", err)
 		}
-		return tx.Bucket(bucketAudit).Put([]byte(key), data)
+		return tx.Bucket(bucketAudit).Put(key, data)
 	})
 }
 
-// ListAudit returns the most recent audit entries, up to the given limit.
-// Entries are returned in reverse chronological order (newest first).
 func (s *BoltStore) ListAudit(limit int) ([]*AuditEntry, error) {
-	var entries []*AuditEntry
+	return s.ListAuditFiltered(AuditFilter{Limit: limit})
+}
+
+func (s *BoltStore) ListAuditFiltered(filter AuditFilter) ([]*AuditEntry, error) {
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 100
+	}
+	entries := []*AuditEntry{}
+	skipped := 0
 	err := s.db.View(func(tx *bolt.Tx) error {
 		c := tx.Bucket(bucketAudit).Cursor()
-
-		// Collect all entries (keys are time-sorted lexicographically).
 		for k, v := c.Last(); k != nil; k, v = c.Prev() {
 			if limit > 0 && len(entries) >= limit {
 				break
@@ -420,6 +527,13 @@ func (s *BoltStore) ListAudit(limit int) ([]*AuditEntry, error) {
 			if err := json.Unmarshal(v, &entry); err != nil {
 				return err
 			}
+			if !auditMatchesFilter(&entry, filter) {
+				continue
+			}
+			if filter.Offset > 0 && skipped < filter.Offset {
+				skipped++
+				continue
+			}
 			entries = append(entries, &entry)
 		}
 		return nil
@@ -427,11 +541,131 @@ func (s *BoltStore) ListAudit(limit int) ([]*AuditEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// Sort newest first (should already be via cursor, but be explicit).
 	sort.Slice(entries, func(i, j int) bool {
 		return entries[i].Timestamp.After(entries[j].Timestamp)
 	})
-
-	return entries, err
+	return entries, nil
 }
+
+func (s *BoltStore) CountAudit() (int, error) {
+	count := 0
+	err := s.db.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket(bucketAudit).Cursor()
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			count++
+		}
+		return nil
+	})
+	return count, err
+}
+
+// ---------------------------------------------------------------------------
+// helpers
+// ---------------------------------------------------------------------------
+
+func decodeSecretValue(data []byte) (*SecretEntry, error) {
+	var entry SecretEntry
+	if err := json.Unmarshal(data, &entry); err != nil {
+		return nil, fmt.Errorf("unmarshal secret: %w", err)
+	}
+	return &entry, nil
+}
+
+func hasPrefix(b, prefix []byte) bool {
+	if len(b) < len(prefix) {
+		return false
+	}
+	for i, c := range prefix {
+		if b[i] != c {
+			return false
+		}
+	}
+	return true
+}
+
+func secretMatchesFilter(name string, entry *SecretEntry, f SecretFilter) bool {
+	if f.Prefix != "" && !strings.HasPrefix(name, f.Prefix) {
+		return false
+	}
+	if f.NameLike != "" && !matchLike(name, f.NameLike) {
+		return false
+	}
+	if !f.UpdatedAfter.IsZero() && entry.UpdatedAt.Before(f.UpdatedAfter) {
+		return false
+	}
+	if !f.UpdatedBefore.IsZero() && entry.UpdatedAt.After(f.UpdatedBefore) {
+		return false
+	}
+	if f.VersionAtLeast > 0 && entry.Version < f.VersionAtLeast {
+		return false
+	}
+	return true
+}
+
+func auditMatchesFilter(e *AuditEntry, f AuditFilter) bool {
+	if f.Action != "" && e.Action != f.Action {
+		return false
+	}
+	if f.ResourceType != "" && e.ResourceType != f.ResourceType {
+		return false
+	}
+	if !f.Since.IsZero() && e.Timestamp.Before(f.Since) {
+		return false
+	}
+	if !f.Until.IsZero() && e.Timestamp.After(f.Until) {
+		return false
+	}
+	return true
+}
+
+// matchLike applies a SQL-LIKE-style glob with '*' as the only
+// wildcard. We do not implement `%` or character classes; the
+// in-memory LIKE is intentionally minimal.
+func matchLike(s, pattern string) bool {
+	// Convert to a small state machine: split on '*' and walk.
+	parts := strings.Split(pattern, "*")
+	if len(parts) == 1 {
+		return s == pattern
+	}
+	// prefix must match the first part
+	if !strings.HasPrefix(s, parts[0]) {
+		return false
+	}
+	// suffix must match the last part
+	if !strings.HasSuffix(s, parts[len(parts)-1]) {
+		return false
+	}
+	// middle parts must appear in order
+	rest := s[len(parts[0]):]
+	for i := 1; i < len(parts)-1; i++ {
+		if parts[i] == "" {
+			continue
+		}
+		idx := strings.Index(rest, parts[i])
+		if idx < 0 {
+			return false
+		}
+		rest = rest[idx+len(parts[i]):]
+	}
+	return true
+}
+
+// applyLimitOffset slices `in` to a window of `limit` items starting
+// at `offset`. It returns just the slice because the operation cannot
+// fail.
+func applyLimitOffset[T any](in []T, limit, offset int) []T {
+	out := in
+	if offset > 0 {
+		if offset >= len(out) {
+			return nil
+		}
+		out = out[offset:]
+	}
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out
+}
+
+// ensureDir is intentionally absent; NewBoltStore uses os.MkdirAll
+// directly.

@@ -9,26 +9,42 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
+
+	"github.com/abdul-hamid-achik/tinyvault/internal/dotenv"
+)
+
+var (
+	runEnvFile    string
+	runEnvNoVault bool
 )
 
 var runCmd = &cobra.Command{
-	Use:   "run <command> [args...]",
+	Use:   "run [flags] <command> [args...]",
 	Short: "Run a command with secrets as environment variables",
 	Long: `Run a command with all project secrets injected as environment variables.
 
 This is useful for running applications that need access to secrets
 without exposing them in shell history or scripts.
 
+A .env file (or comma-separated list) can be supplied with --env-file.
+The file's values are merged with the vault, with the vault taking
+precedence. Values containing ${tvault://project/key} placeholders are
+resolved against the vault at run time.
+
 Examples:
   tvault run npm start
   tvault run python manage.py runserver
-  tvault run -- docker compose up`,
-	DisableFlagParsing: true,
+  tvault run -- docker compose up
+  tvault run --env-file .env -- npm start
+  tvault run --env-file .env.production -- ./deploy.sh`,
+	DisableFlagParsing: false,
 	RunE:               runRun,
 }
 
 func init() {
 	rootCmd.AddCommand(runCmd)
+	runCmd.Flags().StringVarP(&runEnvFile, "env-file", "e", "", "Dotenv file to load (vault values are merged on top)")
+	runCmd.Flags().BoolVar(&runEnvNoVault, "no-vault", false, "Do not load vault secrets; only use --env-file values")
 }
 
 func runRun(cmd *cobra.Command, args []string) error {
@@ -44,22 +60,70 @@ func runRun(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	v, err := openAndUnlockVault()
-	if err != nil {
-		return err
+	var vaultSecrets map[string]string
+	var project string
+	if !runEnvNoVault {
+		v, err := openAndUnlockVault()
+		if err != nil {
+			return err
+		}
+		project = resolveProject(v, projectName)
+		vaultSecrets, err = v.GetAllSecrets(project)
+		v.Close()
+		if err != nil {
+			return fmt.Errorf("failed to get secrets: %w", err)
+		}
 	}
 
-	project := resolveProject(v, projectName)
+	// Resolve any tvault:// references in env file values against the
+	// vault so a templated .env can be committed safely.
+	resolver := func(ref dotenv.Ref) (string, error) {
+		if vaultSecrets == nil {
+			return "", fmt.Errorf("vault not loaded (use --no-vault=false or remove ${tvault://...} references)")
+		}
+		proj := ref.Project
+		if proj == "" || proj == "current" {
+			if project == "" {
+				return "", fmt.Errorf("no current project; use tvault://PROJECT/KEY syntax")
+			}
+			proj = project
+		}
+		val, ok := vaultSecrets[ref.Key]
+		if !ok {
+			return "", fmt.Errorf("secret %q not found in project %q", ref.Key, proj)
+		}
+		return val, nil
+	}
 
-	secrets, err := v.GetAllSecrets(project)
-	v.Close()
-	if err != nil {
-		return fmt.Errorf("failed to get secrets: %w", err)
+	merged := make(map[string]string, len(vaultSecrets))
+	for k, v := range vaultSecrets {
+		merged[k] = v
+	}
+
+	if runEnvFile != "" {
+		parsed, err := dotenv.ParseFile(runEnvFile)
+		if err != nil {
+			return fmt.Errorf("failed to read %s: %w", runEnvFile, err)
+		}
+		for _, e := range parsed.Entries {
+			val := e.Value
+			if dotenv.HasRef(val) {
+				resolved, err := dotenv.Resolve(val, resolver)
+				if err != nil {
+					return fmt.Errorf("interpolate %s: %w", e.Key, err)
+				}
+				val = resolved
+			}
+			// Vault wins on conflict.
+			if _, exists := merged[e.Key]; !exists {
+				merged[e.Key] = val
+			}
+		}
 	}
 
 	// Build environment.
 	env := os.Environ()
-	for key, value := range secrets {
+	for key, value := range merged {
 		env = append(env, fmt.Sprintf("%s=%s", key, value))
 	}
 

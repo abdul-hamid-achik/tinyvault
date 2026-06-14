@@ -94,3 +94,13 @@ func promptPassphraseConfirm() (string, error) {
 	}
 	return pass, nil
 }
+
+// resolveInitPassphrase returns the passphrase for `tvault init`.
+// It honors TVAULT_PASSPHRASE for non-interactive / CI use; otherwise
+// it prompts twice and verifies the values match.
+func resolveInitPassphrase() (string, error) {
+	if env := os.Getenv("TVAULT_PASSPHRASE"); env != "" {
+		return env, nil
+	}
+	return promptPassphraseConfirm()
+}

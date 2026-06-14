@@ -55,7 +55,7 @@ func (s *VaultMCPServer) handleAuditLog(_ context.Context, _ *sdkmcp.CallToolReq
 		limit = 100
 	}
 
-	entries, err := s.vault.ListAudit(limit)
+	entries, err := s.vault.ListAudit(store.AuditFilter{Limit: limit})
 	if err != nil {
 		return nil, auditLogOutput{}, fmt.Errorf("list audit: %w", err)
 	}
