@@ -328,6 +328,27 @@ tvault ci init --provider=github-actions
 tvault ci init --provider=gitlab
 ```
 
+### CI without the passphrase (per-context identity)
+
+Better still, give CI a **per-context identity** instead of the master
+passphrase. The runner holds a `tvault-key1…` private key as the
+`TVAULT_IDENTITY_KEY` secret and decrypts committed/recipient-sealed secrets
+with it — the passphrase never leaves your machine, and rotating it doesn't
+break CI:
+
+```bash
+tvault identity new ci                                  # provision a CI identity
+tvault projects share <recipient>                       # or add it to .tvault-recipients
+tvault identity export ci --force | gh secret set TVAULT_IDENTITY_KEY
+tvault ci init --provider=github-actions --mode=identity --identity=ci
+```
+
+In the workflow, `TVAULT_IDENTITY_KEY` is enough — `decrypt-env`, `open`, and
+`git-filter checkout` all use it automatically (no `--identity` needed). A
+local identity file always takes precedence over the env key, so dev machines
+stay deterministic. The same `TVAULT_IDENTITY_KEY` works over ssh and for
+agents: `tvault seal | ssh host 'tvault open > .env'`.
+
 ## Key Management
 
 ```bash
@@ -375,6 +396,8 @@ tvault (single binary)
 | Variable | Description |
 |----------|-------------|
 | `TVAULT_PASSPHRASE` | Vault passphrase (for CI/CD, skips interactive prompt) |
+| `TVAULT_IDENTITY_KEY` | A private identity (`tvault-key1…`) for passphrase-free decrypt in CI/ssh/agents; a local identity file takes precedence |
+| `TVAULT_IDENTITY` | Default identity name for git filters / recipient reads (default: `default`) |
 | `TVAULT_DIR` | Vault directory (default: `~/.tvault`) |
 
 ## License

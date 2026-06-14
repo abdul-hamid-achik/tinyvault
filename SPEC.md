@@ -481,6 +481,7 @@ tvault diff <file>                # key drift vs a .env (--values compares value
 
 tvault identity new [name]        # generate an X25519 identity; print its tvault1… recipient
 tvault identity list              # list local identities + recipients
+tvault identity export [name]     # print the PRIVATE key for a CI/ssh secret store (--force off a TTY)
 tvault projects share <recipient>    # grant a recipient access to a project
 tvault projects unshare <recipient>  # revoke (rotates the key + re-encrypts)
 tvault projects recipients           # list a project's recipients
@@ -493,6 +494,7 @@ tvault git-filter checkout        # re-decrypt the working tree (run after cloni
 
 tvault ci init --provider=github-actions
 tvault ci init --provider=gitlab
+tvault ci init --provider=github-actions --mode=identity   # CI decrypts with TVAULT_IDENTITY_KEY, no passphrase
 
 tvault mcp-server                 # start the MCP server on stdio
 tvault completion bash|zsh|...    # shell completion
@@ -588,6 +590,32 @@ in a committed `.tvault-recipients` file; identity resolution is
 filter is idempotent — it re-emits the staged blob when the plaintext is
 unchanged — so `git status` stays quiet; without an identity, files stay
 encrypted ("locked") instead of failing checkout. See `cmd/tvault/cmd/gitfilter.go`.
+
+**Per-context identity transport (CI / ssh / agents).** A CI runner, a remote
+host, or an agent can decrypt recipient-sealed secrets with no passphrase and
+no key file by supplying a private identity directly in the environment:
+`TVAULT_IDENTITY_KEY` carries a `tvault-key1…` string. `resolveIdentity` (in
+`cmd/tvault/cmd/identity.go`) is the single resolver behind `open`,
+`decrypt-env`, `env --identity`, and the git filters, with this precedence:
+
+1. the named key file (`--identity` / `$TVAULT_IDENTITY` / git config /
+   `default`) **if it exists on disk** — keeps local dev deterministic;
+2. else `TVAULT_IDENTITY_KEY` — the CI/ssh/agent path;
+3. else "locked" (callers that require an identity error helpfully; the git
+   filters stay in pass-through mode).
+
+When a local file overrides a set env key, tvault warns to stderr; every
+env-key decrypt prints a one-line notice so a passphrase-free decrypt is never
+silent. The env-key value is process-environment-visible (the standard CI
+secret-masking caveat applies) and is **never echoed in an error**.
+`tvault identity export <name>` prints the private key for injection into a
+secret store; it refuses a non-terminal stdout without `--force` (so it can't
+silently land in a log), writes the key to stdout only, and warns loudly on
+stderr. `tvault ci init --mode=identity` scaffolds a workflow that consumes a
+`TVAULT_IDENTITY_KEY` secret and decrypts with no passphrase. **Deferred:** a
+keyless OIDC flow that binds a CI OIDC token to a recipient automatically — it
+needs an OIDC verifier and a provider trust config (and likely a new
+dependency), so the explicit env-key path is the shipped mechanism.
 
 ### 5.3 Agent discoverability
 

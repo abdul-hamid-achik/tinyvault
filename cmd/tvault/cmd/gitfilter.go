@@ -580,14 +580,13 @@ func identityName() string {
 	return "default"
 }
 
-// gitIdentity loads the configured identity, or (nil, nil) if none exists
-// (the "locked" state — files stay encrypted rather than erroring).
+// gitIdentity loads the identity used by the smudge/clean filters: the named
+// key file, else TVAULT_IDENTITY_KEY (so a CI checkout with the key in its
+// environment decrypts transparently). Returns (nil, nil) when neither exists
+// — the "locked" state, where files stay encrypted rather than erroring.
 func gitIdentity() (*crypto.Identity, error) {
-	path := filepath.Join(identitiesDir(), identityName()+".key")
-	if _, err := os.Stat(path); err != nil {
-		return nil, nil //nolint:nilerr // a missing identity is the locked state, not an error
-	}
-	return loadIdentity(path)
+	id, _, err := resolveIdentity(identityName())
+	return id, err
 }
 
 func trackedPatterns(root string) []string {
