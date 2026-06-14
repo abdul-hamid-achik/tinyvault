@@ -60,6 +60,20 @@ func init() {
 
 func identitiesDir() string { return filepath.Join(getVaultDir(), "identities") }
 
+// resolveIdentityFile validates an identity name and returns the path to its
+// key file. The name is constrained to identityNameRE so a caller-supplied
+// value (flag or environment) can never traverse outside the identities
+// directory (e.g. "--identity ../../etc/x").
+func resolveIdentityFile(name string) (string, error) {
+	if name == "" {
+		name = "default"
+	}
+	if !identityNameRE.MatchString(name) {
+		return "", fmt.Errorf("invalid identity name %q (use letters, digits, '-', '_')", name)
+	}
+	return filepath.Join(identitiesDir(), name+".key"), nil
+}
+
 func runIdentityNew(_ *cobra.Command, args []string) error {
 	name := "default"
 	if len(args) == 1 {

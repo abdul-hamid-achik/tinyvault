@@ -176,7 +176,7 @@ Two ways to keep secrets *in* the repo while keeping them encrypted in
 history — both keyed by the same X25519 recipients, so no passphrase ever
 touches the files.
 
-**1. Standalone encrypted files** (`encrypt-env --recipient`). A
+**1. Standalone encrypted files** (`encrypt-env --recipient`, or `seal`). A
 self-contained `.env.encrypted` (v2 format) that anyone holding a matching
 identity can open — a teammate, CI, or an agent — with no vault unlock, and
 rotating the vault passphrase doesn't invalidate it:
@@ -184,6 +184,11 @@ rotating the vault passphrase doesn't invalidate it:
 ```bash
 tvault encrypt-env --in .env --recipient tvault1… --out .env.encrypted
 tvault decrypt-env --in .env.encrypted --identity ci          # no passphrase
+
+# Or seal a project straight from the vault (no plaintext .env on disk):
+tvault seal --recipient tvault1… > .env.encrypted
+tvault open --in .env.encrypted --identity ci > .env
+tvault seal -r tvault1… | ssh deploy 'tvault open --identity host > .env'
 ```
 
 **2. Transparent git filters** (`git-filter`) — secrets look like plaintext

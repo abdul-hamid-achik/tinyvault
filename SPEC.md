@@ -448,6 +448,9 @@ tvault encrypt-env --in .env --recipient tvault1…   # v2: commit-safe, no pass
 tvault decrypt-env --in .env.enc  # reverse (auto-detects v1/v2)
 tvault decrypt-env --in .env.enc --identity ci      # v2: open with an identity
 
+tvault seal --recipient tvault1…  # project secrets -> v2 blob (no plaintext on disk)
+tvault open --identity ci         # v2 blob -> dotenv (inverse of seal)
+
 tvault search --prefix STRIPE_    # relational query (metadata only, no decrypt)
 tvault search --project prod --name-like 'DB_*'
 tvault search --since 2026-01-01T00:00:00Z

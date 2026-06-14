@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"os"
 	"sort"
-	"strings"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/crypto"
+	"github.com/abdul-hamid-achik/tinyvault/internal/dotenv"
 	"github.com/abdul-hamid-achik/tinyvault/internal/encryptedenv"
 )
 
@@ -70,19 +70,17 @@ func (s *VaultMCPServer) handleSealForRecipients(_ context.Context, _ *sdkmcp.Ca
 		return nil, sealForRecipientsOutput{}, err
 	}
 
-	// Render a deterministic dotenv body, then seal it with the same v2
-	// format as `tvault encrypt-env --recipient` / the git clean filter.
+	// Render a deterministic, round-trip-safe dotenv body, then seal it with
+	// the same v2 format as `tvault encrypt-env --recipient` / the git clean
+	// filter. dotenv.Marshal quotes multi-line and special-character values.
+	body := dotenv.Marshal(selected)
 	keys := make([]string, 0, len(selected))
 	for k := range selected {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	var b strings.Builder
-	for _, k := range keys {
-		fmt.Fprintf(&b, "%s=%s\n", k, selected[k])
-	}
 
-	sealed, err := encryptedenv.EncryptV2(recipients, []byte(b.String()))
+	sealed, err := encryptedenv.EncryptV2(recipients, body)
 	if err != nil {
 		return nil, sealForRecipientsOutput{}, fmt.Errorf("seal: %w", err)
 	}

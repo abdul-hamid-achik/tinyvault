@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/abdul-hamid-achik/tinyvault/internal/dotenv"
 )
 
 type exportEnvInput struct {
@@ -83,11 +85,9 @@ func (s *VaultMCPServer) handleExportEnv(_ context.Context, _ *sdkmcp.CallToolRe
 	var content string
 	switch format {
 	case "dotenv":
-		var b strings.Builder
-		for k, v := range filtered {
-			fmt.Fprintf(&b, "%s=%s\n", k, v)
-		}
-		content = b.String()
+		// dotenv.Marshal sorts keys and quotes multi-line / special-character
+		// values so the written .env round-trips through the parser.
+		content = string(dotenv.Marshal(filtered))
 	case "shell":
 		var b strings.Builder
 		for k, v := range filtered {

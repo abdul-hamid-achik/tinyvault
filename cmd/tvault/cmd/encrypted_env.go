@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -150,7 +149,11 @@ func runEnvDecrypt(_ *cobra.Command, _ []string) error {
 		if envDecryptIdentity == "" {
 			return fmt.Errorf("this file is recipient-encrypted (v2); pass --identity <name> to decrypt it")
 		}
-		id, ierr := loadIdentity(filepath.Join(identitiesDir(), envDecryptIdentity+".key"))
+		keyPath, kerr := resolveIdentityFile(envDecryptIdentity)
+		if kerr != nil {
+			return kerr
+		}
+		id, ierr := loadIdentity(keyPath)
 		if ierr != nil {
 			return fmt.Errorf("load identity %q: %w", envDecryptIdentity, ierr)
 		}

@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -59,7 +58,11 @@ func envSecrets() (map[string]string, error) {
 			return nil, fmt.Errorf("vault not found at %s, run 'tvault init' first: %w", dir, err)
 		}
 		defer v.Close()
-		id, err := loadIdentity(filepath.Join(identitiesDir(), envIdentity+".key"))
+		keyPath, err := resolveIdentityFile(envIdentity)
+		if err != nil {
+			return nil, err
+		}
+		id, err := loadIdentity(keyPath)
 		if err != nil {
 			return nil, fmt.Errorf("load identity %q: %w", envIdentity, err)
 		}
