@@ -439,6 +439,7 @@ tvault restore <path>             # replace vault.db from a backup
 tvault key rotate                 # re-encrypt every project DEK under a new KEK
 
 tvault doctor                     # read-only setup diagnostics (--json; exit 1 on failure)
+tvault diff <file>                # key drift vs a .env (--values compares values, never prints them)
 
 tvault ci init --provider=github-actions
 tvault ci init --provider=gitlab

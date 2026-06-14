@@ -70,6 +70,10 @@ tvault import .env
 tvault import --env production
 tvault import --interactive --env production
 
+# See how a .env has drifted from the vault (metadata-only; --values compares values)
+tvault diff .env
+tvault diff .env --values
+
 # Two-way sync between .env files and the vault
 tvault sync --direction pull --path .env       # vault -> .env
 tvault sync --direction push --path .env       # .env -> vault

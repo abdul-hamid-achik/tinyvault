@@ -66,6 +66,7 @@ cmd/tvault/
     sync.go                  # tvault sync --direction pull|push|mirror
     encrypted_env.go         # tvault encrypt-env / decrypt-env (.env.encrypted)
     search.go                # tvault search (relational query, metadata only)
+    diff.go                  # tvault diff <file> (key/value drift vs a .env; metadata-only by default)
     docs.go                  # tvault docs (machine-readable feature manifest)
     projects.go / use.go     # tvault projects list/create / tvault use PROJECT
     backup.go                # tvault backup <path> / tvault restore <path> (restore is a separate command)
