@@ -301,8 +301,8 @@ The MCP server is the most security-sensitive surface. The design rules:
 
 ## 4. The MCP surface
 
-13 tools, 2 prompts, 2 resources + 1 template. All registered through
-`github.com/modelcontextprotocol/go-sdk` v1.2.0.
+18 tools, 2 prompts, 3 resources. All registered through
+`github.com/modelcontextprotocol/go-sdk` v1.4.1.
 
 ### 4.1 Tools
 

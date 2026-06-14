@@ -212,15 +212,15 @@ func fullCatalog() docsCatalog {
 			},
 			{
 				Name:        "mcp-server",
-				Summary:     "MCP server over stdio with 13 tools, 2 prompts, 3 resources.",
+				Summary:     "MCP server over stdio with 18 tools, 2 prompts, 3 resources.",
 				Commands:    []string{"tvault mcp-server"},
 				Description: "Agents can manage secrets without the values ever entering the model context: vault_run_with_secrets injects env vars, vault_export_env writes to disk and returns the path, vault_generate_secret returns only {stored: true}.",
 			},
 			{
-				Name:        "fts5-search",
-				Summary:     "Read-only FTS5 index over secret keys and project names (values never indexed).",
-				Commands:    []string{"tvault index build", "tvault index search <query>"},
-				Description: "Fast substring search across hundreds of secret names. Built on demand from bbolt state.",
+				Name:        "relational-search",
+				Summary:     "Read-only relational search over secrets, projects, and audit log (values never indexed, never returned in search results).",
+				Commands:    []string{"tvault search", "tvault audit", "tvault projects list"},
+				Description: "Composable filters: key glob, project, tag, prefix, time window. Backed by the SQL-shaped tabular store (bbolt under the hood, no FTS, no derived index).",
 			},
 			{
 				Name:        "agent-discoverability",
@@ -257,7 +257,7 @@ func fullCatalog() docsCatalog {
 			{
 				Slug:        "mcp",
 				Title:       "MCP server",
-				Description: "Starts a Model Context Protocol server on stdio. Add to your MCP host config with command=tvault args=[mcp-server] env={TVAULT_PASSPHRASE:...}. The server exposes 13 tools, 2 prompts, and 3 resources. The model never needs to see secret values: prefer vault_run_with_secrets and vault_export_env over vault_get_secret.",
+				Description: "Starts a Model Context Protocol server on stdio. Add to your MCP host config with command=tvault args=[mcp-server] env={TVAULT_PASSPHRASE:...}. The server exposes 18 tools, 2 prompts, and 3 resources. The model never needs to see secret values: prefer vault_run_with_secrets and vault_export_env over vault_get_secret.",
 			},
 			{
 				Slug:        "interpolate",
