@@ -262,6 +262,12 @@ func fullCatalog() docsCatalog {
 				SeeAlso:     []string{"tvault help browse"},
 				Description: "Built on the Bubble Tea v2 / Lip Gloss v2 (charm.land) stack. The browser never writes — all mutations stay in the CLI. Browse project and secret metadata while locked; unlock in-app with 'u' to reveal a value behind a key press ('r'), which re-masks on 'esc' / pane change / quit. Vim + arrow + mouse-wheel navigation, live key filter, light/dark theme auto-detected from the terminal background. Animations disable on --no-anim, $TVAULT_NO_ANIM, or over SSH.",
 			},
+			{
+				Name:        "diagnostics",
+				Summary:     "Read-only setup diagnostics + a typed config file.",
+				Commands:    []string{"tvault doctor", "tvault doctor --json"},
+				Description: "`tvault doctor` checks the vault directory + permissions, vault validity, lock state, project/secret counts, the config and MCP-policy files, environment, and terminal — without unlocking. Exit code is non-zero if any check fails (warnings don't fail), so scripts can gate on it. Optional ~/.tvault/config.yaml supplies a `browse:` block (no_anim, single_pane, audit_limit) as defaults for the interactive browser; explicit flags win.",
+			},
 		},
 		Topics: []docsTopic{
 			{

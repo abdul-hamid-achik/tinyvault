@@ -438,6 +438,8 @@ tvault backup <path>              # copy vault.db to path
 tvault restore <path>             # replace vault.db from a backup
 tvault key rotate                 # re-encrypt every project DEK under a new KEK
 
+tvault doctor                     # read-only setup diagnostics (--json; exit 1 on failure)
+
 tvault ci init --provider=github-actions
 tvault ci init --provider=gitlab
 

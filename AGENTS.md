@@ -73,6 +73,9 @@ cmd/tvault/
     mcp_server.go            # tvault mcp-server (stdio MCP transport)
     ci.go                    # tvault ci init (generate CI workflow files)
     browse.go                # tvault browse (cobra wiring + TTY checks; calls browse pkg)
+    doctor.go                # tvault doctor (read-only setup diagnostics; --json)
+    audit_helper.go          # recordAudit(): CLI/TUI audit logging (MCP-vocab actions)
+    config_helper.go         # typed ~/.tvault/config.yaml (browse: defaults)
     completion.go            # Shell completion
     output.go                # Color output helpers (Success, Error, Warning, Info)
     browse/                  # The interactive browser (the ONLY package importing charm.land/*)

@@ -49,7 +49,21 @@ func init() {
 	browseCmd.Flags().IntVar(&browseAuditLimit, "audit-limit", 100, "Number of recent audit entries to load")
 }
 
-func runBrowse(_ *cobra.Command, args []string) error {
+func runBrowse(cmd *cobra.Command, args []string) error {
+	// Config-file defaults (~/.tvault/config.yaml `browse:` block) fill in
+	// any flag the user did not set explicitly; explicit flags always win.
+	if cfg, err := loadConfig(); err == nil {
+		if !cmd.Flags().Changed("no-anim") && cfg.Browse.NoAnim {
+			browseNoAnim = true
+		}
+		if !cmd.Flags().Changed("single-pane") && cfg.Browse.SinglePane {
+			browseSinglePane = true
+		}
+		if !cmd.Flags().Changed("audit-limit") && cfg.Browse.AuditLimit > 0 {
+			browseAuditLimit = cfg.Browse.AuditLimit
+		}
+	}
+
 	// The browser needs a real terminal. Refuse on piped/dumb terminals so
 	// we fail fast with a clear message instead of producing garbage.
 	if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
