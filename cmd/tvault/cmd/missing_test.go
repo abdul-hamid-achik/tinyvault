@@ -56,6 +56,67 @@ func TestRunRestoreRejectsMissingFile(t *testing.T) {
 	}
 }
 
+func TestRunStatus(t *testing.T) {
+	vaultPath, restore := setupVaultForCommandTest(t)
+	defer restore()
+
+	v := openTestVault(t, vaultPath)
+	if err := v.SetSecret("default", "FOO", "bar"); err != nil {
+		t.Fatal(err)
+	}
+	v.Close()
+
+	// Default (text) output.
+	out := captureStdout(t, func() {
+		if err := runStatus(nil, nil); err != nil {
+			t.Fatalf("runStatus: %v", err)
+		}
+	})
+	for _, want := range []string{vaultPath, "initialized", "default"} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("status output missing %q:\n%s", want, out)
+		}
+	}
+
+	// --json output.
+	oldJSON := jsonOutput
+	jsonOutput = true
+	defer func() { jsonOutput = oldJSON }()
+
+	out = captureStdout(t, func() {
+		if err := runStatus(nil, nil); err != nil {
+			t.Fatalf("runStatus --json: %v", err)
+		}
+	})
+	var doc map[string]any
+	if err := json.Unmarshal(out, &doc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if doc["initialized"] != true {
+		t.Errorf("expected initialized=true, got %v", doc["initialized"])
+	}
+	if doc["current_project"] != "default" {
+		t.Errorf("expected current_project=default, got %v", doc["current_project"])
+	}
+}
+
+func TestRunStatusUninitialized(t *testing.T) {
+	// Use a fresh empty dir so the vault is not found.
+	dir := t.TempDir()
+	oldVaultDir := vaultDir
+	vaultDir = dir
+	defer func() { vaultDir = oldVaultDir }()
+
+	out := captureStdout(t, func() {
+		if err := runStatus(nil, nil); err != nil {
+			t.Fatalf("runStatus uninit: %v", err)
+		}
+	})
+	if !strings.Contains(string(out), "not initialized") {
+		t.Errorf("expected 'not initialized' in output: %q", out)
+	}
+}
+
 // TestRunDelete tests the tvault delete command via the cobra path.
 func TestRunDelete(t *testing.T) {
 	vaultPath, restore := setupVaultForCommandTest(t)
