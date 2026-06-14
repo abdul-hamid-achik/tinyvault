@@ -39,8 +39,9 @@ func (p paneID) title() string {
 		return "Secrets"
 	case paneAudit:
 		return "Audit"
+	default:
+		return ""
 	}
-	return ""
 }
 
 // mode is the current input focus.
@@ -245,7 +246,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// initial load is done — stop the loading spinner.
 			m.loading = false
 		}
-		return m, m.ensureAnim()
+		// ensureAnim mutates m (sets animating); evaluate it before the
+		// return so the mutation is captured in the returned model.
+		cmd := m.ensureAnim()
+		return m, cmd
 
 	case projectsLoadedMsg:
 		m.projects = msg.projects
@@ -277,7 +281,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.flashKey = msg.key
 		m.flashUntil = time.Now().Add(flashDuration)
 		m.statusLine = "revealed " + msg.key
-		return m, m.ensureAnim()
+		cmd := m.ensureAnim()
+		return m, cmd
 
 	case copiedMsg:
 		m.statusLine = "copied " + msg.key + " to clipboard"
@@ -289,7 +294,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		if m.mode == modeUnlock {
 			m.shakeUntil = time.Now().Add(flashDuration)
-			return m, m.ensureAnim()
+			cmd := m.ensureAnim()
+			return m, cmd
 		}
 		return m, nil
 
@@ -386,7 +392,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.lastErr = err
 				m.statusLine = "unlock failed: " + err.Error()
 				m.shakeUntil = time.Now().Add(flashDuration)
-				return m, m.ensureAnim()
+				cmd := m.ensureAnim()
+				return m, cmd
 			}
 			m.statusLine = "vault unlocked"
 			return m, tea.Batch(statusCmd(m.vault), auditCmd(m.vault, m.opts.AuditLimit))
@@ -394,9 +401,11 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.unlock, cmd = m.unlock.Update(msg)
 		return m, cmd
+
+	default:
+		// modeNormal — handled below.
 	}
 
-	// modeNormal
 	return m.handleNormalKey(msg)
 }
 
@@ -479,7 +488,8 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.vault.Lock()
 		m.wipeRevealed()
 		m.statusLine = "vault locked"
-		return m, tea.Batch(statusCmd(m.vault), m.ensureAnim())
+		cmd := m.ensureAnim()
+		return m, tea.Batch(statusCmd(m.vault), cmd)
 
 	case key.Matches(msg, m.keys.Reload):
 		m.wipeRevealed() // re-mask everything; the data is being refetched
@@ -538,6 +548,8 @@ func (m Model) moveCursor(delta int) (tea.Model, tea.Cmd) {
 		m.secCursor = clampInt(m.secCursor+delta, 0, len(m.secrets)-1)
 	case paneAudit:
 		m.auditOffset = clampInt(m.auditOffset+delta, 0, maxInt(0, len(m.audit)-1))
+	default:
+		// status pane has no cursor to move
 	}
 	return m, nil
 }

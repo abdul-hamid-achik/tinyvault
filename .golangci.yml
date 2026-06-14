@@ -123,6 +123,12 @@ linters:
     unparam:
       check-exported: false
 
+    exhaustive:
+      # A default: clause counts as handling the remaining cases. Enums
+      # like paneID carry a trailing count sentinel (paneCount) that can
+      # never be a real value, so requiring an explicit case for it is noise.
+      default-signifies-exhaustive: true
+
   exclusions:
     generated: lax
     presets:
@@ -143,6 +149,7 @@ linters:
           - revive
           - staticcheck
           - gocritic
+          - unparam
 
       # Allow longer functions in cmd
       - path: cmd/

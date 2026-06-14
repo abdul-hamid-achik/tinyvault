@@ -55,7 +55,7 @@ func easeInOutSine(t float64) float64 {
 
 // pulseAlpha returns an alpha in [lo,hi] oscillating with period seconds,
 // derived from the elapsed time. Drives the locked-lock-icon pulse.
-func pulseAlpha(elapsed time.Duration, period time.Duration, lo, hi float64) float64 {
+func pulseAlpha(elapsed, period time.Duration, lo, hi float64) float64 {
 	if period <= 0 {
 		return hi
 	}

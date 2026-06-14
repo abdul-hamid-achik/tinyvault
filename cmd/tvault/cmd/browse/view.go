@@ -91,9 +91,11 @@ func (m Model) renderHeader() string {
 	if proj == "" {
 		proj = "—"
 	}
-	parts = append(parts, m.styles.accent.Render(proj))
-	parts = append(parts, m.styles.headerMeta.Render(fmt.Sprintf("%d secrets", m.secretCount())))
-	parts = append(parts, m.styles.headerMeta.Render(fmt.Sprintf("%d projects", len(m.projects))))
+	parts = append(parts,
+		m.styles.accent.Render(proj),
+		m.styles.headerMeta.Render(fmt.Sprintf("%d secrets", m.secretCount())),
+		m.styles.headerMeta.Render(fmt.Sprintf("%d projects", len(m.projects))),
+	)
 
 	line := strings.Join(parts, sep)
 	return truncate(line, m.width)
@@ -142,8 +144,9 @@ func (m Model) activeHint() string {
 		return "secrets — r reveal · R reveal all · c copy · / filter"
 	case paneAudit:
 		return "audit — most recent activity (newest first)"
+	default:
+		return ""
 	}
-	return ""
 }
 
 // ---- body / panes ----
@@ -247,6 +250,8 @@ func (m Model) renderPane(id paneID, boxW, boxH int) string {
 		lines = m.secretsBody(innerW, bodyH, focused)
 	case paneAudit:
 		lines = m.auditBody(innerW, bodyH)
+	default:
+		// paneCount sentinel: no body
 	}
 	lines = fitLines(lines, innerW, bodyH)
 
@@ -271,16 +276,17 @@ func paneTitleText(id paneID, m Model) string {
 		return fmt.Sprintf("%s (%d)", base, len(m.allSecrets))
 	case paneAudit:
 		return fmt.Sprintf("%s (%d)", base, len(m.audit))
+	default:
+		return base
 	}
-	return base
 }
 
-// fitLines truncates/pads a slice to exactly h lines of width ≤ w.
+// fitLines truncates/pads a slice to exactly h lines, each ≤ w cells.
 func fitLines(lines []string, w, h int) []string {
 	out := make([]string, 0, h)
 	for i := 0; i < h; i++ {
 		if i < len(lines) {
-			out = append(out, lines[i])
+			out = append(out, truncate(lines[i], w))
 		} else {
 			out = append(out, "")
 		}
@@ -290,7 +296,7 @@ func fitLines(lines []string, w, h int) []string {
 
 // ---- pane bodies ----
 
-func (m Model) statusBody(w, h int) []string {
+func (m Model) statusBody(w, _ int) []string {
 	lock := m.styles.good.Render("● unlocked")
 	if !m.status.unlocked {
 		lock = m.styles.warn.Render("● locked")
