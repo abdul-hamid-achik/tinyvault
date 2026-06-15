@@ -57,18 +57,26 @@ steps:
         contains: "Secrets (2)"
       timeoutMs: 3000
   - snapshot: rw_start
-  # n → the new-key modal.
+  # n → the new-key modal (title + the field's placeholder hint both render).
   - press: "n"
   - wait:
       screen:
         contains: "New secret — key name"
       timeoutMs: 3000
+  - wait:
+      screen:
+        contains: "new key name"
+      timeoutMs: 3000
   - type: "API_TOKEN"
-  # enter → the value modal.
+  # enter → the value modal; its placeholder names the key being set.
   - press: "enter"
   - wait:
       screen:
         contains: "New secret — value"
+      timeoutMs: 3000
+  - wait:
+      screen:
+        contains: "value for API_TOKEN"
       timeoutMs: 3000
   - type: "tok_secret_999"
   # enter saves; the modal closes, the panes reload, the count grows to 3, and

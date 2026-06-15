@@ -838,6 +838,13 @@ func (m *Model) relayout() {
 	m.help.SetWidth(m.width)
 	m.filter.SetWidth(maxInt(10, m.width/3))
 	m.unlock.SetWidth(maxInt(10, m.width/3))
+	// The --rw edit modal box is overlay.Width(clampInt(width/2,30,60)); the
+	// overlay chrome is a border (2) + horizontal padding (6) = 8, so size the
+	// input to the box's inner width. Without a width the textinput renders
+	// only the cursor cell — the placeholder hint never shows, and a long value
+	// could overflow the box; with it, the placeholder shows and long values
+	// scroll within the field.
+	m.edit.SetWidth(maxInt(10, clampInt(m.width/2, 30, 60)-8))
 	if m.mode == modeHelp {
 		m.hvp.SetContent(renderHelp(w, m.isDark))
 	}
