@@ -12,7 +12,7 @@ import (
 // secret.delete / project.create / project.delete) so the audit log is
 // uniform no matter which surface — CLI, TUI, or MCP — performed the
 // action. Previously only the MCP server logged, so `tvault get/set/delete`
-// were invisible in the audit log (and in the browser's Audit pane).
+// were invisible in the audit log (and in the studio's Audit pane).
 //
 // Errors are intentionally ignored: audit is a safety net and must never
 // block or fail a command. Writing audit does not require the vault to be

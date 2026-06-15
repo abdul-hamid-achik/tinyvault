@@ -1,18 +1,18 @@
-# glyphrun specs — `tvault browse` end-to-end PTY tests
+# glyphrun specs — `tvault studio` end-to-end PTY tests
 
 These [glyphrun](https://github.com/abdul-hamid-achik/glyphrun) specs exercise
-the interactive browser (`tvault browse`, the Bubble Tea v2 TUI in
-`cmd/tvault/cmd/browse/`) **end-to-end in a real PTY**. They complement — they
-do not replace — the fast model-only Go tests in `cmd/tvault/cmd/browse/*_test.go`
-(which assert `View()` output and `Update` logic without a terminal). The specs
-prove the whole thing renders and drives correctly when keystrokes go through a
-real terminal.
+the interactive studio UI (`tvault studio` — `browse`/`ui` remain aliases — the
+Bubble Tea v2 TUI in `cmd/tvault/cmd/studio/`) **end-to-end in a real PTY**.
+They complement — they do not replace — the fast model-only Go tests in
+`cmd/tvault/cmd/studio/*_test.go` (which assert `View()` output and `Update`
+logic without a terminal). The specs prove the whole thing renders and drives
+correctly when keystrokes go through a real terminal.
 
 ## Running
 
 ```bash
 go build -o ./bin/tvault ./cmd/tvault          # specs also build this themselves
-glyph run specs/glyphrun/browse_reveal.yml --format md
+glyph run specs/glyphrun/studio_reveal.yml --format md
 # …or the whole suite:
 for f in specs/glyphrun/*.yml; do glyph run "$f" --format md; done
 ```
@@ -27,23 +27,23 @@ agent-facing workflow guide.
 
 | Spec | Flow it proves |
 |------|----------------|
-| `browse_reveal.yml`     | open unlocked → reveal one value (`r`) → re-mask (`esc`) → quit |
-| `browse_filter.yml`     | focus Secrets → `/` live-filter narrows the key list (`(1/2)`) → `esc` restores |
-| `browse_panes.yml`      | number keys `1`–`4` move focus; the footer hint tracks the active pane |
-| `browse_reveal_all.yml` | `R` reveals every value at once → `esc` re-masks all |
-| `browse_unlock.yml`     | locked start → in-app unlock (`u` + passphrase) → reveal works |
-| `browse_rw_edit.yml`    | `--rw`: create (`n`) then delete (`d`/`y`) a secret through the real vault |
+| `studio_reveal.yml`     | open unlocked → reveal one value (`r`) → re-mask (`esc`) → quit |
+| `studio_filter.yml`     | focus Secrets → `/` live-filter narrows the key list (`(1/2)`) → `esc` restores |
+| `studio_panes.yml`      | number keys `1`–`4` move focus; the footer hint tracks the active pane |
+| `studio_reveal_all.yml` | `R` reveals every value at once → `esc` re-masks all |
+| `studio_unlock.yml`     | locked start → in-app unlock (`u` + passphrase) → reveal works |
+| `studio_rw_edit.yml`    | `--rw`: create (`n`) then delete (`d`/`y`) a secret through the real vault |
 
 ## Two glyphrun behaviors worth knowing
 
 These shaped how the specs are written; keep them in mind when editing.
 
 1. **The config passphrase is injected into every target.** `glyphrun.config.yml`
-   sets `TVAULT_PASSPHRASE: glyphpass` for the `local` environment, so `browse`
+   sets `TVAULT_PASSPHRASE: glyphpass` for the `local` environment, so `studio`
    launches **unlocked** by default (that is what most specs want). A spec's
-   `target.env` only overrides the keys it names. `browse_unlock.yml` needs a
+   `target.env` only overrides the keys it names. `studio_unlock.yml` needs a
    *locked* start, so it overrides `TVAULT_PASSPHRASE` with a deliberately wrong
-   value — `browse` ignores a failed non-interactive unlock and starts locked,
+   value — `studio` ignores a failed non-interactive unlock and starts locked,
    which is exactly the state the in-app `u` flow needs.
 
 2. **Centered modals and single-cell updates don't always repaint.** glyphrun's

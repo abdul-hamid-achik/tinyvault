@@ -1,4 +1,4 @@
-package browse
+package studio
 
 import (
 	glamour "charm.land/glamour/v2"
@@ -6,9 +6,9 @@ import (
 )
 
 // helpMarkdown is the in-app help shown when the user presses `?`. It is
-// the curated, browser-specific cheat sheet — the long-form CLI manual
-// lives in `tvault help browse`, and both are kept close in wording.
-const helpMarkdown = `# tvault browse — keys & concepts
+// the curated, studio-specific cheat sheet — the long-form CLI manual
+// lives in `tvault help studio`, and both are kept close in wording.
+const helpMarkdown = `# tvault studio — keys & concepts
 
 A window into your vault, **read-only by default**. Use it to *see* your
 secrets, *filter* them, and *reveal* a value behind a key press without
@@ -60,7 +60,7 @@ log, exactly like ` + "`tvault set`" + ` / ` + "`tvault delete`" + `.
 **Safety**
 
 Revealed values live only in memory and only while shown. They are wiped
-on ` + "`esc`" + `, when you switch panes, and on quit. Without ` + "`--rw`" + ` the browser
+on ` + "`esc`" + `, when you switch panes, and on quit. Without ` + "`--rw`" + ` the studio
 never writes to the vault; the only thing it records is a reveal (` + "`r`" + `),
 which the audit log treats exactly like ` + "`tvault get`" + `. With ` + "`--rw`" + `, your
 new/edit/delete actions are written and audited like the matching CLI command.

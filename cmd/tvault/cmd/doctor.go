@@ -201,12 +201,12 @@ func checkEnvironment() []doctorCheck {
 
 func checkTerminal() doctorCheck {
 	if os.Getenv("TERM") == "dumb" {
-		return doctorCheck{Name: "terminal", Status: statusWarn, Detail: "TERM=dumb — 'tvault browse' will refuse to start"}
+		return doctorCheck{Name: "terminal", Status: statusWarn, Detail: "TERM=dumb — 'tvault studio' will refuse to start"}
 	}
 	if !term.IsTerminal(int(os.Stdout.Fd())) {
-		return doctorCheck{Name: "terminal", Status: statusInfo, Detail: "not a TTY — 'tvault browse' needs an interactive terminal"}
+		return doctorCheck{Name: "terminal", Status: statusInfo, Detail: "not a TTY — 'tvault studio' needs an interactive terminal"}
 	}
-	return doctorCheck{Name: "terminal", Status: statusOK, Detail: "interactive TTY ('tvault browse' OK)"}
+	return doctorCheck{Name: "terminal", Status: statusOK, Detail: "interactive TTY ('tvault studio' OK)"}
 }
 
 func shortID(id string) string {

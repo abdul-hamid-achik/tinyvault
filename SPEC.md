@@ -679,10 +679,11 @@ complete list of features and topics.
 
 ---
 
-### 5.4 The interactive browser (`tvault browse`)
+### 5.4 The interactive studio (`tvault studio`)
 
-`tvault browse` is the **human** surface — a full-screen terminal UI for
-browsing the vault, **read-only by default**. It is the natural sibling to
+`tvault studio` (aliases: `browse`, `ui`) is the **human** surface — a
+full-screen terminal UI for browsing the vault, **read-only by default**.
+It is the natural sibling to
 `tvault docs` (agent-readable manifest) and `tvault help` (long-form
 manual). With no flags it only reads, so a stray keystroke can't change
 anything; the only decryption is the on-demand reveal, recorded in the
@@ -737,12 +738,13 @@ a loading spinner, a soft pulse on the lock indicator while locked, and a
 brief flash on reveal. All animations disable automatically under
 `--no-anim`, `$TVAULT_NO_ANIM`, or an SSH session (`$SSH_CONNECTION` /
 `$SSH_TTY`), and the frame ticker only runs while something is actually
-animating, so an idle browser is free.
+animating, so an idle studio is free.
 
-**Dependency footprint.** The browser is the only thing that pulls in the
+**Dependency footprint.** The studio is the only thing that pulls in the
 `charm.land/*` v2 stack — `bubbletea/v2`, `lipgloss/v2`, `bubbles/v2`,
-and `glamour/v2` (for the help pane). It is opt-in via the `browse`
-subcommand; no other command imports those libraries. Adding the stack
+and `glamour/v2` (for the help pane). It is opt-in via the `studio`
+subcommand (aliases `browse`/`ui`); no other command imports those
+libraries. Adding the stack
 takes the binary from ~12 MB to ~24 MB uncompressed. No `harmonica` —
 animations are hand-rolled easing — and no `huh`, keeping the dependency
 set strictly to the v2 line.

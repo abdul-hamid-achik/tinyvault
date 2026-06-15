@@ -1,4 +1,4 @@
-package browse
+package studio
 
 import (
 	"fmt"
@@ -76,7 +76,7 @@ type Options struct {
 	ReadWrite  bool // --rw: enable in-app set/edit/delete (default read-only)
 }
 
-// Model is the top-level Bubble Tea model for `tvault browse`.
+// Model is the top-level Bubble Tea model for `tvault studio`.
 type Model struct {
 	vault *vault.Vault
 	opts  Options

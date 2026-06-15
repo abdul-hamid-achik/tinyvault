@@ -45,7 +45,7 @@ func TestEmitHelpJSON(t *testing.T) {
 	}
 	for _, k := range []string{
 		"overview", "lifecycle", "conventions", "output", "safety",
-		"recipes", "agent_guide", "troubleshooting", "browse", "topics",
+		"recipes", "agent_guide", "troubleshooting", "studio", "topics",
 	} {
 		if _, ok := doc[k]; !ok {
 			t.Errorf("JSON manifest missing top-level key %q", k)
@@ -67,7 +67,8 @@ func TestEmitHelpJSON(t *testing.T) {
 
 // TestEmitHelpTopicText verifies each topic produces non-empty text.
 func TestEmitHelpTopicText(t *testing.T) {
-	topics := []string{"workflow", "safety", "recipes", "output", "agent", "troubleshooting", "browse", "topics"}
+	// "browse" and "ui" are kept aliases of the primary "studio" topic.
+	topics := []string{"workflow", "safety", "recipes", "output", "agent", "troubleshooting", "studio", "browse", "topics"}
 	for _, topic := range topics {
 		t.Run(topic, func(t *testing.T) {
 			out := &bytes.Buffer{}
@@ -100,6 +101,8 @@ func TestEmitHelpTopicJSON(t *testing.T) {
 		{topic: "output", shapeIsArray: false, wantKeys: []string{"json_usage", "env_formats", "golden_rule"}},
 		{topic: "agent", shapeIsArray: false, wantKeys: []string{"discover", "preferred_order", "anti_patterns", "when_to_ask_for_help"}},
 		{topic: "troubleshooting", shapeIsArray: true, firstItemKey: "problem"},
+		{topic: "studio", shapeIsArray: false, wantKeys: []string{"what_it_is", "what_it_is_not", "panes", "keys", "when_to_use", "security"}},
+		// "browse" is a kept alias and must resolve to the same shape as "studio".
 		{topic: "browse", shapeIsArray: false, wantKeys: []string{"what_it_is", "what_it_is_not", "panes", "keys", "when_to_use", "security"}},
 		{topic: "topics", shapeIsArray: true, firstItemKey: "slug"},
 	}
@@ -148,6 +151,25 @@ func TestEmitHelpUnknownTopic(t *testing.T) {
 	err = emitHelp(&bytes.Buffer{}, "nonexistent", true)
 	if err == nil {
 		t.Error("expected error for unknown topic in JSON mode")
+	}
+}
+
+// TestEmitHelpStudioAlias verifies the "browse" topic is a kept alias
+// of the primary "studio" topic: both must resolve and produce the
+// identical output in text and JSON form.
+func TestEmitHelpStudioAlias(t *testing.T) {
+	for _, asJSON := range []bool{false, true} {
+		studio := &bytes.Buffer{}
+		if err := emitHelp(studio, "studio", asJSON); err != nil {
+			t.Fatalf("emitHelp studio (json=%v): %v", asJSON, err)
+		}
+		browse := &bytes.Buffer{}
+		if err := emitHelp(browse, "browse", asJSON); err != nil {
+			t.Fatalf("emitHelp browse alias (json=%v): %v", asJSON, err)
+		}
+		if studio.String() != browse.String() {
+			t.Errorf("browse alias output differs from studio (json=%v)", asJSON)
+		}
 	}
 }
 

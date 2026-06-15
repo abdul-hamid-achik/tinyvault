@@ -1,5 +1,5 @@
 version: 1
-name: tvault_browse_filter
+name: tvault_studio_filter
 
 intent: |
   A user opens `tvault browse` on an unlocked vault with two secrets, focuses
@@ -13,7 +13,7 @@ intent: |
   this spec proves it renders and responds to keystrokes over a PTY.
 
 target:
-  cmd: ["./bin/tvault", "browse", "--no-anim"]
+  cmd: ["./bin/tvault", "studio", "--no-anim"]
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/filter"

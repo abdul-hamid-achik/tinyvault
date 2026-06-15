@@ -1,4 +1,4 @@
-package browse
+package studio
 
 import (
 	tea "charm.land/bubbletea/v2"

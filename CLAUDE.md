@@ -2,7 +2,8 @@
 
 TinyVault is a **single Go binary**: a local-first secrets CLI (`tvault`) plus
 an MCP server, backed by one encrypted bbolt file. No servers, no accounts,
-no cloud. There is also an interactive terminal browser, `tvault browse`.
+no cloud. There is also an interactive terminal studio UI, `tvault studio`
+(aliases: `browse`, `ui`).
 
 **Read these first — they are the source of truth:**
 - [AGENTS.md](AGENTS.md) — project structure, code conventions, security
@@ -110,11 +111,13 @@ Security Scan, Build**. All four must be green.
   delegation. Tokens are out-of-band (0600 file, SIGHUP reload), only their
   SHA-256 is stored, and audit logs a hash prefix (`token_id`), never the token.
 
-## The interactive browser (`tvault browse`)
+## The interactive studio UI (`tvault studio`, aliases `browse`/`ui`)
 
-- Lives in `cmd/tvault/cmd/browse/` — the **only** package that imports
+- Lives in `cmd/tvault/cmd/studio/` — the **only** package that imports
   `charm.land/*` (Bubble Tea v2 / Lip Gloss v2 / Bubbles v2 / Glamour v2).
   Strictly the v2 line: no `harmonica`, no `huh`; animations are hand-rolled.
+  `browse` and `ui` remain working aliases for `studio`; the `browse:` config
+  block in `~/.tvault/config.yaml` keeps its name.
 - **Read-only by default** — with no flags it never writes; the only decryption
   is the on-demand reveal (`r`), audited like `tvault get`. `--rw` enables
   audited in-app edits (`n`/`e`/`d`) that reuse the CLI's `vault.SetSecret`/
@@ -125,7 +128,7 @@ Security Scan, Build**. All four must be green.
 - Reveal-map values are wiped on `esc`, pane change, lock, reload, and quit,
   and a late (epoch-stale) reveal is dropped so it can't resurrect a value.
 - **Verify TUI changes in a real PTY** with glyphrun (the `glyph` CLI, at
-  `~/projects/glyphrun`): `glyph run specs/glyphrun/browse_reveal.yml --format md`.
+  `~/projects/glyphrun`): `glyph run specs/glyphrun/studio_reveal.yml --format md`.
   The full e2e suite (reveal, filter, panes, reveal-all, unlock, `--rw` edit)
   and two glyphrun gotchas (config-injected passphrase; overlays / single-cell
   updates not always repainting → drive modals blind) are documented in
