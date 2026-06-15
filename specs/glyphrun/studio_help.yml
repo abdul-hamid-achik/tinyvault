@@ -1,0 +1,119 @@
+version: 1
+name: studio_help
+
+intent: |
+  A user opens `tvault studio` against an unlocked vault, focuses the Secrets
+  pane, and presses `?` to open the in-app help overlay (a centered glamour
+  cheat sheet). They read it, then press `esc` to close it and return to the
+  clean multi-pane view, and quit cleanly with `q`.
+
+  This is the end-to-end PTY smoke test for the help overlay (modeHelp). The
+  model-only assertions on the overlay's contents live in
+  cmd/tvault/cmd/studio/*_test.go; this spec proves `?` opens and `esc` closes
+  the overlay when driven through a real terminal.
+
+  Note on overlays: glyphrun's terminal emulator does not fully apply Bubble
+  Tea v2's cell-diff repaint when a centered modal opens over the multi-pane
+  body (stale border cells linger), so the help overlay's glamour contents do
+  not always render reliably in the emulator. The keystrokes still reach the
+  model, so this spec drives the overlay "blind" — press `?`, settle on idle,
+  snapshot, press `esc`, settle on idle — and asserts only on the clean
+  multi-pane state the flow returns to: the Secrets footer hint ("reveal all",
+  the unlocked read-only secrets activeHint) repaints reliably as a whole
+  token once modeNormal is restored.
+
+target:
+  cmd: ["./bin/tvault", "studio", "--no-anim"]
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/help"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 15000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/help"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/help TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/help TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/help TVAULT_PASSPHRASE=glyphpass ./bin/tvault use webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/help TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph -p webapp"
+      timeoutMs: 10000
+
+steps:
+  # Clean unlocked multi-pane start.
+  - wait:
+      screen:
+        contains: "unlocked"
+      timeoutMs: 6000
+  - wait:
+      screen:
+        contains: "webapp"
+      timeoutMs: 3000
+  # Focus the Secrets pane so the footer activeHint is the read-only secrets
+  # hint ("…R reveal all…") — the whole-token string we assert on after esc.
+  - press: "3"
+  - wait:
+      screen:
+        contains: "DB_URL"
+      timeoutMs: 3000
+  - wait:
+      screen:
+        contains: "reveal all"
+      timeoutMs: 3000
+  - snapshot: before_help
+  # ? opens the help overlay (modeHelp). Drive it blind: keystrokes reach the
+  # model regardless of how the emulator repaints the centered glamour box, so
+  # settle on idle rather than asserting on overlay contents.
+  - press: "?"
+  - wait:
+      idle:
+        quietForMs: 400
+      timeoutMs: 3000
+  - snapshot: help_open
+  # esc closes the overlay and restores modeNormal. Settle on idle so the
+  # multi-pane body has fully repainted before asserting on the footer.
+  - press: "esc"
+  - wait:
+      idle:
+        quietForMs: 400
+      timeoutMs: 3000
+  # Back on the clean Secrets view: the read-only secrets footer hint repaints
+  # as a whole token. This proves the overlay closed and panes returned.
+  - wait:
+      screen:
+        contains: "reveal all"
+      timeoutMs: 3000
+  - wait:
+      screen:
+        contains: "DB_URL"
+      timeoutMs: 3000
+  - snapshot: help_closed
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  # The wait steps enforce the flow: an unlocked start, the secrets hint before
+  # help, the idle settles around `?`/`esc`, and the secrets hint + DB_URL row
+  # returning after esc (proving the overlay closed). A wait that times out
+  # errors the run. This outcome verifies the durable end-state: the studio
+  # exits the alternate screen and returns status 0 (vault closed).
+  - id: clean_exit
+    description: "? opens help and esc closes it, then q exits cleanly with status 0"
+    verify:
+      process:
+        exitCode: 0

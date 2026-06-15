@@ -1,0 +1,115 @@
+version: 1
+name: studio_delete_cancel
+
+intent: |
+  A user opens `tvault studio --rw` (in-app writes enabled; the header shows an
+  "rw" badge) on an unlocked vault with two secrets (DB_URL, STRIPE_KEY). They
+  start a delete on the selected key with `d` — which opens the delete-confirm
+  modal — then change their mind and press `esc` to cancel. No write happens:
+  the secret is still there afterward.
+
+  This proves the delete-cancel path is non-destructive end-to-end over a PTY.
+  The model-only confirmation logic (modeConfirmDel, esc clears confirmKey
+  without deleting) is covered by cmd/tvault/cmd/studio/mutations_test.go; this
+  spec proves the keystrokes drive a real cancel through the real vault and
+  leave the data untouched.
+
+  Note on overlays + cell updates: glyphrun's terminal emulator does not fully
+  apply Bubble Tea v2's cell-diff repaint when a centered modal opens over the
+  multi-pane body, and it can drop a single-cell update (a pane-title count
+  digit). So the delete-confirm modal is driven "blind" (settling on idle
+  between inputs, no assertion on the overlay contents), and the cancel is
+  proven by asserting on whole-token strings that repaint reliably: the header
+  "2 secrets" count and the DB_URL key row both still present after esc.
+
+target:
+  cmd: ["./bin/tvault", "studio", "--rw", "--no-anim"]
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/delcancel"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 15000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/delcancel"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/delcancel TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/delcancel TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/delcancel TVAULT_PASSPHRASE=glyphpass ./bin/tvault use webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/delcancel TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph -p webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/delcancel TVAULT_PASSPHRASE=glyphpass ./bin/tvault set STRIPE_KEY sk_live_glyph123 -p webapp"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "unlocked"
+      timeoutMs: 6000
+  # Clean multi-pane start: two secrets, header count reads "2 secrets".
+  - wait:
+      screen:
+        contains: "2 secrets"
+      timeoutMs: 3000
+  - wait:
+      screen:
+        contains: "DB_URL"
+      timeoutMs: 3000
+  - snapshot: before_delete
+  # The Secrets pane is focused by default and the cursor sits on DB_URL
+  # (sorted first). d → delete-confirm modal (driven blind; settle on idle).
+  - press: "d"
+  - wait:
+      idle:
+        quietForMs: 300
+      timeoutMs: 3000
+  # esc cancels the delete: confirmKey is cleared, mode returns to normal, and
+  # NO write happens. Settle on idle so the clean multi-pane state has repainted.
+  - press: "esc"
+  - wait:
+      idle:
+        quietForMs: 500
+      timeoutMs: 3000
+  # The cancel left the data untouched: the header still reads "2 secrets" and
+  # the DB_URL row is still in the Secrets pane. The footer fell back to the
+  # rw secrets hint ("n new"), confirming we are back in the clean normal state.
+  - wait:
+      screen:
+        contains: "2 secrets"
+      timeoutMs: 3000
+  - wait:
+      screen:
+        contains: "DB_URL"
+      timeoutMs: 3000
+  - wait:
+      screen:
+        contains: "n new"
+      timeoutMs: 3000
+  - snapshot: after_cancel
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  # The screen assertions above ("2 secrets" and "DB_URL" still present after
+  # esc) are enforced by the wait steps — a wait that times out errors the run.
+  # The outcome verifies the durable end-state: a clean exit with status 0.
+  - id: clean_exit
+    description: d then esc cancels the delete (no write) and q exits with status 0
+    verify:
+      process:
+        exitCode: 0

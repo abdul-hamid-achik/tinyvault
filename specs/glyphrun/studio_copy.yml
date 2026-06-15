@@ -1,0 +1,90 @@
+version: 1
+name: studio_copy
+
+intent: |
+  A user opens `tvault studio` against an unlocked vault and lands on the
+  Secrets pane (the default focus). With the cursor on the first key (DB_URL,
+  sorted before STRIPE_KEY) they press `c` to copy it. The footer status line
+  confirms the copy with "copied DB_URL to clipboard", then they quit cleanly
+  with `q`.
+
+  This proves the copy keybinding drives correctly over a real PTY. glyphrun's
+  emulator can't read the system clipboard, but the copy path also writes a
+  whole-token status line that repaints reliably — that line is the observable
+  signal asserted here. The model-only copy logic (copyCurrent / copiedMsg) is
+  covered by cmd/tvault/cmd/studio/*_test.go.
+
+target:
+  cmd: ["./bin/tvault", "studio", "--no-anim"]
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/copy"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 15000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/copy"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/copy TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/copy TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/copy TVAULT_PASSPHRASE=glyphpass ./bin/tvault use webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/copy TVAULT_PASSPHRASE=glyphpass ./bin/tvault set STRIPE_KEY sk_live_glyph123 -p webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/copy TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph -p webapp"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "unlocked"
+      timeoutMs: 6000
+  - wait:
+      screen:
+        contains: "webapp"
+      timeoutMs: 3000
+  # The Secrets pane is focused by default; confirm the keys are listed before
+  # we act on the cursor.
+  - wait:
+      screen:
+        contains: "STRIPE_KEY"
+      timeoutMs: 3000
+  - wait:
+      screen:
+        contains: "DB_URL"
+      timeoutMs: 3000
+  - snapshot: home
+  # Cursor starts on DB_URL (sorted first). Copy it; the footer status line
+  # repaints as a whole token once the async decrypt lands.
+  - press: "c"
+  - wait:
+      screen:
+        contains: "copied DB_URL to clipboard"
+      timeoutMs: 3000
+  - snapshot: copied
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  # The "copied DB_URL to clipboard" wait above enforces the copy status line;
+  # a wait that times out errors the run. This outcome verifies the durable
+  # end-state: the studio exits the alternate screen with status 0.
+  - id: clean_exit
+    description: c copies the selected key (footer confirms) and q exits cleanly
+    verify:
+      process:
+        exitCode: 0

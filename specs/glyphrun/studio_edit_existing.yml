@@ -1,0 +1,129 @@
+version: 1
+name: studio_edit_existing
+
+intent: |
+  A user opens `tvault studio --rw` (in-app writes enabled; the header shows an
+  "rw" badge) on an unlocked vault that holds a `webapp` project with
+  DB_URL=postgres://old. They focus the Secrets pane (DB_URL is sorted first, so
+  the cursor already sits on it), press `e` to edit, clear the prefilled current
+  value, type a new value, and save — proving the audited in-app *edit* path
+  (modeSetValue with editing=true) drives an existing key through the same
+  vault.SetSecret call the CLI uses.
+
+  The edit overlay prefills the field with the current decrypted value and puts
+  the cursor at the end (startEditSecret → CursorEnd). To replace it we press
+  ctrl+u (the textinput DeleteBeforeCursor binding), which deletes everything
+  before the cursor — the whole line — then type the new value and ⏎ to save.
+
+  Note on overlays + cell updates: glyphrun's terminal emulator does not fully
+  apply Bubble Tea v2's cell-diff repaint when a centered modal opens over the
+  multi-pane body, so this spec drives the edit modal "blind" (settling on idle
+  between inputs) and asserts only on signals that repaint reliably as whole
+  tokens: the footer status line confirming the write ("set DB_URL") and the new
+  value when revealed ("postgres://new"). The modal contents themselves are
+  covered by the model tests (mutations_test.go).
+
+target:
+  cmd: ["./bin/tvault", "studio", "--rw", "--no-anim"]
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/edit"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/edit"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/edit TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/edit TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/edit TVAULT_PASSPHRASE=glyphpass ./bin/tvault use webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/edit TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://old -p webapp"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "unlocked"
+      timeoutMs: 6000
+  # Clean multi-pane state: one secret (DB_URL), sorted first → cursor on it.
+  - wait:
+      screen:
+        contains: "Secrets (1)"
+      timeoutMs: 3000
+  - wait:
+      screen:
+        contains: "DB_URL"
+      timeoutMs: 3000
+  - snapshot: before_edit
+  # Focus the Secrets pane explicitly so `e` targets it (DB_URL at the cursor).
+  - press: "3"
+  - wait:
+      idle:
+        quietForMs: 300
+      timeoutMs: 3000
+  # e → edit overlay, prefilled with "postgres://old", cursor at end.
+  # Driven blind; settle on idle.
+  - press: "e"
+  - wait:
+      idle:
+        quietForMs: 400
+      timeoutMs: 3000
+  # ctrl+u clears the prefilled value (DeleteBeforeCursor; cursor is at the end).
+  - press: "ctrl+u"
+  - wait:
+      idle:
+        quietForMs: 400
+      timeoutMs: 3000
+  - type: "postgres://new"
+  - wait:
+      idle:
+        quietForMs: 400
+      timeoutMs: 3000
+  # ⏎ saves; the modal closes and the panes reload. Settle on idle so every
+  # reload (status/projects/secrets/audit) has landed before asserting.
+  - press: "enter"
+  - wait:
+      idle:
+        quietForMs: 500
+      timeoutMs: 5000
+  # The write is confirmed in the footer status line as a whole token.
+  - wait:
+      screen:
+        contains: "set DB_URL"
+      timeoutMs: 5000
+  - snapshot: saved
+  # Reveal the edited value: cursor is still on DB_URL (sorted first).
+  - press: "r"
+  - wait:
+      screen:
+        contains: "postgres://new"
+      timeoutMs: 3000
+  - snapshot: revealed
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  # The screen assertions ("unlocked", "DB_URL", "set DB_URL", the revealed new
+  # value) are enforced by the wait steps above — a wait that times out errors
+  # the run. The outcome verifies the durable end-state: studio exits the
+  # alternate screen with status 0 after an in-app edit of an existing secret.
+  - id: clean_exit
+    description: q exits cleanly with status 0 after editing an existing secret's value
+    verify:
+      process:
+        exitCode: 0

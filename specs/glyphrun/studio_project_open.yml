@@ -1,0 +1,130 @@
+version: 1
+name: studio_project_open
+
+intent: |
+  A user opens `tvault studio` on an unlocked vault with three projects (sorted:
+  api → default → webapp). webapp is current and holds DB_URL; api holds
+  API_HOST=example.com. studio launches showing the current project's secrets
+  (DB_URL). The user focuses the Projects pane with `2`, moves the selection up
+  with `k` twice (webapp → default → api), and presses `enter` to open the api
+  project. studio focuses the Secrets pane and loads api's keys, so the Secrets
+  pane now holds API_HOST; revealing it with `r` shows api's value
+  `example.com`. They quit cleanly with `q`.
+
+  This proves the open-a-project flow (Projects pane → `enter` → Secrets pane
+  swaps to the chosen project's keys) drives correctly over a real PTY. The
+  model-only navigation logic is covered by cmd/tvault/cmd/studio/*_test.go;
+  this spec proves the keystrokes swap the live secrets list end-to-end.
+
+  Note (assertion choice): the Audit pane always lists `API_HOST` (the write
+  is logged by key name), so the key alone is NOT a Secrets-pane-specific
+  signal. The unambiguous proof that api was opened is the *revealed value*
+  `example.com` — it appears only when api's secret is revealed in the Secrets
+  pane and never in the audit log (which records key names, never values).
+
+target:
+  cmd: ["./bin/tvault", "studio", "--no-anim"]
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/projopen"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 15000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/projopen"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/projopen TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/projopen TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/projopen TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create api"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/projopen TVAULT_PASSPHRASE=glyphpass ./bin/tvault use webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/projopen TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph -p webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/projopen TVAULT_PASSPHRASE=glyphpass ./bin/tvault set API_HOST example.com -p api"
+      timeoutMs: 10000
+
+steps:
+  # studio launches unlocked, on the current project (webapp) and its keys.
+  - wait:
+      screen:
+        contains: "unlocked"
+      timeoutMs: 6000
+  - wait:
+      screen:
+        contains: "DB_URL"
+      timeoutMs: 3000
+  # All projects are listed in the Projects pane (sorted: api, default, webapp).
+  - wait:
+      screen:
+        contains: "webapp"
+      timeoutMs: 3000
+  - wait:
+      screen:
+        contains: "api"
+      timeoutMs: 3000
+  - snapshot: home
+  # Focus the Projects pane. The cursor sits on the current project (webapp,
+  # the last of the three sorted names); the footer hint switches to the
+  # projects context.
+  - press: "2"
+  - wait:
+      screen:
+        contains: "to open"
+      timeoutMs: 3000
+  # Move the selection up twice (webapp → default → api). Each move live-previews
+  # the highlighted project; settle on idle between presses so the preview
+  # reload for `api` has landed before we commit with enter.
+  - press: "k"
+  - wait:
+      idle:
+        quietForMs: 300
+      timeoutMs: 3000
+  - press: "k"
+  - wait:
+      idle:
+        quietForMs: 300
+      timeoutMs: 3000
+  # enter opens the selected project: focus jumps to Secrets and api's keys
+  # load. The Secrets list now holds API_HOST.
+  - press: "enter"
+  - wait:
+      screen:
+        contains: "API_HOST"
+      timeoutMs: 5000
+  # Reveal the selected (and only) api key. `example.com` is api's value — it
+  # surfaces only in the Secrets pane, proving the Secrets list swapped to api
+  # (the audit log shows the key name but never the value).
+  - press: "r"
+  - wait:
+      screen:
+        contains: "example.com"
+      timeoutMs: 3000
+  - snapshot: opened
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  # The screen assertions (unlocked, DB_URL, the project names, the projects
+  # hint, API_HOST, and api's revealed value example.com) are enforced by the
+  # wait steps — a wait that times out errors the run. The outcome verifies the
+  # durable end-state: the studio leaves the alternate screen and returns 0.
+  - id: clean_exit
+    description: q exits cleanly with status 0 after opening + revealing in api
+    verify:
+      process:
+        exitCode: 0

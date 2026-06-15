@@ -1,0 +1,69 @@
+version: 1
+name: studio_too_small
+
+intent: |
+  A user launches `tvault studio` in a terminal smaller than the 40x10 minimum
+  the UI needs to render its multi-pane layout. Instead of a corrupted or empty
+  screen, the studio shows a single readable guard message — "terminal too
+  small (WxH) — need at least 40x10" — and still accepts the quit key, exiting
+  cleanly with status 0.
+
+  This proves the too-small guard (model.go minTermW=40 / minTermH=10,
+  rendered in view.go) drives correctly over a real PTY. The model-only
+  rendering of the guard is covered by cmd/tvault/cmd/studio/*_test.go; this
+  spec proves it shows up and quits at a sub-minimum terminal size end-to-end.
+
+target:
+  cmd: ["./bin/tvault", "studio", "--no-anim"]
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/small"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 15000
+
+terminal:
+  cols: 30
+  rows: 8
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/small"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/small TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/small TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/small TVAULT_PASSPHRASE=glyphpass ./bin/tvault use webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/small TVAULT_PASSPHRASE=glyphpass ./bin/tvault set STRIPE_KEY sk_live_glyph123 -p webapp"
+      timeoutMs: 10000
+
+steps:
+  # At 30x8 (below the 40x10 minimum) there is no normal multi-pane UI — the
+  # View() short-circuits to the guard message. Wait for it, then quit.
+  - wait:
+      screen:
+        contains: "terminal too small"
+      timeoutMs: 6000
+  - snapshot: too_small
+  # The quit key still reaches handleNormalKey regardless of size (the size
+  # check only gates rendering), so q exits cleanly.
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  # The "terminal too small" assertion is enforced by the wait step above — a
+  # wait that times out errors the run. This outcome verifies the durable
+  # end-state: the studio leaves the alternate screen and returns status 0.
+  - id: clean_exit
+    description: q exits the studio cleanly with status 0 from the too-small guard
+    verify:
+      process:
+        exitCode: 0

@@ -27,12 +27,24 @@ agent-facing workflow guide.
 
 | Spec | Flow it proves |
 |------|----------------|
-| `studio_reveal.yml`     | open unlocked → reveal one value (`r`) → re-mask (`esc`) → quit |
-| `studio_filter.yml`     | focus Secrets → `/` live-filter narrows the key list (`(1/2)`) → `esc` restores |
-| `studio_panes.yml`      | number keys `1`–`4` move focus; the footer hint tracks the active pane |
-| `studio_reveal_all.yml` | `R` reveals every value at once → `esc` re-masks all |
-| `studio_unlock.yml`     | locked start → in-app unlock (`u` + passphrase) → reveal works |
-| `studio_rw_edit.yml`    | `--rw`: create (`n`) then delete (`d`/`y`) a secret through the real vault |
+| `studio_reveal.yml`        | open unlocked → reveal one value (`r`) → re-mask (`esc`) → quit |
+| `studio_reveal_all.yml`    | `R` reveals every value at once → `esc` re-masks all |
+| `studio_copy.yml`          | `c` copies the selected value (footer "copied KEY to clipboard") |
+| `studio_filter.yml`        | focus Secrets → `/` live-filter narrows the key list (`(1/2)`) → `esc` restores |
+| `studio_filter_no_match.yml` | `/` + non-matching text → "no keys match filter" + `(0/N)` |
+| `studio_panes.yml`         | number keys `1`–`4` move focus; the footer hint tracks the active pane |
+| `studio_tab_cycle.yml`     | `tab` / `shift+tab` cycle focus around all four panes |
+| `studio_vim_nav.yml`       | vim `j`/`k` move the selection, `h`/`l` cycle panes |
+| `studio_project_open.yml`  | Projects pane → navigate → `enter` opens another project's secrets |
+| `studio_single_pane.yml`   | `--single-pane`: tab strip + one pane; numbers switch the visible pane |
+| `studio_unlock.yml`        | locked start → in-app unlock (`u` + passphrase) → reveal works |
+| `studio_lock.yml`          | `L` locks an unlocked vault; reveal is then blocked |
+| `studio_rw_edit.yml`       | `--rw`: create (`n`) then delete (`d`/`y`) a secret through the real vault |
+| `studio_edit_existing.yml` | `--rw`: `e` edits an existing value; the new value reveals |
+| `studio_delete_cancel.yml` | `--rw`: `d` then `esc` cancels — the secret survives |
+| `studio_help.yml`          | `?` opens the help overlay, `esc` closes it |
+| `studio_too_small.yml`     | a sub-minimum terminal shows the "terminal too small" guard |
+| `studio_quit_ctrlc.yml`    | `ctrl+c` quits cleanly (exit 0), like `q` |
 
 ## Two glyphrun behaviors worth knowing
 
