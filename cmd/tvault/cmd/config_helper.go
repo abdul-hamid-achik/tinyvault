@@ -9,8 +9,9 @@ import (
 
 // Config is the typed view of ~/.tvault/config.yaml for settings that the
 // global viper flag-binding (vault / project / verbose, wired in root.go)
-// does not cover. Today that is the `browse:` block, which supplies
-// defaults for the interactive browser's flags.
+// does not cover. Today that is the `browse:` block (the key is kept as
+// `browse:` for backwards compatibility), which supplies defaults for the
+// interactive studio's flags (`tvault studio`, aliases `browse`/`ui`).
 //
 //	# ~/.tvault/config.yaml
 //	browse:
@@ -21,7 +22,8 @@ type Config struct {
 	Browse BrowseConfig `yaml:"browse"`
 }
 
-// BrowseConfig holds default settings for `tvault browse`. Explicit
+// BrowseConfig holds default settings for `tvault studio` (under the
+// `browse:` config key, kept for backwards compatibility). Explicit
 // command-line flags always win over these.
 type BrowseConfig struct {
 	NoAnim     bool `yaml:"no_anim"`

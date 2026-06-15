@@ -1,4 +1,4 @@
-package browse
+package studio
 
 import (
 	key "charm.land/bubbles/v2/key"

@@ -29,11 +29,11 @@ golangci-lint run ./...        # 0 lint issues
 govulncheck ./...              # no new vulnerabilities in our code path
 ```
 
-If you touch the interactive browser (`cmd/tvault/cmd/browse/`, the
-`tvault browse` TUI), also run its real-PTY smoke test with
-[glyphrun](https://github.com/abdul-hamid-achik/glyphrun):
+If you touch the interactive studio UI (`cmd/tvault/cmd/studio/`, the
+`tvault studio` TUI — `browse`/`ui` remain aliases), also run its real-PTY
+smoke test with [glyphrun](https://github.com/abdul-hamid-achik/glyphrun):
 ```bash
-glyph run specs/glyphrun/browse_reveal.yml --format md
+glyph run specs/glyphrun/studio_reveal.yml --format md
 ```
 
 ## Pull Request Process

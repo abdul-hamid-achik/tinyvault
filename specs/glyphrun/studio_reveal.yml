@@ -1,5 +1,5 @@
 version: 1
-name: tvault_browse_reveal
+name: tvault_studio_reveal
 
 intent: |
   A user opens `tvault browse` against an unlocked vault, sees the vault is
@@ -12,7 +12,7 @@ intent: |
   terminal.
 
 target:
-  cmd: ["./bin/tvault", "browse", "--no-anim"]
+  cmd: ["./bin/tvault", "studio", "--no-anim"]
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/vault"

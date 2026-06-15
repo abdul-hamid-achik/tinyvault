@@ -1,4 +1,4 @@
-package browse
+package studio
 
 import (
 	"time"
@@ -67,7 +67,7 @@ func loadAudit(v *vault.Vault, limit int) ([]*store.AuditEntry, error) {
 // revealSecret decrypts a single value. Requires the vault to be
 // unlocked; returns vault.ErrLocked otherwise. A successful decrypt is
 // audited as a secret.read (same vocabulary as the CLI and MCP), so a
-// reveal/copy in the browser shows up in the Audit pane and the log.
+// reveal/copy in the studio shows up in the Audit pane and the log.
 func revealSecret(v *vault.Vault, project, key string) (string, error) {
 	val, err := v.GetSecret(project, key)
 	if err == nil {

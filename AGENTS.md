@@ -79,13 +79,13 @@ cmd/tvault/
     rotate.go                # tvault key rotate
     mcp_server.go            # tvault mcp-server (stdio MCP transport)
     ci.go                    # tvault ci init --mode=passphrase|identity (generate CI workflow files)
-    browse.go                # tvault browse (cobra wiring + TTY checks; calls browse pkg)
+    studio.go                # tvault studio (aliases: browse, ui) (cobra wiring + TTY checks; calls studio pkg)
     doctor.go                # tvault doctor (read-only setup diagnostics; --json)
     audit_helper.go          # recordAudit(): CLI/TUI audit logging (MCP-vocab actions)
     config_helper.go         # typed ~/.tvault/config.yaml (browse: defaults)
     completion.go            # Shell completion
     output.go                # Color output helpers (Success, Error, Warning, Info)
-    browse/                  # The interactive browser (the ONLY package importing charm.land/*)
+    studio/                  # The interactive studio UI (the ONLY package importing charm.land/*)
       run.go                 # Run(): builds the model, runs the Bubble Tea v2 program
       model.go               # tea.Model: state, Init/Update, key handling
       view.go                # View(): responsive 4-pane layout, panes, overlays
@@ -167,13 +167,13 @@ internal/
     validation.go            # Input validation (keys, project names)
 
 specs/
-  glyphrun/                  # End-to-end PTY specs for `tvault browse` (glyphrun)
-    browse_reveal.yml        # reveal one value (r) + re-mask (esc) + clean quit
-    browse_filter.yml        # live key filter (/) narrows the list
-    browse_panes.yml         # pane focus 1-4 tracks the footer hint
-    browse_reveal_all.yml    # reveal every value (R) + re-mask
-    browse_unlock.yml        # locked start → in-app unlock (u) → reveal
-    browse_rw_edit.yml       # --rw: create (n) + delete (d) a secret end-to-end
+  glyphrun/                  # End-to-end PTY specs for `tvault studio` (glyphrun)
+    studio_reveal.yml        # reveal one value (r) + re-mask (esc) + clean quit
+    studio_filter.yml        # live key filter (/) narrows the list
+    studio_panes.yml         # pane focus 1-4 tracks the footer hint
+    studio_reveal_all.yml    # reveal every value (R) + re-mask
+    studio_unlock.yml        # locked start → in-app unlock (u) → reveal
+    studio_rw_edit.yml       # --rw: create (n) + delete (d) a secret end-to-end
 glyphrun.config.yml          # glyphrun runtime: env, terminal, passphrase redaction
 ```
 
@@ -314,16 +314,17 @@ Before every commit:
 | `golang.org/x/sys`                       | unix peer-credential check for the agent (now a direct require; was indirect — no new module) |
 | `github.com/modelcontextprotocol/go-sdk` | MCP server SDK                           |
 | `go.yaml.in/yaml/v3`                     | YAML parsing (access policy)             |
-| `charm.land/bubbletea/v2`                | TUI runtime (`tvault browse` only)          |
-| `charm.land/lipgloss/v2`                 | TUI styling/layout (`tvault browse` only)   |
+| `charm.land/bubbletea/v2`                | TUI runtime (`tvault studio` only)          |
+| `charm.land/lipgloss/v2`                 | TUI styling/layout (`tvault studio` only)   |
 | `charm.land/bubbles/v2`                  | TUI components: textinput, spinner, help, viewport, key |
 | `charm.land/glamour/v2`                  | Markdown rendering for the in-app help pane |
 
-The browser is a `cmd/` subcommand, **not** an `internal/` package — it
+The studio UI is a `cmd/` subcommand, **not** an `internal/` package — it
 imports the `charm.land/*` v2 libraries that are otherwise absent from
-the project. Those libraries are pulled in **only** by `tvault browse`; no
-other command links them at runtime. The stack is strictly the v2 line
-(no `harmonica`, no `huh`): animations are hand-rolled easing.
+the project. Those libraries are pulled in **only** by `tvault studio`
+(aliases: `browse`, `ui`); no other command links them at runtime. The
+stack is strictly the v2 line (no `harmonica`, no `huh`): animations are
+hand-rolled easing.
 
 ## Where things live
 

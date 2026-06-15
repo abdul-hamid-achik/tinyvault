@@ -1,5 +1,5 @@
 version: 1
-name: tvault_browse_panes
+name: tvault_studio_panes
 
 intent: |
   A user opens `tvault browse` and cycles the focus across the four panes with
@@ -12,7 +12,7 @@ intent: |
   spec proves the per-pane footer hint renders and updates in a real terminal.
 
 target:
-  cmd: ["./bin/tvault", "browse", "--no-anim"]
+  cmd: ["./bin/tvault", "studio", "--no-anim"]
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/panes"

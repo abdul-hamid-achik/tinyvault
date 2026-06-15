@@ -1,5 +1,5 @@
 version: 1
-name: tvault_browse_rw_edit
+name: tvault_studio_rw_edit
 
 intent: |
   A user opens `tvault browse --rw` (in-app writes enabled; the header shows an
@@ -24,7 +24,7 @@ intent: |
   API_TOKEN", "delete API_TOKEN").
 
 target:
-  cmd: ["./bin/tvault", "browse", "--rw", "--no-anim"]
+  cmd: ["./bin/tvault", "studio", "--rw", "--no-anim"]
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/rw"

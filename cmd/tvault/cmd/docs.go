@@ -58,7 +58,7 @@ Available subcommands:
   committable-secrets  Commit secrets to a repo (git filters / v2 files)
   safety           Threat model and safety properties
   quickstart       Five-line getting-started
-  browse           The interactive terminal UI
+  studio           The interactive terminal UI (aliases: browse, ui)
 
 Any topic or feature can also be named directly, e.g.
 ` + "`tvault docs committable-secrets`" + `. If nothing is named, the full
@@ -73,7 +73,7 @@ var (
 func init() {
 	rootCmd.AddCommand(docsCmd)
 	docsCmd.Flags().StringVarP(&docsTopicFlag, "topic", "t", "", "Topic to print (alias for the first positional argument)")
-	docsCmd.AddCommand(docsFeaturesCmd, docsTopicsCmd, docsRunCmd, docsMCPCmd, docsInterpolateCmd, docsSyncCmd, docsEncryptedEnvCmd, docsSafetyCmd, docsQuickstartCmd, docsBrowseCmd)
+	docsCmd.AddCommand(docsFeaturesCmd, docsTopicsCmd, docsRunCmd, docsMCPCmd, docsInterpolateCmd, docsSyncCmd, docsEncryptedEnvCmd, docsSafetyCmd, docsQuickstartCmd, docsStudioCmd)
 }
 
 func runDocs(_ *cobra.Command, args []string) error {
@@ -215,11 +215,12 @@ var docsQuickstartCmd = &cobra.Command{
 	},
 }
 
-var docsBrowseCmd = &cobra.Command{
-	Use:   "browse",
-	Short: "The interactive terminal UI",
+var docsStudioCmd = &cobra.Command{
+	Use:     "studio",
+	Aliases: []string{"browse", "ui"},
+	Short:   "The interactive terminal UI",
 	RunE: func(_ *cobra.Command, _ []string) error {
-		return printTopic(fullCatalog(), "browse")
+		return printTopic(fullCatalog(), "studio")
 	},
 }
 
@@ -300,11 +301,11 @@ func fullCatalog() docsCatalog {
 				Description: "Secret values are never re-encrypted; only the DEK wrapping changes. Old encrypted .env files are invalidated by design.",
 			},
 			{
-				Name:        "interactive-browser",
+				Name:        "interactive-studio",
 				Summary:     "Full-screen terminal UI for browsing the vault (status, projects, secrets, audit); read-only by default, --rw for edits.",
-				Commands:    []string{"tvault browse", "tvault browse --rw", "tvault browse --project webapp", "tvault browse --single-pane", "tvault browse --no-anim"},
-				SeeAlso:     []string{"tvault help browse"},
-				Description: "Built on the Bubble Tea v2 / Lip Gloss v2 (charm.land) stack. Read-only by default; pass --rw to enable audited in-app edits (n new, e edit, d delete) that use the same encryption path as the CLI. Browse project and secret metadata while locked; unlock in-app with 'u' to reveal a value behind a key press ('r'), which re-masks on 'esc' / pane change / quit. Vim + arrow + mouse-wheel navigation, live key filter, light/dark theme auto-detected from the terminal background. Animations disable on --no-anim, $TVAULT_NO_ANIM, or over SSH.",
+				Commands:    []string{"tvault studio", "tvault studio --rw", "tvault studio --project webapp", "tvault studio --single-pane", "tvault studio --no-anim"},
+				SeeAlso:     []string{"tvault help studio"},
+				Description: "The interactive studio (aliases: browse, ui), built on the Bubble Tea v2 / Lip Gloss v2 (charm.land) stack. Read-only by default; pass --rw to enable audited in-app edits (n new, e edit, d delete) that use the same encryption path as the CLI. Browse project and secret metadata while locked; unlock in-app with 'u' to reveal a value behind a key press ('r'), which re-masks on 'esc' / pane change / quit. Vim + arrow + mouse-wheel navigation, live key filter, light/dark theme auto-detected from the terminal background. Animations disable on --no-anim, $TVAULT_NO_ANIM, or over SSH.",
 			},
 			{
 				Name:        "secret-sharing",
@@ -324,7 +325,7 @@ func fullCatalog() docsCatalog {
 				Name:        "diagnostics",
 				Summary:     "Read-only setup diagnostics + a typed config file.",
 				Commands:    []string{"tvault doctor", "tvault doctor --json"},
-				Description: "`tvault doctor` checks the vault directory + permissions, vault validity, lock state, project/secret counts, the config and MCP-policy files, environment, and terminal — without unlocking. Exit code is non-zero if any check fails (warnings don't fail), so scripts can gate on it. Optional ~/.tvault/config.yaml supplies a `browse:` block (no_anim, single_pane, audit_limit) as defaults for the interactive browser; explicit flags win.",
+				Description: "`tvault doctor` checks the vault directory + permissions, vault validity, lock state, project/secret counts, the config and MCP-policy files, environment, and terminal — without unlocking. Exit code is non-zero if any check fails (warnings don't fail), so scripts can gate on it. Optional ~/.tvault/config.yaml supplies a `browse:` block (no_anim, single_pane, audit_limit) as defaults for the interactive studio; explicit flags win.",
 			},
 			{
 				Name:        "agent-and-hooks",
@@ -407,10 +408,10 @@ func fullCatalog() docsCatalog {
 				Example:     "  tvault init\n  tvault set DATABASE_URL \"postgres://...\"\n  tvault run -- npm start\n  tvault encrypt-env --in .env       # commit .env.encrypted\n  tvault mcp-server                  # for AI agents",
 			},
 			{
-				Slug:        "browse",
-				Title:       "tvault browse",
-				Description: "Launches a full-screen terminal UI for browsing the vault, read-only by default. Four panes — status, projects, secrets, audit — with vim/arrow/mouse-wheel navigation and a live key filter. Press 'r' to reveal the selected value (warm-orange = a secret is showing), 'esc' to re-mask; revealed values live only in memory and are wiped on esc, pane change, and quit. The vault can be browsed (metadata only) while locked; press 'u' to unlock in-app. Pass --rw to enable audited in-app new/edit/delete (n/e/d), using the same encryption path as the CLI. Built on Bubble Tea v2 / Lip Gloss v2.",
-				Example:     "  tvault browse\n  tvault browse --rw                 # enable in-app new/edit/delete\n  tvault browse webapp               # open a specific project\n  tvault browse --single-pane        # small terminals\n  tvault browse --no-anim            # disable animations (SSH/screen-reader friendly)",
+				Slug:        "studio",
+				Title:       "tvault studio",
+				Description: "Launches a full-screen terminal UI for browsing the vault, read-only by default (aliases: browse, ui). Four panes — status, projects, secrets, audit — with vim/arrow/mouse-wheel navigation and a live key filter. Press 'r' to reveal the selected value (warm-orange = a secret is showing), 'esc' to re-mask; revealed values live only in memory and are wiped on esc, pane change, and quit. The vault can be browsed (metadata only) while locked; press 'u' to unlock in-app. Pass --rw to enable audited in-app new/edit/delete (n/e/d), using the same encryption path as the CLI. Built on Bubble Tea v2 / Lip Gloss v2.",
+				Example:     "  tvault studio\n  tvault studio --rw                 # enable in-app new/edit/delete\n  tvault studio webapp               # open a specific project\n  tvault studio --single-pane        # small terminals\n  tvault studio --no-anim            # disable animations (SSH/screen-reader friendly)",
 			},
 		},
 	}

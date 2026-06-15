@@ -1,5 +1,5 @@
 version: 1
-name: tvault_browse_unlock
+name: tvault_studio_unlock
 
 intent: |
   A user opens `tvault browse` against a locked vault (the header shows
@@ -26,7 +26,7 @@ intent: |
   cmd/tvault/cmd/browse/model_test.go.
 
 target:
-  cmd: ["./bin/tvault", "browse", "--no-anim"]
+  cmd: ["./bin/tvault", "studio", "--no-anim"]
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/unlock"
