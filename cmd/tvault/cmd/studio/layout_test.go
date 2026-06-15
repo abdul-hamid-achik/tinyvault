@@ -104,6 +104,38 @@ func TestGridExactHelpOverlay(t *testing.T) {
 	}
 }
 
+// TestGridExactEditOverlay guards the --rw edit modal (modeNewKey /
+// modeSetValue) at several sizes, including with a value far longer than the
+// modal box — the sized textinput must scroll within its field rather than
+// overflow the frame.
+func TestGridExactEditOverlay(t *testing.T) {
+	v := newScratchVault(t)
+	longVal := "postgres://user:pw@some-very-long-host.example.com:5432/a_long_database_name?sslmode=require"
+	for _, sz := range [][2]int{{120, 40}, {100, 30}, {90, 24}, {160, 50}, {40, 10}} {
+		m := New(v, Options{ReadWrite: true})
+		m.anim = false
+		m.rw = true
+		m = update(t, m, tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
+		m = update(t, m, statusLoadedMsg(loadStatus(v)))
+		// modeNewKey: the key-name field (empty → placeholder must fit).
+		m = update(t, m, keyPress("n"))
+		if m.mode != modeNewKey {
+			t.Fatalf("expected modeNewKey at %dx%d", sz[0], sz[1])
+		}
+		assertExactGrid(t, m.View().Content, sz[0], sz[1])
+		// modeSetValue with a long value: must stay within the frame.
+		m = update(t, m, keyPress("K"))
+		m = update(t, m, keyPress("enter"))
+		for _, r := range longVal {
+			m = update(t, m, keyPress(string(r)))
+		}
+		if m.mode != modeSetValue {
+			t.Fatalf("expected modeSetValue at %dx%d", sz[0], sz[1])
+		}
+		assertExactGrid(t, m.View().Content, sz[0], sz[1])
+	}
+}
+
 // TestGridExactUnlockOverlay guards the unlock modal (modeUnlock) — only
 // reachable on a locked vault — at several sizes.
 func TestGridExactUnlockOverlay(t *testing.T) {

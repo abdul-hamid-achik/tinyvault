@@ -71,6 +71,11 @@ steps:
       screen:
         contains: "Edit DB_URL"
       timeoutMs: 3000
+  # The field is prefilled with the current decrypted value, shown in full.
+  - wait:
+      screen:
+        contains: "postgres://old"
+      timeoutMs: 3000
   - snapshot: edit_modal
   # ctrl+u clears the prefilled value (DeleteBeforeCursor; cursor is at the end),
   # then type the replacement (a brief settle lets the clear apply).
