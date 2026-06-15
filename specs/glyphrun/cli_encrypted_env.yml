@@ -1,0 +1,72 @@
+version: 1
+name: cli_encrypted_env
+
+intent: |
+  Round-trips a .env file through the commit-safe recipient (v2) encrypted
+  format: `tvault encrypt-env --recipient <tvault1…>` wraps a per-file key to
+  an X25519 identity and writes a passphrase-independent .env.encrypted, then
+  `tvault decrypt-env --identity <name>` unwraps it back to the original
+  KEY=VALUE lines without any vault unlock.
+
+  preconditions create the vault, mint an identity named "ci", and drop a plain
+  .env with two keys. The command under test (one sh -c) reads the identity's
+  public recipient string at runtime, encrypts to it, then decrypts with the
+  identity and prints the recovered plaintext. Proves the v2 encrypt-env /
+  decrypt-env pair is a lossless, passphrase-free round-trip in a real PTY.
+
+target:
+  cmd:
+    - "/bin/sh"
+    - "-c"
+    - >
+      PUB=$(./bin/tvault identity list | awk '{print $2}' | head -1) &&
+      ./bin/tvault encrypt-env --in .glyphrun/tmp/cli-eenv/.env --out .glyphrun/tmp/cli-eenv/.env.encrypted --recipient "$PUB" &&
+      ./bin/tvault decrypt-env --in .glyphrun/tmp/cli-eenv/.env.encrypted --identity ci
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/cli-eenv"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: forbid
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/cli-eenv"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-eenv TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-eenv TVAULT_PASSPHRASE=glyphpass ./bin/tvault identity new ci"
+      timeoutMs: 10000
+    - run: "printf 'DB_URL=postgres://glyph\\nAPI_KEY=sk_glyph_42\\n' > .glyphrun/tmp/cli-eenv/.env"
+      timeoutMs: 5000
+
+steps:
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 15000
+  - snapshot: result
+
+outcomes:
+  - id: clean_exit
+    description: the encrypt-env | decrypt-env round-trip exits 0
+    verify:
+      process:
+        exitCode: 0
+  - id: db_url_recovered
+    description: decrypt-env recovers the first original KEY=VALUE line
+    verify:
+      screen:
+        contains: "DB_URL=postgres://glyph"
+  - id: api_key_recovered
+    description: decrypt-env recovers the second original KEY=VALUE line
+    verify:
+      screen:
+        contains: "API_KEY=sk_glyph_42"

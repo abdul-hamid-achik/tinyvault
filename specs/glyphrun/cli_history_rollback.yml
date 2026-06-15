@@ -1,0 +1,81 @@
+version: 1
+name: cli_history_rollback
+
+intent: |
+  Versioned secrets end-to-end in a real PTY: setting a key twice archives the
+  prior value into history, `tvault history` lists every version (with the
+  current one flagged), `tvault rollback --to N` non-destructively re-stores an
+  old version as a new monotonic version, and `tvault get` then returns that
+  rolled-back value.
+
+  The vault is seeded in preconditions with TOKEN=v1 then TOKEN=v2 (so v1 is
+  archived and v2 is current). The command under test chains the three
+  versioning surfaces — history, rollback, get — so the spec doubles as
+  living documentation of the rollback flags (`--to 1`).
+
+  Fast unit coverage lives in internal/vault and cmd/tvault/cmd; this proves
+  the whole versioning flow runs and prints correctly through a tty.
+
+target:
+  cmd:
+    - "/bin/sh"
+    - "-c"
+    - "./bin/tvault history TOKEN -p default && ./bin/tvault rollback TOKEN --to 1 -p default && ./bin/tvault get TOKEN -p default"
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/cli-hist"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: forbid
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/cli-hist"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-hist TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-hist TVAULT_PASSPHRASE=glyphpass ./bin/tvault set TOKEN v1 -p default"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-hist TVAULT_PASSPHRASE=glyphpass ./bin/tvault set TOKEN v2 -p default"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 15000
+  - snapshot: result
+
+outcomes:
+  - id: exit_zero
+    description: the chained history → rollback → get pipeline exits cleanly
+    verify:
+      process:
+        exitCode: 0
+  - id: history_header
+    description: history prints the version-history header for TOKEN
+    verify:
+      screen:
+        contains: 'Version history for "TOKEN"'
+  - id: history_current_marker
+    description: history lists multiple versions, flagging the current one
+    verify:
+      screen:
+        contains: "(current)"
+  - id: rollback_line
+    description: rollback re-stores v1 as a new monotonic version (v3)
+    verify:
+      screen:
+        contains: "TOKEN: rolled back to v1 (new version v3)"
+  - id: get_rolled_back_value
+    description: get returns the rolled-back value v1
+    verify:
+      screen:
+        contains: "v1"

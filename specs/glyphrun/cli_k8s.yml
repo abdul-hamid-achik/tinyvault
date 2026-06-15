@@ -1,0 +1,91 @@
+version: 1
+name: cli_k8s
+
+intent: |
+  Prove the Kubernetes SealedSecret round-trip end to end in a real PTY:
+  `tvault seal --format k8s` turns a project's secrets into a commit-safe
+  SealedSecret manifest (apiVersion tinyvault.dev/v1, kind: SealedSecret,
+  encryptedData ciphertext), and `tvault k8s render --identity` decrypts that
+  manifest back into a real `kind: Secret` (apiVersion v1, Opaque, stringData
+  plaintext) ready for `kubectl apply`.
+
+  Setup (init + identity + a couple of secrets) lives in preconditions. The
+  command(s) under test run as one sh sequence: extract the cluster recipient
+  from `identity list`, seal to a SealedSecret file inside the scratch vault
+  dir, cat that manifest, then render it with the cluster identity. The final
+  screen holds both manifests.
+
+  Covers: `tvault seal --format k8s`, `tvault k8s render`.
+
+target:
+  cmd:
+    - "/bin/sh"
+    - "-c"
+    - >-
+      PUB=$(./bin/tvault identity list | awk '/cluster/{print $2}');
+      ./bin/tvault seal --format k8s --name app-secrets --recipient "$PUB" -p app -o .glyphrun/tmp/cli-k8s/sealed.yaml &&
+      cat .glyphrun/tmp/cli-k8s/sealed.yaml &&
+      echo '---RENDER---' &&
+      ./bin/tvault k8s render --in .glyphrun/tmp/cli-k8s/sealed.yaml --identity cluster
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/cli-k8s"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: forbid
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/cli-k8s"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-k8s TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-k8s TVAULT_PASSPHRASE=glyphpass ./bin/tvault identity new cluster"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-k8s TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create app"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-k8s TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph -p app"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-k8s TVAULT_PASSPHRASE=glyphpass ./bin/tvault set API_KEY sk_glyph_123 -p app"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 15000
+  - snapshot: result
+
+outcomes:
+  - id: exit_zero
+    description: the seal + render sequence completes with status 0
+    verify:
+      process:
+        exitCode: 0
+  - id: sealed_manifest_kind
+    description: seal --format k8s emits a SealedSecret manifest
+    verify:
+      screen:
+        contains: "kind: SealedSecret"
+  - id: sealed_manifest_apiversion
+    description: the SealedSecret carries the tinyvault.dev/v1 apiVersion
+    verify:
+      screen:
+        contains: "apiVersion: tinyvault.dev/v1"
+  - id: rendered_secret_kind
+    description: k8s render decrypts the SealedSecret into a real Kubernetes Secret
+    verify:
+      screen:
+        contains: "kind: Secret"
+  - id: rendered_plaintext_value
+    description: the rendered Secret contains the decrypted stringData value
+    verify:
+      screen:
+        contains: "DB_URL: postgres://glyph"

@@ -1,0 +1,85 @@
+version: 1
+name: cli_search
+
+intent: |
+  A user has three secrets in the `webapp` project — DB_URL, DB_POOL, and
+  API_KEY — and narrows the vault down to just the DB_-prefixed keys.
+
+  This is the PTY smoke test for the non-interactive prefix-filtering surfaces:
+  `tvault search --prefix DB_` (cross-project metadata query: prints
+  tab-separated "project/KEY  vN  timestamp", values never decrypted) and
+  `tvault list -p webapp --prefix DB_` (bare key listing for one project).
+  Both must surface DB_URL and DB_POOL and must NOT surface API_KEY.
+
+target:
+  cmd:
+    - "/bin/sh"
+    - "-c"
+    - "echo '=== search ===' && ./bin/tvault search --prefix DB_ && echo '=== list ===' && ./bin/tvault list -p webapp --prefix DB_"
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/cli-search"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: forbid
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/cli-search"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-search TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-search TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-search TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph -p webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-search TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_POOL 25 -p webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-search TVAULT_PASSPHRASE=glyphpass ./bin/tvault set API_KEY sk_glyph_abc -p webapp"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 15000
+  - snapshot: result
+
+outcomes:
+  - id: clean_exit
+    description: the search + list sequence exits with status 0
+    verify:
+      process:
+        exitCode: 0
+  - id: search_finds_db_url
+    description: search --prefix DB_ reports the DB_URL key (project-qualified)
+    verify:
+      screen:
+        contains: "webapp/DB_URL"
+  - id: search_finds_db_pool
+    description: search --prefix DB_ reports the DB_POOL key (project-qualified)
+    verify:
+      screen:
+        contains: "webapp/DB_POOL"
+  - id: list_finds_db_url
+    description: list -p webapp --prefix DB_ prints the bare DB_URL key
+    verify:
+      screen:
+        contains: "DB_URL"
+  - id: list_finds_db_pool
+    description: list -p webapp --prefix DB_ prints the bare DB_POOL key
+    verify:
+      screen:
+        contains: "DB_POOL"
+  - id: api_key_excluded
+    description: the DB_ prefix filter excludes the unrelated API_KEY secret
+    verify:
+      screen:
+        notContains: "API_KEY"

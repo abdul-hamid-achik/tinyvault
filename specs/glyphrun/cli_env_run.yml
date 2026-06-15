@@ -1,0 +1,74 @@
+version: 1
+name: cli_env_run
+
+intent: |
+  Exercise two non-interactive secret-injection surfaces back to back against
+  a freshly initialised vault holding two secrets in the default project:
+
+    tvault env --format dotenv   # render all secrets as KEY=value lines
+    tvault run -- sh -c '…'      # inject secrets as env vars into a child
+
+  The target runs `env --format dotenv`, prints a `---` separator, then
+  `run -- sh -c 'echo INJECTED=$DB_URL'`. We assert the dotenv output carries
+  both DB_URL and API_KEY lines and that the child process saw DB_URL injected
+  into its environment as `INJECTED=postgres://glyph`. Covers: env (dotenv
+  format), run.
+
+target:
+  cmd:
+    - "/bin/sh"
+    - "-c"
+    - "./bin/tvault env --format dotenv && echo --- && ./bin/tvault run -- sh -c 'echo INJECTED=$DB_URL'"
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/cli-env"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: forbid
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/cli-env"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-env TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-env TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-env TVAULT_PASSPHRASE=glyphpass ./bin/tvault set API_KEY k123"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 15000
+  - snapshot: result
+
+outcomes:
+  - id: clean_exit
+    description: the env + run sequence completes with status 0
+    verify:
+      process:
+        exitCode: 0
+  - id: dotenv_db_url
+    description: dotenv output includes the DB_URL secret line
+    verify:
+      screen:
+        contains: "DB_URL=postgres://glyph"
+  - id: dotenv_api_key
+    description: dotenv output includes the API_KEY secret line
+    verify:
+      screen:
+        contains: "API_KEY=k123"
+  - id: run_injects_env
+    description: run injects DB_URL into the child process environment
+    verify:
+      screen:
+        contains: "INJECTED=postgres://glyph"

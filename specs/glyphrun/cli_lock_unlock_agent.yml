@@ -1,0 +1,66 @@
+version: 1
+name: cli_lock_unlock_agent
+
+intent: |
+  Drive the lifecycle trio of non-interactive tvault commands in a real PTY:
+  `tvault lock` re-locks the vault, `tvault unlock` re-establishes the unlocked
+  session, and `tvault agent status` reports that no local agent daemon is
+  running. lock/unlock run with TVAULT_NO_AGENT=1 so they take the direct
+  KEK/Argon2id path rather than talking to an agent socket.
+
+  This is the CLI scrollback smoke test for the lock/unlock/agent-status
+  surfaces; it proves the exact success lines ("✓ Vault locked",
+  "✓ Vault unlocked", "agent not running") render and the chain exits 0.
+
+target:
+  cmd: ["/bin/sh", "-c", "./bin/tvault lock && ./bin/tvault unlock && ./bin/tvault agent status"]
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/cli-lock"
+    TVAULT_PASSPHRASE: "glyphpass"
+    TVAULT_NO_AGENT: "1"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: forbid
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/cli-lock"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-lock TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 15000
+  - snapshot: result
+
+outcomes:
+  - id: clean_exit
+    description: lock && unlock && agent status chain exits with status 0
+    verify:
+      process:
+        exitCode: 0
+  - id: vault_locked
+    description: tvault lock prints the locked confirmation line
+    verify:
+      screen:
+        contains: "✓ Vault locked"
+  - id: vault_unlocked
+    description: tvault unlock prints the unlocked confirmation line
+    verify:
+      screen:
+        contains: "✓ Vault unlocked"
+  - id: agent_not_running
+    description: agent status reports no daemon is running
+    verify:
+      screen:
+        contains: "agent not running"

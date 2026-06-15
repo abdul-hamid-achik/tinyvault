@@ -1,0 +1,74 @@
+version: 1
+name: cli_identity
+
+intent: |
+  Exercises the identity lifecycle as a non-interactive CLI flow: create a new
+  keypair (`identity new alice`), list it (`identity list`), then export its
+  PRIVATE key (`identity export alice --force`).
+
+  `identity export` is TTY-guarded and refuses without --force on a tty; glyph
+  runs in a real PTY, so --force is required here. This proves the keypair is
+  created, surfaces in the list with its tvault1… recipient, and that export
+  prints a tvault-key1… private key. The asserted strings are stable: the
+  random key material differs per run, so we assert on the literal prefixes and
+  the success/row markers, never the full key.
+
+target:
+  cmd:
+    - "/bin/sh"
+    - "-c"
+    - "./bin/tvault identity new alice && ./bin/tvault identity list && ./bin/tvault identity export alice --force"
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/cli-id"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: forbid
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/cli-id"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-id TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 15000
+  - snapshot: result
+
+outcomes:
+  - id: exit_zero
+    description: the identity new/list/export sequence exits cleanly with status 0
+    verify:
+      process:
+        exitCode: 0
+  - id: created
+    description: identity new reports the new keypair was created
+    verify:
+      screen:
+        contains: 'Created identity "alice"'
+  - id: listed
+    description: identity list shows the alice row with its tvault1 recipient
+    verify:
+      screen:
+        contains: "alice"
+  - id: recipient_public
+    description: the public recipient half is a tvault1… string
+    verify:
+      screen:
+        contains: "tvault1"
+  - id: exported_private_key
+    description: identity export prints the PRIVATE key with the tvault-key1 prefix
+    verify:
+      screen:
+        contains: "tvault-key1"
