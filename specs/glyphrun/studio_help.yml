@@ -7,20 +7,11 @@ intent: |
   cheat sheet). They read it, then press `esc` to close it and return to the
   clean multi-pane view, and quit cleanly with `q`.
 
-  This is the end-to-end PTY smoke test for the help overlay (modeHelp). The
-  model-only assertions on the overlay's contents live in
-  cmd/tvault/cmd/studio/*_test.go; this spec proves `?` opens and `esc` closes
-  the overlay when driven through a real terminal.
-
-  Note on overlays: glyphrun's terminal emulator does not fully apply Bubble
-  Tea v2's cell-diff repaint when a centered modal opens over the multi-pane
-  body (stale border cells linger), so the help overlay's glamour contents do
-  not always render reliably in the emulator. The keystrokes still reach the
-  model, so this spec drives the overlay "blind" — press `?`, settle on idle,
-  snapshot, press `esc`, settle on idle — and asserts only on the clean
-  multi-pane state the flow returns to: the Secrets footer hint ("reveal all",
-  the unlocked read-only secrets activeHint) repaints reliably as a whole
-  token once modeNormal is restored.
+  This is the end-to-end PTY smoke test for the help overlay (modeHelp). It
+  asserts on the overlay's title ("Help") and the glamour-rendered cheat-sheet
+  heading ("tvault studio — keys & concepts") when open, then on the Secrets
+  footer hint ("reveal all") once `esc` restores the clean multi-pane view.
+  The full overlay contents are also covered by cmd/tvault/cmd/studio/*_test.go.
 
 target:
   cmd: ["./bin/tvault", "studio", "--no-anim"]
@@ -73,13 +64,15 @@ steps:
         contains: "reveal all"
       timeoutMs: 3000
   - snapshot: before_help
-  # ? opens the help overlay (modeHelp). Drive it blind: keystrokes reach the
-  # model regardless of how the emulator repaints the centered glamour box, so
-  # settle on idle rather than asserting on overlay contents.
+  # ? opens the help overlay (modeHelp): assert its title + cheat-sheet heading.
   - press: "?"
   - wait:
-      idle:
-        quietForMs: 400
+      screen:
+        contains: "Help"
+      timeoutMs: 3000
+  - wait:
+      screen:
+        contains: "keys & concepts"
       timeoutMs: 3000
   - snapshot: help_open
   # esc closes the overlay and restores modeNormal. Settle on idle so the
