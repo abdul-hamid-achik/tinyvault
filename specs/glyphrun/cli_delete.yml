@@ -1,0 +1,65 @@
+version: 1
+name: cli_delete
+
+intent: |
+  Deleting a secret removes it from the project and leaves siblings intact.
+
+  Against a vault seeded with K1 and K2 in the default project, this drives
+  `tvault delete K1 -y` (the -y skips the interactive confirmation prompt)
+  followed by `tvault list`. It asserts the deletion confirmation line
+  ("✓ Secret 'K1' deleted") and that the post-delete listing still shows K2,
+  proving delete is targeted (it removes only the named key).
+
+  This is the non-interactive CLI smoke test for `tvault delete` in a real
+  PTY; the fine-grained unit coverage lives in the runDelete tests.
+
+target:
+  cmd: ["/bin/sh", "-c", "./bin/tvault delete K1 -y -p default && ./bin/tvault list -p default"]
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/cli-del"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: forbid
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/cli-del"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-del TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-del TVAULT_PASSPHRASE=glyphpass ./bin/tvault set K1 val1 -p default"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-del TVAULT_PASSPHRASE=glyphpass ./bin/tvault set K2 val2 -p default"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 15000
+  - snapshot: result
+
+outcomes:
+  - id: exit_zero
+    description: delete then list exits cleanly with status 0
+    verify:
+      process:
+        exitCode: 0
+  - id: delete_confirmed
+    description: delete prints the deletion confirmation for K1
+    verify:
+      screen:
+        contains: "✓ Secret 'K1' deleted"
+  - id: sibling_remains
+    description: the post-delete listing still shows the untouched sibling K2
+    verify:
+      screen:
+        contains: "K2"

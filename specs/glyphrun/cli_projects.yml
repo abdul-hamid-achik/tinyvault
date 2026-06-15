@@ -1,0 +1,73 @@
+version: 1
+name: cli_projects
+
+intent: |
+  The project lifecycle for the non-interactive CLI: create a project,
+  list it (the current-project marker `*` sits on `default`), switch to it
+  with `use`, list again (the marker has moved to `api`), then create and
+  delete a throwaway project non-interactively with `-y`.
+
+  This is the PTY smoke test for `tvault projects create/list/use/delete`
+  and `tvault use`. It runs the whole sequence in one shell, asserts on the
+  exact human-facing output lines, and proves the command group exits 0 in a
+  real terminal.
+
+target:
+  cmd:
+    - "/bin/sh"
+    - "-c"
+    - "./bin/tvault projects create api && ./bin/tvault projects list && ./bin/tvault use api && ./bin/tvault projects list && ./bin/tvault projects create scratch && ./bin/tvault projects delete scratch -y"
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/cli-proj"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: forbid
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/cli-proj"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-proj TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 15000
+  - snapshot: result
+
+outcomes:
+  - id: clean_exit
+    description: the full projects create/list/use/delete sequence exits 0
+    verify:
+      process:
+        exitCode: 0
+  - id: created
+    description: projects create reports the new project
+    verify:
+      screen:
+        contains: "✓ Project 'api' created"
+  - id: use_switches
+    description: use switches the current project to api
+    verify:
+      screen:
+        contains: "Now using project: api"
+  - id: list_shows_default
+    description: projects list renders the default project row
+    verify:
+      screen:
+        contains: "default  Default project"
+  - id: deleted
+    description: a throwaway project is deleted non-interactively with -y
+    verify:
+      screen:
+        contains: "✓ Project 'scratch' deleted"

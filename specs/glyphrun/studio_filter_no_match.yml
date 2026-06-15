@@ -1,0 +1,128 @@
+version: 1
+name: studio_filter_no_match
+
+intent: |
+  A user opens `tvault studio` against an unlocked vault (webapp with two
+  secrets, DB_URL + STRIPE_KEY). They focus the Secrets pane and start a live
+  filter with `/`, then type "ZZZZ" — a query that matches no key. The Secrets
+  pane collapses to the empty-filter state: the body shows "no keys match
+  filter" and the pane title reports "3 Secrets (0/2)" (0 of 2 shown). They
+  press `esc` to clear the filter, and the pane returns to "3 Secrets (2)" with
+  both keys back. Finally they quit cleanly with `q`.
+
+  This is the end-to-end PTY proof of the filter no-match state. The model-only
+  filter logic (applyFilter, the (M/N) title) is covered by
+  cmd/tvault/cmd/studio/*_test.go; this spec proves the keystrokes drive the
+  empty-result state and its recovery in a real terminal.
+
+  Note on rendering: the filter textinput lives in the footer status line, so
+  it is driven with idle settles between inputs and we assert only on
+  whole-token strings that repaint reliably — the "no keys match filter" body,
+  the "(0/2)" title token, and the restored "(2)" title — never on a single
+  mutated digit.
+
+target:
+  cmd: ["./bin/tvault", "studio", "--no-anim"]
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/nomatch"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 15000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/nomatch"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/nomatch TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/nomatch TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/nomatch TVAULT_PASSPHRASE=glyphpass ./bin/tvault use webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/nomatch TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph -p webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/nomatch TVAULT_PASSPHRASE=glyphpass ./bin/tvault set STRIPE_KEY sk_live_glyph123 -p webapp"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "unlocked"
+      timeoutMs: 6000
+  - wait:
+      screen:
+        contains: "webapp"
+      timeoutMs: 3000
+  # Clean multi-pane start: both secrets present, title shows (2).
+  - wait:
+      screen:
+        contains: "Secrets (2)"
+      timeoutMs: 3000
+  - snapshot: start
+  # `/` focuses Secrets and enters the live filter (footer input).
+  - press: "/"
+  - wait:
+      idle:
+        quietForMs: 300
+      timeoutMs: 3000
+  # Type a query that matches no key, settling on idle between to let the
+  # footer/title repaint land.
+  - type: "ZZZZ"
+  - wait:
+      idle:
+        quietForMs: 400
+      timeoutMs: 3000
+  # No-match state: empty body + (0/2) title token.
+  - wait:
+      screen:
+        contains: "no keys match filter"
+      timeoutMs: 3000
+  - wait:
+      screen:
+        contains: "Secrets (0/2)"
+      timeoutMs: 3000
+  - snapshot: no_match
+  # esc clears the filter and exits filter mode; the pane returns to (2).
+  - press: "esc"
+  - wait:
+      idle:
+        quietForMs: 400
+      timeoutMs: 3000
+  - wait:
+      screen:
+        contains: "Secrets (2)"
+      timeoutMs: 3000
+  # Both keys are back.
+  - wait:
+      screen:
+        contains: "DB_URL"
+      timeoutMs: 3000
+  - wait:
+      screen:
+        contains: "STRIPE_KEY"
+      timeoutMs: 3000
+  - snapshot: cleared
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  # The screen assertions ("Secrets (2)", "no keys match filter",
+  # "Secrets (0/2)", the restored keys) are enforced by the wait steps above —
+  # a wait that times out errors the run. The outcome verifies the durable
+  # end-state: the studio exits the alternate screen and returns status 0.
+  - id: clean_exit
+    description: q exits the studio cleanly with status 0 after a no-match filter + clear
+    verify:
+      process:
+        exitCode: 0

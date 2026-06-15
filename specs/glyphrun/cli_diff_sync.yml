@@ -1,0 +1,97 @@
+version: 1
+name: cli_diff_sync
+
+intent: |
+  Prove the `tvault diff` + `tvault sync` reconciliation pair against a vault
+  that has drifted from a dotenv file. The webapp project holds
+  DB_URL=postgres://glyph; a checked-out .env carries a CONFLICTING
+  DB_URL=postgres://localhost plus an extra API_KEY that the vault has never
+  seen.
+
+  `diff --values` (names + value-verdict, never the value itself) must report
+  the drift: API_KEY only in the file, DB_URL differing, and an overall
+  "Out of sync" verdict. Then `sync --direction push --overwrite` (.env is the
+  source of truth) reconciles it: API_KEY is Created and the conflicting
+  DB_URL is Updated.
+
+  This is the non-interactive CLI smoke test for the diff/sync surface in a
+  real PTY. Setup (init/project/seed/.env) lives in preconditions; the two
+  commands under test live in target.cmd so the spec documents them.
+
+target:
+  cmd:
+    - "/bin/sh"
+    - "-c"
+    - "./bin/tvault diff .glyphrun/tmp/cli-diff/.env -p webapp --values && echo '--- RECONCILE ---' && ./bin/tvault sync --direction push --path .glyphrun/tmp/cli-diff/.env --overwrite -p webapp"
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/cli-diff"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: forbid
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/cli-diff"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-diff TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-diff TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-diff TVAULT_PASSPHRASE=glyphpass ./bin/tvault use webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-diff TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph -p webapp"
+      timeoutMs: 10000
+    - run: "printf 'DB_URL=postgres://localhost\\nAPI_KEY=extra_only_in_file\\n' > .glyphrun/tmp/cli-diff/.env"
+      timeoutMs: 5000
+
+steps:
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 15000
+  - snapshot: result
+
+outcomes:
+  - id: clean_exit
+    description: the diff + sync sequence runs and exits with status 0
+    verify:
+      process:
+        exitCode: 0
+  - id: diff_reports_extra_key
+    description: diff reports API_KEY as present only in the file
+    verify:
+      screen:
+        contains: "API_KEY"
+  - id: diff_reports_value_drift
+    description: diff --values reports DB_URL differs without printing the value
+    verify:
+      screen:
+        contains: "DB_URL (differs)"
+  - id: diff_out_of_sync
+    description: diff renders the overall out-of-sync verdict
+    verify:
+      screen:
+        contains: "Out of sync"
+  - id: sync_push_direction
+    description: sync runs in the push direction (.env -> vault)
+    verify:
+      screen:
+        contains: "Direction: push"
+  - id: sync_created_extra_key
+    description: sync creates the file-only API_KEY in the vault
+    verify:
+      screen:
+        contains: "Created (1):"
+  - id: sync_updated_conflict
+    description: sync overwrites the drifted DB_URL in the vault
+    verify:
+      screen:
+        contains: "Updated (1):"

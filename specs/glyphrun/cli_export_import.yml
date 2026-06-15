@@ -1,0 +1,95 @@
+version: 1
+name: cli_export_import
+
+intent: |
+  Round-trips secrets through the dotenv export/import surface. We set two
+  secrets in a `webapp` project, `tvault export --format dotenv -o .../.env`
+  them to a file, then `tvault import` that file into a fresh `restored`
+  project and `tvault list` to prove both keys come back.
+
+  This is the non-interactive PTY smoke test for `tvault export` and
+  `tvault import`: it documents the real flag surface (`--format`, `-o`)
+  and asserts the per-key import lines plus the round-tripped key rows.
+
+target:
+  # The whole export -> import -> list pipeline is the thing under test, so
+  # it lives in target.cmd (preconditions only seed the source project). The
+  # importer requires a supported dotenv filename, so export writes to a
+  # directory as `.env`. TVAULT_DIR/TVAULT_PASSPHRASE are inherited by the
+  # inner tvault calls.
+  cmd:
+    - "/bin/sh"
+    - "-c"
+    - "./bin/tvault export --format dotenv -o .glyphrun/tmp/cli-exp/exp/.env -p webapp && ./bin/tvault projects create restored && ./bin/tvault import .glyphrun/tmp/cli-exp/exp/.env -p restored && ./bin/tvault list -p restored"
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/cli-exp"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: forbid
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/cli-exp"
+      timeoutMs: 5000
+    - run: "mkdir -p .glyphrun/tmp/cli-exp/exp"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-exp TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-exp TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-exp TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph -p webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-exp TVAULT_PASSPHRASE=glyphpass ./bin/tvault set STRIPE_KEY sk_live_glyph123 -p webapp"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 15000
+  - snapshot: result
+
+outcomes:
+  - id: clean_exit
+    description: the export | import | list pipeline exits 0
+    verify:
+      process:
+        exitCode: 0
+  - id: export_count
+    description: export reports it wrote 2 secrets
+    verify:
+      screen:
+        contains: "Exported 2 secrets"
+  - id: import_created_db_url
+    description: import creates DB_URL in the restored project
+    verify:
+      screen:
+        contains: "✓ DB_URL (created from"
+  - id: import_created_stripe_key
+    description: import creates STRIPE_KEY in the restored project
+    verify:
+      screen:
+        contains: "✓ STRIPE_KEY (created from"
+  - id: import_summary
+    description: import summary reports 2 secrets from 1 file
+    verify:
+      screen:
+        contains: "✓ Imported 2 secret(s) from 1 file(s)"
+  - id: list_roundtrip_db_url
+    description: DB_URL appears in the restored project listing
+    verify:
+      screen:
+        contains: "DB_URL"
+  - id: list_roundtrip_stripe_key
+    description: STRIPE_KEY appears in the restored project listing
+    verify:
+      screen:
+        contains: "STRIPE_KEY"

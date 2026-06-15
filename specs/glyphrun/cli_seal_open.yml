@@ -1,0 +1,70 @@
+version: 1
+name: cli_seal_open
+
+intent: |
+  Recipient seal/open round-trip for the asymmetric sharing layer. After
+  creating an X25519 identity ("alice"), `tvault seal` reads a project's
+  secrets straight from the unlocked vault and writes a v2 blob sealed to
+  alice's recipient; `tvault open --identity alice` decrypts that blob back
+  to the dotenv body — no passphrase, no vault unlock on the open side.
+
+  This proves the seal -> open pipe works end-to-end in a real PTY: the
+  plaintext value that went into the vault comes back out the other end.
+  alice's recipient (tvault1…) is unique per identity, so the target
+  captures it at runtime from `identity list` rather than hard-coding it.
+
+  Covers: identity new, seal, open.
+
+target:
+  # Capture alice's recipient string from `identity list`, seal the webapp
+  # project's secrets to it, and pipe the v2 blob into `open --identity alice`.
+  # The decrypted dotenv body is printed to stdout.
+  cmd:
+    - "/bin/sh"
+    - "-c"
+    - 'REC=$(./bin/tvault identity list | awk "/^alice/{print \$2}"); ./bin/tvault seal -p webapp --recipient "$REC" | ./bin/tvault open --identity alice'
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/cli-seal"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: forbid
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/cli-seal"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-seal TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-seal TVAULT_PASSPHRASE=glyphpass ./bin/tvault identity new alice"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-seal TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-seal TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph-secret -p webapp"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 15000
+  - snapshot: result
+
+outcomes:
+  - id: round_trip_exit
+    description: the seal | open pipe completes cleanly with status 0
+    verify:
+      process:
+        exitCode: 0
+  - id: plaintext_returned
+    description: open prints the original DB_URL value sealed into the blob
+    verify:
+      screen:
+        contains: "DB_URL=postgres://glyph-secret"

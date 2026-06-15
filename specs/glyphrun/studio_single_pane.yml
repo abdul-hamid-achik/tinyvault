@@ -1,0 +1,97 @@
+version: 1
+name: studio_single_pane
+
+intent: |
+  A user opens `tvault studio --single-pane` (forced single-pane mode, the
+  layout small terminals fall back to). Instead of the four-pane grid, the
+  studio renders a numbered tab strip (`1 Status  2 Projects  3 Secrets
+  4 Audit`) above a single full-width pane showing the active tab.
+
+  The flow proves single-pane navigation drives correctly over a real PTY: the
+  tab strip renders, pressing `1` switches the active pane to Status (the footer
+  hint becomes "vault health at a glance"), pressing `3` switches to Secrets
+  (a real key, STRIPE_KEY, shows in the body), then `q` quits cleanly.
+
+  The model-only single-pane layout is covered by layout_test.go
+  (TestSinglePaneGridExact) and model_test.go (TestViewSinglePaneNarrow); this
+  spec proves the keystrokes and tab strip render in a real terminal.
+
+target:
+  cmd: ["./bin/tvault", "studio", "--single-pane", "--no-anim"]
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/single"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 15000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/single"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/single TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/single TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/single TVAULT_PASSPHRASE=glyphpass ./bin/tvault use webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/single TVAULT_PASSPHRASE=glyphpass ./bin/tvault set STRIPE_KEY sk_live_glyph123 -p webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/single TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph -p webapp"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "unlocked"
+      timeoutMs: 6000
+  # Single-pane mode renders a numbered tab strip rather than the grid.
+  - wait:
+      screen:
+        contains: "1 Status"
+      timeoutMs: 3000
+  - wait:
+      screen:
+        contains: "3 Secrets"
+      timeoutMs: 3000
+  - snapshot: single_pane_home
+  # Press 1 → the Status tab becomes active; the footer hint switches to the
+  # status pane's "vault health at a glance" (a whole-token string that
+  # repaints reliably).
+  - press: "1"
+  - wait:
+      screen:
+        contains: "vault health at a glance"
+      timeoutMs: 3000
+  - snapshot: status_active
+  # Press 3 → the Secrets tab becomes active; the single pane now shows the
+  # real key rows, so STRIPE_KEY appears in the body.
+  - press: "3"
+  - wait:
+      screen:
+        contains: "STRIPE_KEY"
+      timeoutMs: 3000
+  - snapshot: secrets_active
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  # The wait steps enforce the screen assertions (a failed wait errors the run):
+  # the tab strip ("1 Status" + "3 Secrets"), the Status hint after `1`, and the
+  # key row after `3`. This outcome verifies the durable end-state — the studio
+  # leaves the alternate screen and exits with status 0.
+  - id: clean_exit
+    description: q exits single-pane mode cleanly with status 0
+    verify:
+      process:
+        exitCode: 0

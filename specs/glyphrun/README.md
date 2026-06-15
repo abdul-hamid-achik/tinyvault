@@ -1,12 +1,16 @@
 # glyphrun specs — `tvault studio` end-to-end PTY tests
 
 These [glyphrun](https://github.com/abdul-hamid-achik/glyphrun) specs exercise
-the interactive studio UI (`tvault studio` — `browse`/`ui` remain aliases — the
-Bubble Tea v2 TUI in `cmd/tvault/cmd/studio/`) **end-to-end in a real PTY**.
-They complement — they do not replace — the fast model-only Go tests in
-`cmd/tvault/cmd/studio/*_test.go` (which assert `View()` output and `Update`
-logic without a terminal). The specs prove the whole thing renders and drives
-correctly when keystrokes go through a real terminal.
+tinyvault **end-to-end in a real PTY**. There are two families:
+
+- **`studio_*.yml`** — the interactive studio UI (`tvault studio` — `browse`/`ui`
+  remain aliases — the Bubble Tea v2 TUI in `cmd/tvault/cmd/studio/`), driven by
+  keystrokes through a real terminal.
+- **`cli_*.yml`** — the non-interactive CLI commands, run as the real built
+  binary and asserted on their stdout + exit code.
+
+They complement — they do not replace — the fast Go tests (model/unit/integration);
+they prove the actual binary renders and behaves correctly in a real terminal.
 
 ## Running
 
@@ -27,12 +31,49 @@ agent-facing workflow guide.
 
 | Spec | Flow it proves |
 |------|----------------|
-| `studio_reveal.yml`     | open unlocked → reveal one value (`r`) → re-mask (`esc`) → quit |
-| `studio_filter.yml`     | focus Secrets → `/` live-filter narrows the key list (`(1/2)`) → `esc` restores |
-| `studio_panes.yml`      | number keys `1`–`4` move focus; the footer hint tracks the active pane |
-| `studio_reveal_all.yml` | `R` reveals every value at once → `esc` re-masks all |
-| `studio_unlock.yml`     | locked start → in-app unlock (`u` + passphrase) → reveal works |
-| `studio_rw_edit.yml`    | `--rw`: create (`n`) then delete (`d`/`y`) a secret through the real vault |
+| `studio_reveal.yml`        | open unlocked → reveal one value (`r`) → re-mask (`esc`) → quit |
+| `studio_reveal_all.yml`    | `R` reveals every value at once → `esc` re-masks all |
+| `studio_copy.yml`          | `c` copies the selected value (footer "copied KEY to clipboard") |
+| `studio_filter.yml`        | focus Secrets → `/` live-filter narrows the key list (`(1/2)`) → `esc` restores |
+| `studio_filter_no_match.yml` | `/` + non-matching text → "no keys match filter" + `(0/N)` |
+| `studio_panes.yml`         | number keys `1`–`4` move focus; the footer hint tracks the active pane |
+| `studio_tab_cycle.yml`     | `tab` / `shift+tab` cycle focus around all four panes |
+| `studio_vim_nav.yml`       | vim `j`/`k` move the selection, `h`/`l` cycle panes |
+| `studio_project_open.yml`  | Projects pane → navigate → `enter` opens another project's secrets |
+| `studio_single_pane.yml`   | `--single-pane`: tab strip + one pane; numbers switch the visible pane |
+| `studio_unlock.yml`        | locked start → in-app unlock (`u` + passphrase) → reveal works |
+| `studio_lock.yml`          | `L` locks an unlocked vault; reveal is then blocked |
+| `studio_rw_edit.yml`       | `--rw`: create (`n`) then delete (`d`/`y`) a secret through the real vault |
+| `studio_edit_existing.yml` | `--rw`: `e` edits an existing value; the new value reveals |
+| `studio_delete_cancel.yml` | `--rw`: `d` then `esc` cancels — the secret survives |
+| `studio_help.yml`          | `?` opens the help overlay, `esc` closes it |
+| `studio_too_small.yml`     | a sub-minimum terminal shows the "terminal too small" guard |
+| `studio_quit_ctrlc.yml`    | `ctrl+c` quits cleanly (exit 0), like `q` |
+
+### CLI command specs (`cli_*.yml`)
+
+Each runs the real binary and asserts on observed output. Together they cover
+every top-level command at least once.
+
+| Spec | Commands it exercises |
+|------|-----------------------|
+| `cli_core.yml`             | `init` · `set` · `get` · `list` · `status` |
+| `cli_delete.yml`           | `delete` (with `-y`) |
+| `cli_projects.yml`         | `projects create/list/delete` · `use` |
+| `cli_env_run.yml`          | `env --format dotenv` · `run -- …` (env injection) |
+| `cli_history_rollback.yml` | `history` · `rollback --to` · `get` |
+| `cli_search.yml`           | `search --prefix` · `list --prefix` |
+| `cli_seal_open.yml`        | `identity new` · `seal --recipient` · `open --identity` |
+| `cli_encrypted_env.yml`    | `encrypt-env` · `decrypt-env` (v2 round-trip) |
+| `cli_export_import.yml`    | `export` · `import` |
+| `cli_backup_restore.yml`   | `backup` · `restore` |
+| `cli_key_rotate.yml`       | `key rotate` (value still readable after) |
+| `cli_k8s.yml`              | `seal --format k8s` · `k8s render` |
+| `cli_diff_sync.yml`        | `diff` · `sync` |
+| `cli_git_filter.yml`       | `git-filter install/status` (in a scratch git repo) |
+| `cli_identity.yml`         | `identity new/list/export --force` |
+| `cli_scaffold.yml`         | `doctor` · `hook` · `ci init` · `completion` |
+| `cli_lock_unlock_agent.yml`| `lock` · `unlock` · `agent status` |
 
 ## Two glyphrun behaviors worth knowing
 

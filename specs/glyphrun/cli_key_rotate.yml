@@ -1,0 +1,109 @@
+version: 1
+name: cli_key_rotate
+
+intent: |
+  `tvault key rotate` re-encrypts the vault under a new passphrase: every
+  project's data key is re-wrapped from the old KEK to a new one derived from
+  the new passphrase. The secret values themselves are untouched, so a value
+  set before the rotation must still decrypt afterwards under the NEW
+  passphrase.
+
+  This proves the rotation drives correctly end-to-end in a real PTY. Unlike
+  every other CLI command, `key rotate` does NOT honor TVAULT_PASSPHRASE — it
+  reads each passphrase straight from the terminal with echo disabled
+  (term.ReadPassword), prompting three times: current, new, confirm. glyphrun
+  types each one into the PTY as its prompt appears.
+
+  The target is a single sh -c so the spec documents the whole flow: rotate
+  glyphpass -> newglyphpass, then prove DB_URL still reads back as
+  postgres://glyph — but only with the NEW passphrase (the get re-exports
+  TVAULT_PASSPHRASE=newglyphpass inline, since the old one no longer unlocks).
+
+  Covers: key rotate.
+
+target:
+  # The inner `key rotate` reads its three passphrases from the PTY (typed by
+  # the steps below). After rotation glyphpass is dead, so the verifying `get`
+  # supplies the NEW passphrase inline rather than the glyphpass inherited from
+  # target.env. The decrypted value lands on stdout.
+  cmd:
+    - "/bin/sh"
+    - "-c"
+    - "./bin/tvault key rotate && TVAULT_PASSPHRASE=newglyphpass ./bin/tvault get DB_URL -p default"
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/cli-key"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: forbid
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/cli-key"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-key TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-key TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph -p default"
+      timeoutMs: 10000
+
+steps:
+  # Prompt 1: current passphrase.
+  - wait:
+      screen:
+        contains: "Current passphrase:"
+      timeoutMs: 6000
+  - type: "glyphpass"
+  - press: "enter"
+  # Prompt 2: new passphrase.
+  - wait:
+      screen:
+        contains: "New passphrase:"
+      timeoutMs: 4000
+  - type: "newglyphpass"
+  - press: "enter"
+  # Prompt 3: confirm the new passphrase.
+  - wait:
+      screen:
+        contains: "Confirm new passphrase:"
+      timeoutMs: 4000
+  - type: "newglyphpass"
+  - press: "enter"
+  # Rotation succeeds, then the chained `get` decrypts DB_URL under the new
+  # passphrase and prints it.
+  - wait:
+      screen:
+        contains: "Passphrase rotated successfully"
+      timeoutMs: 6000
+  - wait:
+      screen:
+        contains: "postgres://glyph"
+      timeoutMs: 4000
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 6000
+  - snapshot: result
+
+outcomes:
+  - id: rotate_then_get_exit
+    description: the rotate + get pipeline completes cleanly with status 0
+    verify:
+      process:
+        exitCode: 0
+  - id: rotation_succeeded
+    description: key rotate reports the passphrase was rotated
+    verify:
+      screen:
+        contains: "Passphrase rotated successfully"
+  - id: value_survives_rotation
+    description: DB_URL still decrypts to its original value under the new passphrase
+    verify:
+      screen:
+        contains: "postgres://glyph"

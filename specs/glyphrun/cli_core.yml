@@ -1,0 +1,77 @@
+version: 1
+name: cli_core
+
+intent: |
+  The core non-interactive lifecycle of the tvault CLI, end to end in a real
+  PTY: starting from a freshly `init`'d vault (in preconditions), set a secret
+  into the default project, read it back with `get`, list the project's keys,
+  and print vault `status`.
+
+  This proves set/get/list/status all work against one scratch vault and emit
+  the exact strings users see. Fast unit coverage lives in the cmd tests; this
+  spec is the real-terminal smoke test for the four commands chained together.
+
+target:
+  cmd:
+    - "/bin/sh"
+    - "-c"
+    - "./bin/tvault set DB_URL postgres://glyph -p default && ./bin/tvault get DB_URL -p default && echo && ./bin/tvault list -p default && ./bin/tvault status"
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/cli-core"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: forbid
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/cli-core"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-core TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 15000
+  - snapshot: result
+
+outcomes:
+  - id: clean_exit
+    description: the chained set/get/list/status sequence exits with status 0
+    verify:
+      process:
+        exitCode: 0
+  - id: set_confirmed
+    description: set reports the secret was stored
+    verify:
+      screen:
+        contains: "Secret 'DB_URL' set successfully"
+  - id: get_value
+    description: get prints the secret value verbatim
+    verify:
+      screen:
+        contains: "postgres://glyph"
+  - id: list_key
+    description: list shows the DB_URL key
+    verify:
+      screen:
+        contains: "DB_URL"
+  - id: status_initialized
+    description: status reports the vault as initialized
+    verify:
+      screen:
+        contains: "Status: initialized"
+  - id: status_project
+    description: status reports the current project
+    verify:
+      screen:
+        contains: "Current project: default"

@@ -1,0 +1,72 @@
+version: 1
+name: cli_backup_restore
+
+intent: |
+  A user backs up the encrypted vault to a file with `tvault backup <path>`,
+  then restores it in place with `tvault restore <path> -y`, and finally reads
+  back a secret to prove the data survived the round-trip.
+
+  This is the non-interactive CLI smoke test for backup/restore in a real PTY.
+  The vault is initialised with a `webapp` project holding a single secret
+  (DB_URL). The target runs the three commands as one shell chain so the spec
+  documents the whole flow: backup succeeds, restore succeeds, and `get`
+  returns the original value (postgres://glyph) from the restored database.
+
+target:
+  cmd:
+    - "/bin/sh"
+    - "-c"
+    - "./bin/tvault backup .glyphrun/tmp/cli-bak/backup.db && ./bin/tvault restore .glyphrun/tmp/cli-bak/backup.db -y && ./bin/tvault get DB_URL -p webapp"
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/cli-bak"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: forbid
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/cli-bak"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-bak TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-bak TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-bak TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph -p webapp"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 15000
+  - snapshot: result
+
+outcomes:
+  - id: chain_exit_zero
+    description: backup, restore and get all succeed (chain exits 0)
+    verify:
+      process:
+        exitCode: 0
+  - id: backup_success_line
+    description: backup prints the success line with the backup path
+    verify:
+      screen:
+        contains: "✓ Vault backed up to .glyphrun/tmp/cli-bak/backup.db"
+  - id: restore_success_line
+    description: restore prints the success line with the backup path
+    verify:
+      screen:
+        contains: "✓ Vault restored from .glyphrun/tmp/cli-bak/backup.db"
+  - id: restored_value_survives
+    description: get returns the original secret value from the restored vault
+    verify:
+      screen:
+        contains: "postgres://glyph"

@@ -1,0 +1,99 @@
+version: 1
+name: cli_git_filter
+
+intent: |
+  The "commit your secrets safely" workflow end-to-end in a real PTY:
+  `tvault git-filter install` registers the clean/smudge filters in a git
+  repo and seeds .tvault-recipients with an X25519 recipient, `track` adds a
+  .gitattributes pattern, and `status` reports the resulting configuration
+  (filters installed, recipient count, tracked patterns).
+
+  git-filter operates on the *current git repository*, not the vault, so this
+  spec runs against a scratch repo created in preconditions. The vault only
+  supplies the identity whose recipient (tvault1…) seeds the filter; that
+  recipient is unique per identity, so the target captures it at runtime from
+  `identity list` rather than hard-coding it.
+
+  glyphrun runs the target from the repo root (cwd "."), so the sequence
+  resolves an absolute TVAULT_DIR and the tvault binary up front, then cd's
+  into the scratch repo before invoking the git-filter subcommands.
+
+  Covers: git-filter install, track, status.
+
+target:
+  cmd:
+    - "/bin/sh"
+    - "-c"
+    - |
+      export TVAULT_DIR="$PWD/.glyphrun/tmp/cli-gitf"
+      TVAULT="$PWD/bin/tvault"
+      REC=$("$TVAULT" identity list | awk "/^ci/{print \$2}")
+      cd .glyphrun/tmp/cli-gitf-repo
+      "$TVAULT" git-filter install --recipient "$REC" &&
+      "$TVAULT" git-filter track .env &&
+      "$TVAULT" git-filter status
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/cli-gitf"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: forbid
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/cli-gitf .glyphrun/tmp/cli-gitf-repo"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-gitf TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-gitf TVAULT_PASSPHRASE=glyphpass ./bin/tvault identity new ci"
+      timeoutMs: 10000
+    - run: "mkdir -p .glyphrun/tmp/cli-gitf-repo"
+      timeoutMs: 5000
+    - run: "git -C .glyphrun/tmp/cli-gitf-repo init -q"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 15000
+  - snapshot: result
+
+outcomes:
+  - id: sequence_exit
+    description: install && track && status completes cleanly with status 0
+    verify:
+      process:
+        exitCode: 0
+  - id: filters_installed
+    description: install registers the tvault clean/smudge filters in the repo
+    verify:
+      screen:
+        contains: "Installed tvault clean/smudge filters"
+  - id: recipient_seeded
+    description: install seeds the captured recipient into .tvault-recipients
+    verify:
+      screen:
+        contains: "Recipients added: 1"
+  - id: pattern_tracked
+    description: track appends a .env filter=tvault pattern to .gitattributes
+    verify:
+      screen:
+        contains: ".env filter=tvault"
+  - id: status_reports_config
+    description: status reports the filters as installed
+    verify:
+      screen:
+        contains: "Filters installed in"
+  - id: status_lists_tracked
+    description: status lists the tracked .env pattern
+    verify:
+      screen:
+        contains: "Tracked: .env"

@@ -1,0 +1,119 @@
+version: 1
+name: studio_vim_nav
+
+intent: |
+  A user opens `tvault studio` on an unlocked vault and drives it purely with
+  vim motions. Focus starts on the Secrets pane (DB_URL, STRIPE_KEY — sorted).
+  Pressing `j` moves the cursor down from DB_URL to STRIPE_KEY; pressing `r`
+  reveals STRIPE_KEY's value (sk_live_glyph123) — the revealed value proves `j`
+  actually moved the cursor (otherwise DB_URL would reveal). Then `esc`
+  re-masks and clears the status line, and `l` / `h` cycle the focused pane:
+  `l` advances Secrets → Audit (footer hint "most recent activity") and `h`
+  steps back Audit → Secrets (footer hint "reveal all"). Quit cleanly with `q`.
+
+  This proves vim-style navigation (j down, l/h pane cycle) drives correctly
+  over a real PTY. The model-only motion logic is covered by the studio
+  *_test.go files; this spec proves the keystrokes move the real cursor and
+  pane focus end-to-end.
+
+target:
+  cmd: ["./bin/tvault", "studio", "--no-anim"]
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/vim"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 15000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/vim"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/vim TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/vim TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/vim TVAULT_PASSPHRASE=glyphpass ./bin/tvault use webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/vim TVAULT_PASSPHRASE=glyphpass ./bin/tvault set STRIPE_KEY sk_live_glyph123 -p webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/vim TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph -p webapp"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "unlocked"
+      timeoutMs: 6000
+  - wait:
+      screen:
+        contains: "webapp"
+      timeoutMs: 3000
+  # Focus starts on the Secrets pane; both keys are present (sorted DB_URL,
+  # STRIPE_KEY), so the cursor sits on DB_URL.
+  - wait:
+      screen:
+        contains: "STRIPE_KEY"
+      timeoutMs: 3000
+  - snapshot: home
+  # vim `j` moves the cursor down one row: DB_URL -> STRIPE_KEY.
+  - press: "j"
+  - wait:
+      idle:
+        quietForMs: 300
+      timeoutMs: 3000
+  # Reveal the row under the cursor. If `j` moved correctly this is STRIPE_KEY,
+  # so its value renders — proving the motion landed on the second row.
+  - press: "r"
+  - wait:
+      screen:
+        contains: "sk_live_glyph123"
+      timeoutMs: 3000
+  - snapshot: revealed_via_j
+  # esc re-masks every revealed value AND clears the status line, so the footer
+  # falls back to the focused pane's activeHint. Settling here also separates
+  # esc from the next key so the lone ESC is delivered on its own.
+  - press: "esc"
+  - wait:
+      screen:
+        contains: "reveal all"
+      timeoutMs: 3000
+  # vim `l` advances focus one pane: Secrets -> Audit. focusPane wipes any
+  # reveal; the Audit hint repaints as a whole footer line.
+  - press: "l"
+  - wait:
+      screen:
+        contains: "most recent activity"
+      timeoutMs: 3000
+  - snapshot: audit_focused
+  # vim `h` steps focus back one pane: Audit -> Secrets. The Secrets hint
+  # ("…R reveal all…") returns, proving the round-trip.
+  - press: "h"
+  - wait:
+      screen:
+        contains: "reveal all"
+      timeoutMs: 3000
+  - snapshot: secrets_focused
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  # The wait steps enforce the navigation assertions (the revealed value after
+  # `j`+`r`, the Audit hint after `l`, the Secrets hint after `h`); a wait that
+  # times out errors the run. This outcome verifies the durable end-state: the
+  # studio leaves the alternate screen and exits 0 (vault closed).
+  - id: clean_exit
+    description: vim navigation drives correctly and q exits cleanly with status 0
+    verify:
+      process:
+        exitCode: 0

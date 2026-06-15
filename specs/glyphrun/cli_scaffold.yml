@@ -1,0 +1,91 @@
+version: 1
+name: cli_scaffold
+
+intent: |
+  TinyVault's non-mutating output/scaffold commands all run against an
+  initialized vault and emit deterministic, copy-pasteable text:
+
+    - `doctor`            health report ending in "✓ All checks passed."
+    - `hook zsh`          a shell hook defining `tvault_load() {`
+    - `ci init`           a CI/CD workflow scaffold ("name: TinyVault Secrets")
+    - `completion bash`   a bash completion script ("# bash completion for tvault")
+
+  This spec chains the four in one shell invocation (with `=== … ===`
+  separators) and asserts one distinctive line from each, proving they each
+  produce their expected output and exit 0 in a real PTY. None of them mutate
+  the vault.
+
+  Each command's output is piped through `grep` for its one distinctive line
+  so the combined result fits the 40-row viewport (the `completion bash`
+  script alone is hundreds of lines and would scroll the rest off-screen).
+  `set -o pipefail` keeps each tvault command's real exit code gating the
+  `&&` chain, so a nonzero tvault exit still fails the run.
+
+target:
+  cmd:
+    - "/bin/sh"
+    - "-c"
+    - >-
+      set -o pipefail;
+      echo '=== DOCTOR ===';
+      ./bin/tvault doctor | grep -F 'All checks passed.'
+      && echo '=== HOOK ==='
+      && ./bin/tvault hook zsh | grep -F 'tvault_load() {'
+      && echo '=== CI ==='
+      && ./bin/tvault ci init --provider=github-actions --mode=identity --output=- | grep -F 'name: TinyVault Secrets'
+      && echo '=== COMPLETION ==='
+      && ./bin/tvault completion bash | grep -F '# bash completion for tvault'
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/cli-scaf"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: forbid
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/cli-scaf"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-scaf TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 15000
+  - snapshot: result
+
+outcomes:
+  - id: exit_zero
+    description: the chained scaffold commands all succeed and exit 0
+    verify:
+      process:
+        exitCode: 0
+  - id: doctor_ok
+    description: doctor reports all health checks passed
+    verify:
+      screen:
+        contains: "✓ All checks passed."
+  - id: hook_defines_loader
+    description: hook zsh emits the tvault_load shell function
+    verify:
+      screen:
+        contains: "tvault_load() {"
+  - id: ci_scaffold
+    description: ci init emits the TinyVault Secrets CI workflow
+    verify:
+      screen:
+        contains: "name: TinyVault Secrets"
+  - id: completion_script
+    description: completion bash emits a bash completion script
+    verify:
+      screen:
+        contains: "# bash completion for tvault"

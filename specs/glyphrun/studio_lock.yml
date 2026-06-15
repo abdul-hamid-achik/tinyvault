@@ -1,0 +1,97 @@
+version: 1
+name: studio_lock
+
+intent: |
+  A user opens `tvault studio` against an unlocked vault (the header shows
+  "● unlocked"), then presses `L` to lock it in place. The footer confirms
+  "vault locked" and the header lock badge flips to "● locked". A subsequent
+  reveal (`r`) is refused because the vault is now locked — the footer shows
+  the locked guidance "vault is locked — press u to unlock". The user quits
+  cleanly with `q`.
+
+  This is the end-to-end PTY proof of the in-app lock path (`L` →
+  vault.Lock() → status reload). The model-only assertions live in
+  cmd/tvault/cmd/studio/*_test.go; this spec proves the keystroke locks the
+  live vault and the locked state renders correctly in a real terminal.
+
+  --no-anim is used so the locked header dot does not pulse: with animations
+  off the badge renders as the stable whole token "● locked" that glyphrun's
+  emulator repaints reliably.
+
+target:
+  cmd: ["./bin/tvault", "studio", "--no-anim"]
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/lock"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 15000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/lock"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/lock TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/lock TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/lock TVAULT_PASSPHRASE=glyphpass ./bin/tvault use webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/lock TVAULT_PASSPHRASE=glyphpass ./bin/tvault set STRIPE_KEY sk_live_glyph123 -p webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/lock TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph -p webapp"
+      timeoutMs: 10000
+
+steps:
+  # Starts unlocked (the config injects the correct passphrase).
+  - wait:
+      screen:
+        contains: "● unlocked"
+      timeoutMs: 6000
+  - wait:
+      screen:
+        contains: "webapp"
+      timeoutMs: 3000
+  - snapshot: unlocked
+  # L locks the live vault in place: status reloads, the footer confirms it,
+  # and the header badge flips to "● locked".
+  - press: "L"
+  - wait:
+      screen:
+        contains: "vault locked"
+      timeoutMs: 3000
+  - wait:
+      screen:
+        contains: "● locked"
+      timeoutMs: 3000
+  - snapshot: locked
+  # A reveal is now refused — the footer shows the locked guidance.
+  - press: "r"
+  - wait:
+      screen:
+        contains: "vault is locked — press u to unlock"
+      timeoutMs: 3000
+  - snapshot: reveal_blocked
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  # The wait steps enforce the screen assertions ("● unlocked" → "vault
+  # locked" + "● locked" → the locked reveal guidance); a wait that times out
+  # errors the run. This outcome verifies the durable end-state: studio exits
+  # the alternate screen and returns status 0.
+  - id: clean_exit
+    description: q exits studio cleanly with status 0 after an in-app lock
+    verify:
+      process:
+        exitCode: 0

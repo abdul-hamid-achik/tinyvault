@@ -1,0 +1,69 @@
+version: 1
+name: studio_quit_ctrlc
+
+intent: |
+  A user opens `tvault studio` against an unlocked vault, sees the vault is
+  unlocked along with its webapp project, then quits with `ctrl+c`.
+
+  `ctrl+c` is an alternate binding for the Quit key (keymap.go binds Quit to
+  both "q" and "ctrl+c"), so it must behave exactly like `q`: wipe any
+  revealed values, exit the alternate screen cleanly, and return status 0.
+  This proves the ctrl+c quit path drives correctly over a real PTY (the
+  model-only Update logic is covered by cmd/tvault/cmd/studio/*_test.go).
+
+target:
+  cmd: ["./bin/tvault", "studio", "--no-anim"]
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/ctrlc"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 15000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/ctrlc"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/ctrlc TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/ctrlc TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/ctrlc TVAULT_PASSPHRASE=glyphpass ./bin/tvault use webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/ctrlc TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph -p webapp"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "unlocked"
+      timeoutMs: 6000
+  - wait:
+      screen:
+        contains: "webapp"
+      timeoutMs: 3000
+  - snapshot: home
+  # ctrl+c is bound to Quit (alongside q); it must exit cleanly off the alt
+  # screen with status 0, identical to pressing q.
+  - press: "ctrl+c"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  # The screen assertions ("unlocked", "webapp") are enforced by the wait
+  # steps above. This outcome verifies the durable end-state: ctrl+c exits
+  # the alternate screen and returns status 0 (vault closed).
+  - id: clean_exit
+    description: ctrl+c exits the studio cleanly with status 0
+    verify:
+      process:
+        exitCode: 0

@@ -1,0 +1,109 @@
+version: 1
+name: studio_tab_cycle
+
+intent: |
+  A user opens `tvault studio` (unlocked) with the Secrets pane focused by
+  default, then cycles focus forward with `tab` and backward with `shift+tab`.
+  The footer context hint tracks the active pane, so it is the observable: from
+  Secrets, `tab` advances Secrets → Audit ("most recent activity") → Status
+  ("vault health at a glance") → Projects ("to preview") → back to Secrets
+  ("reveal all"); then `shift+tab` steps Secrets → Projects ("to preview").
+  Finally the user quits with `q`.
+
+  This proves tab / shift+tab pane cycling drives correctly over a PTY. The
+  model-only cycle logic ((active±1) % paneCount) is covered by the studio Go
+  tests; this spec proves the per-pane footer hint renders and updates in a real
+  terminal as focus wraps around the four panes.
+
+  The footer activeHint only shows when there is no transient status line, and
+  pane focus changes never set one, so each hint repaints cleanly as a whole
+  token between presses — no single-cell update is asserted on.
+
+target:
+  cmd: ["./bin/tvault", "studio", "--no-anim"]
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/tab"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 15000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/tab"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/tab TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/tab TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/tab TVAULT_PASSPHRASE=glyphpass ./bin/tvault use webapp"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/tab TVAULT_PASSPHRASE=glyphpass ./bin/tvault set STRIPE_KEY sk_live_glyph123 -p webapp"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "unlocked"
+      timeoutMs: 6000
+  # Secrets pane is focused on launch — its hint ("…R reveal all…") is showing.
+  - wait:
+      screen:
+        contains: "reveal all"
+      timeoutMs: 3000
+  - snapshot: secrets_focused
+  # tab → Audit pane (Secrets[2] → Audit[3]).
+  - press: "tab"
+  - wait:
+      screen:
+        contains: "most recent activity"
+      timeoutMs: 3000
+  # tab → Status pane (Audit[3] → Status[0], wraps).
+  - press: "tab"
+  - wait:
+      screen:
+        contains: "vault health at a glance"
+      timeoutMs: 3000
+  # tab → Projects pane (Status[0] → Projects[1]).
+  - press: "tab"
+  - wait:
+      screen:
+        contains: "to preview"
+      timeoutMs: 3000
+  # tab → back to Secrets pane (Projects[1] → Secrets[2]).
+  - press: "tab"
+  - wait:
+      screen:
+        contains: "reveal all"
+      timeoutMs: 3000
+  - snapshot: cycled_forward
+  # shift+tab → step backward Secrets[2] → Projects[1] ("to preview").
+  - press: "shift+tab"
+  - wait:
+      screen:
+        contains: "to preview"
+      timeoutMs: 3000
+  - snapshot: stepped_back
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  # The footer-hint assertions ("most recent activity", "vault health at a
+  # glance", "to preview", "reveal all") are enforced by the wait steps above —
+  # a wait that times out errors the run. The outcome verifies the durable
+  # end-state: q exits the alternate screen and returns status 0.
+  - id: clean_exit
+    description: q exits cleanly with status 0 after cycling panes with tab / shift+tab
+    verify:
+      process:
+        exitCode: 0
