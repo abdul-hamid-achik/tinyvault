@@ -87,21 +87,23 @@ These shaped how the specs are written; keep them in mind when editing.
    value — `studio` ignores a failed non-interactive unlock and starts locked,
    which is exactly the state the in-app `u` flow needs.
 
-2. **Centered modals and single-cell updates don't always repaint.** glyphrun's
-   terminal emulator does not fully apply Bubble Tea v2's cell-diff repaint when
-   a centered overlay opens over the multi-pane body (stale border cells linger),
-   and it can drop a lone changed cell such as a pane-title count digit
-   (`(2)` → `(3)`). The model itself renders a correct full-`width`×`height`
-   frame — verified by `layout_test.go` (`assertExactGrid`) and a model-level
-   dump — so this is an emulator limitation, not a `tvault` bug. Two consequences
-   for these specs:
-   - Overlay flows (`unlock`, `rw_edit`) are driven **blind**: keystrokes reach
-     the model regardless of render, so we press/type through the modal, settling
-     on `wait: { idle: … }` between inputs, and assert only on the **clean
-     multi-pane state the flow returns to**.
-   - Assertions target strings that repaint reliably as whole tokens — the header
-     lock badge (`● locked` / `● unlocked`), a revealed value, a new key's row,
-     a footer status line (`set API_TOKEN`) — rather than a single mutated digit.
+2. **Modal/cell-update rendering (was a glyph emulator bug — now fixed).**
+   Earlier, centered modals over the multi-pane body left stale border cells and
+   a lone changed cell (e.g. a pane-title count digit `(2)` → `(3)`) could be
+   dropped, so these specs drove modals *blind*. The root cause was two
+   cursor-desync bugs in glyph's emulator — a multi-byte rune split across a PTY
+   read boundary, and a bare `\n` resetting the column — **fixed upstream in
+   glyphrun** (`internal/terminal`, commit `e224a88`). The specs now assert
+   directly on modal contents and the count digit:
+   - `studio_unlock` asserts the "Unlock vault" modal + "enter passphrase" prompt;
+   - `studio_rw_edit` asserts the "New secret — key name" / "New secret — value"
+     modals, the count `(2)` → `(3)` → `(2)`, and "Delete 'API_TOKEN' permanently?";
+   - `studio_edit_existing` asserts the "Edit DB_URL" modal;
+   - `studio_delete_cancel` asserts "Delete 'DB_URL' permanently?";
+   - `studio_help` asserts the "Help" title + "tvault studio — keys & concepts".
 
-   The modal/overlay *contents* themselves are covered by the model tests
-   (`model_test.go`, `mutations_test.go`).
+   **These specs therefore require a `glyph` built from glyphrun ≥ `e224a88`**
+   (the emulator fix). With an older `glyph`, the modal/count assertions will
+   fail. The one remaining blind spot is the bubbles textinput *placeholder*
+   (e.g. "value for API_TOKEN" renders only its first glyph) — a bubbles
+   behavior, not glyph — so specs assert modal **titles**, not placeholders.

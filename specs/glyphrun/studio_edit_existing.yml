@@ -15,13 +15,10 @@ intent: |
   ctrl+u (the textinput DeleteBeforeCursor binding), which deletes everything
   before the cursor — the whole line — then type the new value and ⏎ to save.
 
-  Note on overlays + cell updates: glyphrun's terminal emulator does not fully
-  apply Bubble Tea v2's cell-diff repaint when a centered modal opens over the
-  multi-pane body, so this spec drives the edit modal "blind" (settling on idle
-  between inputs) and asserts only on signals that repaint reliably as whole
-  tokens: the footer status line confirming the write ("set DB_URL") and the new
-  value when revealed ("postgres://new"). The modal contents themselves are
-  covered by the model tests (mutations_test.go).
+  It asserts on the modal title ("Edit DB_URL"), the footer status line
+  confirming the write ("set DB_URL"), and the new value when revealed
+  ("postgres://new"). The model-only mutation logic is also covered by
+  cmd/tvault/cmd/studio/mutations_test.go.
 
 target:
   cmd: ["./bin/tvault", "studio", "--rw", "--no-anim"]
@@ -67,30 +64,22 @@ steps:
         contains: "DB_URL"
       timeoutMs: 3000
   - snapshot: before_edit
-  # Focus the Secrets pane explicitly so `e` targets it (DB_URL at the cursor).
-  - press: "3"
+  # e → the edit modal, titled "Edit DB_URL" and prefilled with the current
+  # value (cursor at end). The Secrets pane is focused by default, cursor on DB_URL.
+  - press: "e"
+  - wait:
+      screen:
+        contains: "Edit DB_URL"
+      timeoutMs: 3000
+  - snapshot: edit_modal
+  # ctrl+u clears the prefilled value (DeleteBeforeCursor; cursor is at the end),
+  # then type the replacement (a brief settle lets the clear apply).
+  - press: "ctrl+u"
   - wait:
       idle:
         quietForMs: 300
       timeoutMs: 3000
-  # e → edit overlay, prefilled with "postgres://old", cursor at end.
-  # Driven blind; settle on idle.
-  - press: "e"
-  - wait:
-      idle:
-        quietForMs: 400
-      timeoutMs: 3000
-  # ctrl+u clears the prefilled value (DeleteBeforeCursor; cursor is at the end).
-  - press: "ctrl+u"
-  - wait:
-      idle:
-        quietForMs: 400
-      timeoutMs: 3000
   - type: "postgres://new"
-  - wait:
-      idle:
-        quietForMs: 400
-      timeoutMs: 3000
   # ⏎ saves; the modal closes and the panes reload. Settle on idle so every
   # reload (status/projects/secrets/audit) has landed before asserting.
   - press: "enter"

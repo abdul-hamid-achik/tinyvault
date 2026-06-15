@@ -14,13 +14,9 @@ intent: |
   spec proves the keystrokes drive a real cancel through the real vault and
   leave the data untouched.
 
-  Note on overlays + cell updates: glyphrun's terminal emulator does not fully
-  apply Bubble Tea v2's cell-diff repaint when a centered modal opens over the
-  multi-pane body, and it can drop a single-cell update (a pane-title count
-  digit). So the delete-confirm modal is driven "blind" (settling on idle
-  between inputs, no assertion on the overlay contents), and the cancel is
-  proven by asserting on whole-token strings that repaint reliably: the header
-  "2 secrets" count and the DB_URL key row both still present after esc.
+  It asserts on the confirmation prompt ("Delete 'DB_URL' permanently?") when
+  the modal opens, and after esc on the data being untouched: the header "2
+  secrets" count, the DB_URL key row, and the footer back to the rw hint.
 
 target:
   cmd: ["./bin/tvault", "studio", "--rw", "--no-anim"]
@@ -69,12 +65,13 @@ steps:
       timeoutMs: 3000
   - snapshot: before_delete
   # The Secrets pane is focused by default and the cursor sits on DB_URL
-  # (sorted first). d → delete-confirm modal (driven blind; settle on idle).
+  # (sorted first). d → the delete-confirm modal for DB_URL.
   - press: "d"
   - wait:
-      idle:
-        quietForMs: 300
+      screen:
+        contains: "Delete 'DB_URL' permanently?"
       timeoutMs: 3000
+  - snapshot: confirm_modal
   # esc cancels the delete: confirmKey is cleared, mode returns to normal, and
   # NO write happens. Settle on idle so the clean multi-pane state has repainted.
   - press: "esc"

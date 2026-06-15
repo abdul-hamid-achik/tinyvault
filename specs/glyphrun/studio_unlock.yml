@@ -2,35 +2,28 @@ version: 1
 name: tvault_studio_unlock
 
 intent: |
-  A user opens `tvault browse` against a locked vault (the header shows
+  A user opens `tvault studio` against a locked vault (the header shows
   "● locked"). Project and secret metadata are still browsable while locked.
-  The user presses `u`, types the passphrase into the in-app unlock modal, and
-  presses enter. The vault unlocks ("● unlocked"), and a subsequent `r` reveals
-  a real value (postgres://glyph). Then `q` quits cleanly.
+  The user presses `u`, the "Unlock vault" modal appears, types the passphrase,
+  and presses enter. The vault unlocks ("● unlocked"), and a subsequent `r`
+  reveals a real value (postgres://glyph). Then `q` quits cleanly.
 
   This proves the in-app unlock flow — the only way to go from locked to
-  unlocked inside the browser — drives correctly over a PTY.
+  unlocked inside the studio — drives correctly over a PTY, asserting on the
+  unlock modal itself and the header lock badge.
 
   Note on the locked start: glyphrun.config.yml injects TVAULT_PASSPHRASE into
   every target's environment (so the other specs launch unlocked). This spec
-  overrides it with a deliberately wrong value, so browse's non-interactive
-  unlock fails and the browser launches locked — exactly the state we want to
-  exercise the in-app `u` flow against.
-
-  Note on overlays: glyphrun's terminal emulator does not fully apply Bubble
-  Tea v2's cell-diff repaint when a centered modal opens over the multi-pane
-  body (stale border cells linger), so this spec drives the unlock modal
-  "blind" — the model processes keystrokes regardless of render — and asserts
-  only on the clean header state before ("● locked") and after ("● unlocked").
-  The modal's own contents are covered by the model tests in
-  cmd/tvault/cmd/browse/model_test.go.
+  overrides it with a deliberately wrong value, so the non-interactive unlock
+  fails and the studio launches locked — exactly the state we want to exercise
+  the in-app `u` flow against.
 
 target:
   cmd: ["./bin/tvault", "studio", "--no-anim"]
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/unlock"
-    # Wrong on purpose: browse ignores a failed non-interactive unlock and
+    # Wrong on purpose: studio ignores a failed non-interactive unlock and
     # launches locked, which is the state this spec needs.
     TVAULT_PASSPHRASE: "wrong-on-purpose"
   timeoutMs: 15000
@@ -68,17 +61,18 @@ steps:
         contains: "DB_URL"
       timeoutMs: 3000
   - snapshot: locked
-  # u opens the in-app unlock modal (driven blind — see the header note above).
+  # u opens the in-app unlock modal — assert its title + prompt render.
   - press: "u"
   - wait:
-      idle:
-        quietForMs: 350
+      screen:
+        contains: "Unlock vault"
       timeoutMs: 3000
-  - type: "glyphpass"
   - wait:
-      idle:
-        quietForMs: 350
+      screen:
+        contains: "enter passphrase"
       timeoutMs: 3000
+  - snapshot: unlock_modal
+  - type: "glyphpass"
   - press: "enter"
   # The "● unlocked" badge only renders after the status reload confirms the
   # vault is actually unlocked (distinct from the "vault unlocked" status line).
