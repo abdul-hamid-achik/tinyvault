@@ -37,7 +37,9 @@ func NewVaultMCPServer(v *vault.Vault, policy *AccessPolicy) *VaultMCPServer {
 				"Use vault_search_secrets and vault_list_secrets_by_prefix to find keys by " +
 				"project, prefix, name pattern, or update time -- never iterate values. " +
 				"Use vault_secret_history to view a secret's version metadata (no values) and " +
-				"vault_rollback_secret to restore an older version (creates a new version; never returns a value).",
+				"vault_rollback_secret to restore an older version (creates a new version; never returns a value). " +
+				"For a full machine-readable capability manifest, the host can run `tvault docs features` (CLI); " +
+				"`tvault help agent --json` documents the recommended discover-search-use workflow.",
 		},
 	)
 

@@ -29,7 +29,7 @@ features:
     details: tvault is the CLI, the MCP server, and an interactive terminal studio. No database server, no Docker, no network — just one encrypted bbolt file.
   - icon: 🤖
     title: Built for AI agents
-    details: A 21-tool MCP server where secret values never enter the model's context. Inject into a subprocess, write to disk, or seal to a recipient instead.
+    details: A 36-tool MCP server where secret values never enter the model's context. Inject into a subprocess, write to disk, or seal to a recipient instead.
   - icon: 🧬
     title: A real .env toolkit
     details: Safe dotenv parsing (no shell expansion), tvault:// placeholders, two-way sync, drift diffs, and commit-safe .env.encrypted files.
