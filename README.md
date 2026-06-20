@@ -15,6 +15,10 @@ TinyVault is a single-binary CLI tool and [MCP server](https://modelcontextproto
 
 📖 **Full documentation: [tinyvault.dev](https://tinyvault.dev)** — the guide, the complete CLI reference, the MCP tool catalog, configuration, architecture, and the threat model. The site is built from [`docs/`](docs/) (VitePress + Bun) and deployed on Vercel.
 
+## For AI agents
+
+TinyVault is built to be driven by agents without secret values ever entering the model's context. **Run `tvault docs features`** for a machine-readable JSON manifest of every capability, then follow the discover → search → use loop (`tvault help agent --json` documents it). Connect an MCP client to `tvault mcp` (36 tools). Start at the [For AI Agents](https://tinyvault.dev/guide/for-ai-agents) guide.
+
 ## Features
 
 - **AES-256-GCM Encryption** -- Two-tier key hierarchy with per-project data encryption keys

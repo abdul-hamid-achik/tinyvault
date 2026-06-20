@@ -1,0 +1,32 @@
+# TinyVault
+
+> TinyVault (`tvault`) is a single-binary, local-first secrets manager and MCP server. It stores secrets in one encrypted file (AES-256-GCM + Argon2id) with no servers, accounts, or cloud, and is built to be driven by AI agents without secret values ever entering the model's context.
+
+For agents: run `tvault docs features` for a machine-readable JSON manifest of every capability, then follow the discover → search → use loop. An MCP client should connect to `tvault mcp`.
+
+## For AI agents
+
+- [For AI Agents](https://www.tinyvault.dev/guide/for-ai-agents): start here — discovery, the discover→search→use loop, and how values stay out of context.
+- [MCP Overview & Setup](https://www.tinyvault.dev/mcp/): connect a client to `tvault mcp` (Claude Code, Codex, opencode, Hermes, Claude Desktop).
+- [MCP Tools Reference](https://www.tinyvault.dev/mcp/tools): all 36 tools — inputs, returns, and the policy gate each sits behind.
+- [MCP Recipes](https://www.tinyvault.dev/mcp/recipes): end-to-end agent workflows.
+- [Access Policy](https://www.tinyvault.dev/mcp/access-policy): scope what an agent may do via `mcp-policy.yaml`.
+
+## Guide
+
+- [What is TinyVault?](https://www.tinyvault.dev/guide/what-is-tinyvault)
+- [Getting Started](https://www.tinyvault.dev/guide/getting-started)
+- [Core Concepts](https://www.tinyvault.dev/guide/concepts)
+- [Sharing Secrets](https://www.tinyvault.dev/guide/sharing) and [Committable Secrets](https://www.tinyvault.dev/guide/committable-secrets)
+
+## Reference
+
+- [CLI Reference](https://www.tinyvault.dev/cli/): every command and flag.
+- [Configuration](https://www.tinyvault.dev/reference/configuration) and [Environment Variables](https://www.tinyvault.dev/reference/environment-variables)
+- [Architecture](https://www.tinyvault.dev/reference/architecture) and [Security & Threat Model](https://www.tinyvault.dev/reference/security)
+- [Troubleshooting & FAQ](https://www.tinyvault.dev/reference/troubleshooting)
+
+## Optional
+
+- [GitHub repository](https://github.com/abdul-hamid-achik/tinyvault)
+- [Changelog](https://www.tinyvault.dev/changelog)

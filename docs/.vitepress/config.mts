@@ -69,6 +69,7 @@ export default defineConfig({
       { text: 'Guide', link: '/guide/what-is-tinyvault', activeMatch: '/guide/' },
       { text: 'CLI', link: '/cli/', activeMatch: '/cli/' },
       { text: 'MCP', link: '/mcp/', activeMatch: '/mcp/' },
+      { text: 'AI Agents', link: '/guide/for-ai-agents' },
       {
         text: 'Reference',
         activeMatch: '/reference/',
@@ -93,6 +94,7 @@ export default defineConfig({
             { text: 'What is TinyVault?', link: '/guide/what-is-tinyvault' },
             { text: 'Getting Started', link: '/guide/getting-started' },
             { text: 'Core Concepts', link: '/guide/concepts' },
+            { text: 'For AI Agents', link: '/guide/for-ai-agents' },
           ],
         },
         {
