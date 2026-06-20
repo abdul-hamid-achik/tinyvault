@@ -79,6 +79,7 @@ export default defineConfig({
           { text: 'Security & Threat Model', link: '/reference/security' },
         ],
       },
+      { text: 'Changelog', link: '/changelog' },
       { text: 'Releases', link: `${GH}/releases` },
     ],
 
@@ -131,6 +132,7 @@ export default defineConfig({
           items: [
             { text: 'Overview & Setup', link: '/mcp/' },
             { text: 'Tools Reference', link: '/mcp/tools' },
+            { text: 'Recipes', link: '/mcp/recipes' },
             { text: 'Access Policy', link: '/mcp/access-policy' },
           ],
         },
