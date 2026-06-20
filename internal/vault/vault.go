@@ -342,6 +342,10 @@ type Status struct {
 	CreatedAt    string `json:"created_at"`
 }
 
+// Dir returns the vault directory path. It is set at Open and never changes,
+// so no lock is needed. Used to locate sibling files like identities/.
+func (v *Vault) Dir() string { return v.path }
+
 // Status returns current vault status metadata.
 func (v *Vault) Status() Status {
 	v.mu.RLock()
