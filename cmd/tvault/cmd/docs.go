@@ -265,10 +265,10 @@ func fullCatalog() docsCatalog {
 				Description: "Format: tvault-encrypted-v1. Self-contained binary, AES-256-GCM, HKDF-derived per-file key. Rotating the vault passphrase invalidates prior files.",
 			},
 			{
-				Name:        "mcp-server",
-				Summary:     "MCP server over stdio with 21 tools, 2 prompts, 3 resources.",
-				Commands:    []string{"tvault mcp-server"},
-				Description: "Agents can manage secrets without the values ever entering the model context: vault_run_with_secrets injects env vars, vault_export_env writes to disk and returns the path, vault_generate_secret returns only {stored: true}.",
+				Name:        "mcp",
+				Summary:     "MCP server over stdio with 34 tools, 2 prompts, 3 resources.",
+				Commands:    []string{"tvault mcp", "tvault mcp-server"},
+				Description: "Agents can manage secrets without the values ever entering the model context: vault_run_with_secrets injects env vars, vault_export_env writes to disk and returns the path, vault_generate_secret returns only {stored: true}. (`mcp-server` remains a backward-compatible alias.)",
 			},
 			{
 				Name:        "relational-search",
@@ -364,7 +364,7 @@ func fullCatalog() docsCatalog {
 			{
 				Slug:        "mcp",
 				Title:       "MCP server",
-				Description: "Starts a Model Context Protocol server on stdio. Add to your MCP host config with command=tvault args=[mcp-server] env={TVAULT_PASSPHRASE:...}. The server exposes 21 tools, 2 prompts, and 3 resources. The model never needs to see secret values: prefer vault_run_with_secrets and vault_export_env over vault_get_secret. vault_secret_history and vault_rollback_secret manage version history without ever returning a value.",
+				Description: "Starts a Model Context Protocol server on stdio. Add to your MCP host config with command=tvault args=[mcp] env={TVAULT_PASSPHRASE:...}. The server exposes 34 tools, 2 prompts, and 3 resources. The model never needs to see secret values: prefer vault_run_with_secrets and vault_export_env over vault_get_secret. vault_secret_history and vault_rollback_secret manage version history without ever returning a value.",
 			},
 			{
 				Slug:        "interpolate",
@@ -405,7 +405,7 @@ func fullCatalog() docsCatalog {
 				Slug:        "quickstart",
 				Title:       "Quickstart",
 				Description: "Five-line getting-started.",
-				Example:     "  tvault init\n  tvault set DATABASE_URL \"postgres://...\"\n  tvault run -- npm start\n  tvault encrypt-env --in .env       # commit .env.encrypted\n  tvault mcp-server                  # for AI agents",
+				Example:     "  tvault init\n  tvault set DATABASE_URL \"postgres://...\"\n  tvault run -- npm start\n  tvault encrypt-env --in .env       # commit .env.encrypted\n  tvault mcp                         # for AI agents",
 			},
 			{
 				Slug:        "studio",

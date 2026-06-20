@@ -5,7 +5,7 @@ description: The complete tvault command reference — global flags, exit codes,
 
 # CLI Reference
 
-`tvault` is a single Go binary: a local-first secrets CLI, an MCP server (via the hidden `mcp-server` subcommand), and an interactive terminal studio. This page documents every command, its usage line, and its command-local flags.
+`tvault` is a single Go binary: a local-first secrets CLI, an MCP server (via the `mcp` subcommand), and an interactive terminal studio. This page documents every command, its usage line, and its command-local flags.
 
 Run `tvault help` for the long-form manual or `tvault docs` for machine-readable docs aimed at agents. Every command also supports `-h`/`--help`.
 
@@ -675,6 +675,14 @@ Launch the interactive terminal studio. Requires a TTY. **Read-only by default**
 
 TinyVault speaks MCP through the same binary. See the [MCP overview](/mcp/) and the [tools reference](/mcp/tools).
 
+### `mcp`
+
+```bash
+tvault mcp
+```
+
+Start the MCP server over stdio. Loads `~/.tvault/mcp-policy.yaml` and serves the agent-facing tools, resources, and prompts. Your MCP host (Claude Code, Claude Desktop, or any MCP client) usually launches this for you rather than you running it by hand. It unlocks the vault from `TVAULT_PASSPHRASE` (there is no prompt over stdio). Alias: `mcp-server`. No command-local flags.
+
 ::: warning MCP output redaction is a safety net, not a control
 Redaction only replaces literal values longer than three characters and can be evaded by transforming a value (e.g. base64). It is a last line of defense, not access control. The MCP server never returns a raw secret value **except** `vault_get_secret`, which warns when it does.
 :::
@@ -683,7 +691,6 @@ Redaction only replaces literal values longer than three characters and can be e
 
 A few commands are hidden because they are wired up by other tools, not run by hand:
 
-- `mcp-server` — start the MCP server over stdio. Loads `~/.tvault/mcp-policy.yaml`. This is what an MCP client launches.
 - `git-clean` / `git-smudge` — the clean/smudge endpoints invoked by git through `git-filter install`.
 
 ---

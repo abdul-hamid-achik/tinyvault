@@ -4,7 +4,7 @@ import "errors"
 
 var (
 	// ErrUnsupportedPlatform is returned by the agent on non-unix platforms.
-	ErrUnsupportedPlatform = errors.New("tvault agent is unix-only (linux/macOS); use the direct CLI or mcp-server on this platform")
+	ErrUnsupportedPlatform = errors.New("tvault agent is unix-only (linux/macOS); use the direct CLI or mcp on this platform")
 
 	// ErrAgentNotRunning is returned by Stop/Status when no agent is listening.
 	ErrAgentNotRunning = errors.New("tvault agent is not running")

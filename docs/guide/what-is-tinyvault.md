@@ -51,10 +51,10 @@ A full-screen TUI (built on Bubble Tea v2) to browse status, projects, secrets, 
 
 ### The MCP server — for AI agents
 
-The same binary is also a [Model Context Protocol](/mcp/) server (via the hidden `mcp-server` subcommand). Point an AI agent — Claude, an editor assistant, an automation — at it, and the agent can work with your secrets without the plaintext ever needing to enter the model's context.
+The same binary is also a [Model Context Protocol](/mcp/) server (via the `mcp` subcommand). Point an AI agent — Claude, an editor assistant, an automation — at it, and the agent can work with your secrets without the plaintext ever needing to enter the model's context.
 
 ```bash
-tvault mcp-server
+tvault mcp
 ```
 
 The agent can inject secrets into a subprocess, write an env file to disk, generate a secret, or seal ciphertext for a recipient — all without seeing raw values. Access is gated by a disk-loaded [access policy](/mcp/access-policy), not by the model. See the [MCP overview](/mcp/) and the [tool reference](/mcp/tools).

@@ -7,7 +7,7 @@ description: The mental model behind TinyVault — the encrypted vault, lock/unl
 
 This page is the mental model for TinyVault. It is a concept map, not a command reference — each idea links to the page that covers it in depth. Read it once and the rest of the docs will click into place.
 
-TinyVault is a single Go binary, `tvault`. The same binary is your CLI, an interactive terminal studio, and (via a hidden subcommand) an MCP server for AI agents. All three sit on one local, encrypted file. There are no servers, no accounts, and no network calls.
+TinyVault is a single Go binary, `tvault`. The same binary is your CLI, an interactive terminal studio, and (via the `mcp` subcommand) an MCP server for AI agents. All three sit on one local, encrypted file. There are no servers, no accounts, and no network calls.
 
 ## The vault
 
@@ -148,7 +148,7 @@ See the [Studio guide](/guide/studio).
 
 ### MCP server
 
-A [Model Context Protocol](/mcp/) server on stdio for AI agents, started by the hidden `mcp-server` subcommand (your agent host launches it for you). The design goal is that **secret values never enter the model context**: prefer tools like `vault_run_with_secrets` and `vault_export_env` that act on secrets without returning them.
+A [Model Context Protocol](/mcp/) server on stdio for AI agents, started by the `mcp` subcommand (your agent host launches it for you). The design goal is that **secret values never enter the model context**: prefer tools like `vault_run_with_secrets` and `vault_export_env` that act on secrets without returning them.
 
 ::: danger Two MCP security facts to keep straight
 **The MCP server never returns a raw secret value — except `vault_get_secret`, which warns.** Every other tool is designed to keep values out of the model's context.

@@ -1,6 +1,6 @@
 ---
 title: MCP Server
-description: Connect AI agents to TinyVault over the Model Context Protocol — one Go binary that serves 21 tools over stdio while keeping secret values out of the model context.
+description: Connect AI agents to TinyVault over the Model Context Protocol — one Go binary that serves 34 tools over stdio while keeping secret values out of the model context.
 ---
 
 # MCP Server
@@ -9,15 +9,17 @@ TinyVault speaks the [Model Context Protocol](https://modelcontextprotocol.io) (
 
 ## What it is
 
-`tvault` serves MCP over **stdio** through a hidden subcommand:
+`tvault` serves MCP over **stdio** through a dedicated subcommand:
 
 ```bash
-tvault mcp-server
+tvault mcp
 ```
+
+(`mcp-server` remains a working alias.)
 
 You rarely run this by hand — your MCP host (Claude Code, Claude Desktop, or any MCP client) launches it for you. The server is a thin **policy-and-redaction layer** over the same vault API the CLI uses: every call is checked against an [access policy](/mcp/access-policy), privileged actions are audited, and outputs are filtered so plaintext stays out of the conversation.
 
-It exposes **21 tools, 3 resources, and 2 prompts**, built on the official [modelcontextprotocol go-sdk](https://github.com/modelcontextprotocol/go-sdk).
+It exposes **34 tools, 3 resources, and 2 prompts**, built on the official [modelcontextprotocol go-sdk](https://github.com/modelcontextprotocol/go-sdk).
 
 ::: info Same vault, same crypto
 The MCP server is not a separate datastore. It unlocks the one encrypted bbolt vault at `~/.tvault/vault.db` and reads and writes through the identical AES-256-GCM path as the CLI and [studio](/guide/studio). See [Architecture](/reference/architecture).
@@ -35,7 +37,7 @@ The design goal is that a secret value **never needs to enter the model's contex
 | `vault_seal_for_recipients` | Returns commit-safe ciphertext (or just a path) |
 | `vault_get_secret` | **The one exception** — returns the cleartext value with a warning |
 
-`vault_get_secret` is the single tool that returns a raw value. It returns `{key, value, warning}`, where the warning reminds the caller the value is now in the model context. Prefer `vault_run_with_secrets` for *using* a value, and the search tools (`vault_search_secrets`, `vault_list_secrets_by_prefix`) for *finding* keys. The [Tools Reference](/mcp/tools) documents all 21.
+`vault_get_secret` is the single tool that returns a raw value. It returns `{key, value, warning}`, where the warning reminds the caller the value is now in the model context. Prefer `vault_run_with_secrets` for *using* a value, and the search tools (`vault_search_secrets`, `vault_list_secrets_by_prefix`) for *finding* keys. The [Tools Reference](/mcp/tools) documents all 34.
 
 ::: warning Redaction is a safety net, not a control
 With `redact_output` on, the server scrubs secret values from `vault_run_with_secrets` stdout/stderr, but it only replaces literal values longer than 3 characters with `[REDACTED:KEY]`. A subprocess that transforms a value — base64-encodes it, reverses it, splits it across lines — can evade redaction. Treat it as defense in depth, not a guarantee, and trust the *commands* you let an agent run.
@@ -43,7 +45,7 @@ With `redact_output` on, the server scrubs secret values from `vault_run_with_se
 
 ## Connecting an MCP client
 
-Any MCP-capable client can launch `tvault mcp-server`. Because the server unlocks the vault from `TVAULT_PASSPHRASE` (there is no prompt over stdio), the only real decision is **how each client supplies that passphrase**. The most robust, secret-out-of-config pattern is a tiny launcher script — defined [below](#keeping-the-passphrase-out-of-every-config) — and the per-client commands here point at it (`tvault-mcp`). Swap in plain `tvault mcp-server` if you prefer to manage the passphrase yourself.
+Any MCP-capable client can launch `tvault mcp`. Because the server unlocks the vault from `TVAULT_PASSPHRASE` (there is no prompt over stdio), the only real decision is **how each client supplies that passphrase**. The most robust, secret-out-of-config pattern is a tiny launcher script — defined [below](#keeping-the-passphrase-out-of-every-config) — and the per-client commands here point at it (`tvault-mcp`). Swap in plain `tvault mcp` if you prefer to manage the passphrase yourself.
 
 ### Claude Code
 
@@ -58,7 +60,7 @@ Or edit `.claude/settings.local.json` directly. Claude Code expands `${TVAULT_PA
   "mcpServers": {
     "tinyvault": {
       "command": "tvault",
-      "args": ["mcp-server"],
+      "args": ["mcp"],
       "env": { "TVAULT_PASSPHRASE": "${TVAULT_PASSPHRASE}" }
     }
   }
@@ -111,7 +113,7 @@ The cleanest setup is a one-line launcher that loads the passphrase from a singl
 # ~/.local/bin/tvault-mcp   (chmod +x)
 [ -f "$HOME/.config/secrets/env" ] && . "$HOME/.config/secrets/env"
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
-exec tvault mcp-server "$@"
+exec tvault mcp "$@"
 ```
 
 Point every client at `tvault-mcp` and keep `export TVAULT_PASSPHRASE=…` in `~/.config/secrets/env` (or your secrets manager / the macOS Keychain). This works for CLI **and** GUI clients and keeps the passphrase out of all the JSON/TOML/YAML configs.
@@ -121,7 +123,7 @@ If you do embed `TVAULT_PASSPHRASE` in a config file (e.g. `.claude/settings.loc
 :::
 
 ::: tip Optional: point at a non-default vault
-The MCP server honors the global persistent flags. To serve a vault in a custom directory, pass `--vault` in `args`, for example `["mcp-server", "--vault", "/path/to/vault-dir"]`. See [Configuration](/reference/configuration) and [Environment Variables](/reference/environment-variables).
+The MCP server honors the global persistent flags. To serve a vault in a custom directory, pass `--vault` in `args`, for example `["mcp", "--vault", "/path/to/vault-dir"]`. See [Configuration](/reference/configuration) and [Environment Variables](/reference/environment-variables).
 :::
 
 ## Resources and prompts
@@ -169,7 +171,7 @@ If the server fails to start, the exit code tells you why: `3` vault locked, `5`
 
 ## See also
 
-- [Tools Reference](/mcp/tools) — all 21 tools, their inputs, and exactly what each returns
+- [Tools Reference](/mcp/tools) — all 34 tools, their inputs, and exactly what each returns
 - [Access Policy](/mcp/access-policy) — scope an agent with `mcp-policy.yaml` (modes, globs, exec gate)
 - [Local Agent](/guide/agent) — unlock once, skip the passphrase prompt
 - [Security & Threat Model](/reference/security) — what redaction and tokens do and do not protect

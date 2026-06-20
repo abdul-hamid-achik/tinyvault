@@ -9,7 +9,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.4
 	github.com/fatih/color v1.18.0
 	github.com/google/uuid v1.6.0
-	github.com/modelcontextprotocol/go-sdk v1.4.1
+	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	go.etcd.io/bbolt v1.4.3
@@ -35,7 +35,7 @@ require (
 	github.com/dlclark/regexp2 v1.11.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
-	github.com/google/jsonschema-go v0.4.2 // indirect
+	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
@@ -60,9 +60,8 @@ require (
 	github.com/yuin/goldmark v1.7.8 // indirect
 	github.com/yuin/goldmark-emoji v1.0.5 // indirect
 	golang.org/x/net v0.50.0 // indirect
-	golang.org/x/oauth2 v0.34.0 // indirect
+	golang.org/x/oauth2 v0.35.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
-	golang.org/x/tools v0.42.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )

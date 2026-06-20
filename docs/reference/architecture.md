@@ -7,7 +7,7 @@ description: How TinyVault works under the hood — its two-tier key hierarchy, 
 
 This page is the deep technical design of TinyVault: the *how* behind the binary. For the conceptual model first, read [Concepts](/guide/concepts); for the threat model and what TinyVault does and does not defend against, read [Security](/reference/security).
 
-TinyVault is a single Go binary, `tvault`. The same binary is the CLI, an interactive terminal [studio](/guide/studio), and (via the hidden `mcp-server` subcommand) an [MCP server](/mcp/) for AI agents. All three sit on one vault API and one encrypted file on disk. There are no servers, no accounts, and no network calls.
+TinyVault is a single Go binary, `tvault`. The same binary is the CLI, an interactive terminal [studio](/guide/studio), and (via the `mcp` subcommand) an [MCP server](/mcp/) for AI agents. All three sit on one vault API and one encrypted file on disk. There are no servers, no accounts, and no network calls.
 
 ## The big picture
 
@@ -256,7 +256,7 @@ The CLI, the studio TUI, and the MCP server are thin front ends over the same va
 | --- | --- | --- |
 | CLI | `tvault ...` | The primary surface; everything below is also reachable here. |
 | Studio TUI | `tvault studio` (aliases `browse`, `ui`) | Read-only by default; `--rw` enables audited in-app edits. |
-| MCP server | `tvault mcp-server` (hidden subcommand) | For AI agents; uses the same API under an access policy. |
+| MCP server | `tvault mcp` | For AI agents; uses the same API under an access policy. |
 
 ### Global flags
 

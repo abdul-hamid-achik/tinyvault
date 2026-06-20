@@ -77,7 +77,7 @@ cmd/tvault/
     projects.go / use.go     # tvault projects list/create / tvault use PROJECT
     backup.go                # tvault backup <path> / tvault restore <path> (restore is a separate command)
     rotate.go                # tvault key rotate
-    mcp_server.go            # tvault mcp-server (stdio MCP transport)
+    mcp_server.go            # tvault mcp (alias: mcp-server) (stdio MCP transport)
     ci.go                    # tvault ci init --mode=passphrase|identity (generate CI workflow files)
     studio.go                # tvault studio (aliases: browse, ui) (cobra wiring + TTY checks; calls studio pkg)
     doctor.go                # tvault doctor (read-only setup diagnostics; --json)
