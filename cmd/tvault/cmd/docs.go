@@ -272,9 +272,9 @@ func fullCatalog() docsCatalog {
 			},
 			{
 				Name:        "relational-search",
-				Summary:     "Read-only relational search over secrets, projects, and audit log (values never indexed, never returned in search results).",
-				Commands:    []string{"tvault search", "tvault audit", "tvault projects list"},
-				Description: "Composable filters: key glob, project, tag, prefix, time window. Backed by the SQL-shaped tabular store (bbolt under the hood, no FTS, no derived index).",
+				Summary:     "Read-only relational search over secrets and projects (values never indexed, never returned in search results).",
+				Commands:    []string{"tvault search", "tvault projects list"},
+				Description: "Composable filters: key glob, project, prefix, time window, version. Backed by the SQL-shaped tabular store (bbolt under the hood, no FTS, no derived index). The audit log is read over MCP (vault_audit_log / vault_audit_log_since) or in the studio Audit pane -- there is no `tvault audit` CLI command.",
 			},
 			{
 				Name:        "agent-discoverability",
@@ -284,9 +284,33 @@ func fullCatalog() docsCatalog {
 			},
 			{
 				Name:        "ci-integration",
-				Summary:     "Starter GitHub Actions and GitLab CI workflows.",
-				Commands:    []string{"tvault ci init --provider=github-actions", "tvault ci init --provider=gitlab"},
-				Description: "Downloads the binary, sets TVAULT_PASSPHRASE from secrets, runs tvault env to load secrets.",
+				Summary:     "Starter GitHub Actions / GitLab CI workflows (passphrase or passphrase-free identity mode).",
+				Commands:    []string{"tvault ci init --provider=github-actions", "tvault ci init --provider=github-actions --mode=identity --identity=ci", "tvault ci init --provider=gitlab"},
+				Description: "Loads secrets in CI. Default mode uses TVAULT_PASSPHRASE; --mode=identity scaffolds a passphrase-free workflow with a per-context identity (TVAULT_IDENTITY_KEY). See the committable-secrets topic.",
+			},
+			{
+				Name:        "dotenv-import",
+				Summary:     "Safely import .env-family files into the vault (no shell expansion, name allowlist).",
+				Commands:    []string{"tvault import .env", "tvault import --env production", "tvault import --interactive"},
+				Description: "The parser does no variable/command expansion, skips symlinks, and caps size. Over MCP: vault_list_env_files, vault_preview_env_import, vault_import_env_files (values never exposed).",
+			},
+			{
+				Name:        "drift-diff",
+				Summary:     "Show how a .env file has drifted from the vault (metadata by default; --values compares without printing values).",
+				Commands:    []string{"tvault diff .env", "tvault diff .env --values"},
+				Description: "Reports only-in-vault / only-in-file / in-both and same/differs verdicts; never prints values. Over MCP: vault_diff_env.",
+			},
+			{
+				Name:        "backup-restore",
+				Summary:     "Copy the still-encrypted vault.db to and from a backup path.",
+				Commands:    []string{"tvault backup <path>", "tvault restore <path>"},
+				Description: "Backups are byte-identical encrypted copies; the passphrase is still required to use them. Not exposed over MCP by design.",
+			},
+			{
+				Name:        "kubernetes-sealed-secrets",
+				Summary:     "Commit-safe sealed Secrets (SealedSecret pattern), sealed to an X25519 recipient; no cluster controller.",
+				Commands:    []string{"tvault seal --format k8s --name app -r tvault1…", "tvault k8s render --identity cluster"},
+				Description: "Author a commit-safe manifest with `seal --format k8s`; render a real Secret at deploy with the cluster identity. See `tvault docs k8s`.",
 			},
 			{
 				Name:        "multi-project",

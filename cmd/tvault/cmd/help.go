@@ -417,9 +417,10 @@ func helpContent() HelpContent {
 					"at deploy, render a real Secret with the cluster identity. No cluster controller needed.",
 			},
 			{
-				Name:        "Audit log for the last hour",
-				Commands:    []string{"tvault audit log --since 2026-06-13T18:00:00Z --json"},
-				Description: "Find out which secret was read, when, and by which tool.",
+				Name:     "Read the audit log",
+				Commands: []string{"tvault studio   # Audit pane"},
+				Description: "Audit entries (who read/wrote what, and when) are read in the studio's Audit pane, " +
+					"or over MCP via vault_audit_log / vault_audit_log_since. There is no `tvault audit` CLI command.",
 			},
 			{
 				Name:     "Run the MCP server for an agent",
@@ -445,7 +446,7 @@ func helpContent() HelpContent {
 				"1. 'tvault docs features' -- discover what is available",
 				"2. 'tvault search' or 'vault_search_secrets' -- find the key you need",
 				"3. 'tvault run' or 'vault_run_with_secrets' -- use the value without seeing it",
-				"4. 'tvault audit log' -- confirm the action was recorded",
+				"4. 'vault_audit_log_since' (MCP) or the studio Audit pane -- confirm the action was recorded",
 			},
 			AntiPatterns: []string{
 				"Do not call 'tvault get KEY' in a loop just to enumerate secrets; use 'tvault list'.",
