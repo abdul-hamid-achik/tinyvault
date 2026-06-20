@@ -20,7 +20,7 @@ TinyVault is a single-binary CLI tool and [MCP server](https://modelcontextproto
 - **AES-256-GCM Encryption** -- Two-tier key hierarchy with per-project data encryption keys
 - **Argon2id Key Derivation** -- Memory-hard passphrase hashing resistant to GPU/ASIC attacks
 - **Single Binary** -- One `tvault` binary for CLI use and MCP server mode
-- **MCP Server** -- 34 tools: AI agents can manage secrets via the Model Context Protocol (stdio) without the values ever entering the model context
+- **MCP Server** -- 36 tools: AI agents can manage secrets via the Model Context Protocol (stdio) without the values ever entering the model context
 - **Multi-Project** -- Organize secrets into projects with independent encryption keys
 - **.env Ecosystem** -- Safe dotenv parser (no shell expansion), `tvault://` placeholder interpolation, two-way sync (pull/push/mirror), and `.env.encrypted` files (Rails credentials pattern, safe to commit)
 - **Share & commit secrets** -- X25519 recipients (age-style): share a project without the passphrase, commit self-decrypting secrets via `git-filter` (transparent clean/smudge) or v2 `.env.encrypted`, and seal for recipients over MCP. Revocation rotates the key and re-encrypts.
@@ -345,6 +345,8 @@ Add to `.claude/settings.local.json`:
 | `vault_diff_env` | Drift between a `.env` file and the project (verdicts only, never values) |
 | `vault_sync_env` | Reconcile a `.env` with the project: pull / push / mirror |
 | `vault_export_env_encrypted` | Write a commit-safe `.env.encrypted` (v2) sealed to the project's current recipients (ciphertext only) |
+| `vault_identity_new` | Create an X25519 identity; returns the public recipient only (never the private key) |
+| `vault_identity_list` | List local identities and their public recipients |
 
 The recommended pattern for an agent is to discover the surface once via
 `tvault docs features`, then use the relational tools
@@ -476,7 +478,7 @@ tvault (single binary)
     crypto/         # AES-256-GCM, Argon2id, key generation
     store/          # bbolt storage layer
     vault/          # High-level vault operations
-    mcp/            # MCP server (34 tools, access policy, redaction)
+    mcp/            # MCP server (36 tools, access policy, redaction)
     validation/     # Input validation
 ```
 

@@ -1,11 +1,11 @@
 ---
 title: MCP Tools Reference
-description: Complete reference for all 34 TinyVault MCP tools, 3 resources, and 2 prompts — their inputs, what they return, and the policy gate each sits behind.
+description: Complete reference for all 36 TinyVault MCP tools, 3 resources, and 2 prompts — their inputs, what they return, and the policy gate each sits behind.
 ---
 
 # MCP Tools Reference
 
-This is the full reference for the TinyVault MCP surface: **34 tools, 3 resources, and 2 prompts**, served over stdio by the `tvault mcp` subcommand (the older `mcp-server` name still works as an alias) and built on the [modelcontextprotocol go-sdk](https://github.com/modelcontextprotocol/go-sdk). For setup — wiring `tvault` into Claude Code and other clients — see the [MCP overview](/mcp/). For the policy file that gates these tools, see [Access Policy](/mcp/access-policy).
+This is the full reference for the TinyVault MCP surface: **36 tools, 3 resources, and 2 prompts**, served over stdio by the `tvault mcp` subcommand (the older `mcp-server` name still works as an alias) and built on the [modelcontextprotocol go-sdk](https://github.com/modelcontextprotocol/go-sdk). For setup — wiring `tvault` into Claude Code and other clients — see the [MCP overview](/mcp/). For the policy file that gates these tools, see [Access Policy](/mcp/access-policy).
 
 The single most important fact: **only `vault_get_secret` returns a raw plaintext value.** Every other tool returns metadata, a path, a count, or ciphertext. That is the whole design — agents should *use* secrets without ever pulling them into the model's context.
 
@@ -47,6 +47,8 @@ The single most important fact: **only `vault_get_secret` returns a raw plaintex
 | `vault_diff_env` | No | Drift between a `.env` file and the project. |
 | `vault_sync_env` | No | Reconcile a `.env` with the project (pull/push/mirror). |
 | `vault_export_env_encrypted` | No | Write a commit-safe `.env.encrypted` (v2) for current recipients. |
+| `vault_identity_new` | No | Create an X25519 identity; returns the public recipient only. |
+| `vault_identity_list` | No | List local identities and their public recipients. |
 
 ::: tip The recommended agent pattern
 Discover the surface once with `tvault docs features`. Then use the relational tools — `vault_search_secrets` and `vault_list_secrets_by_prefix` — to find keys *without* enumerating values, and use `vault_run_with_secrets` when you actually need to *use* a value. That keeps secrets out of the model context, which is exactly what `vault_get_secret` cannot guarantee.
@@ -444,6 +446,26 @@ Writes a commit-safe `.env.encrypted` (v2) sealed to the project's **current** r
 ::: tip Seals to current recipients, not an arbitrary key
 Unlike `vault_seal_for_recipients` (which takes explicit recipient keys), `vault_export_env_encrypted` seals to whoever the project is already shared with. Share the project first (`vault_share_project`) if the recipient list is empty.
 :::
+
+## Identities
+
+These manage the X25519 identity key files used by the recipient layer. They return only the **public** recipient string (`tvault1…`) — never the private key (`tvault-key1…`).
+
+### `vault_identity_new`
+
+Generates a new identity keypair, writes the private key `0600` under the vault's `identities/` directory, and returns the public recipient and the file path.
+
+- **Inputs:** `name` (optional; letters/digits/`-`/`_`, max 64; default `default`). Errors if an identity with that name already exists.
+- **Returns:** `{ name, recipient, path }` — the public `tvault1…` recipient and the on-disk path. The private key is **never** returned.
+- **Policy gate:** `CanWrite` (it creates a file).
+
+### `vault_identity_list`
+
+Lists local identities and their public recipient strings, so you can pick a recipient to share or seal to.
+
+- **Inputs:** none.
+- **Returns:** `{ identities: [{ name, recipient }] }` — public halves only.
+- **Policy gate:** read-only.
 
 ---
 
