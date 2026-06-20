@@ -41,34 +41,83 @@ The design goal is that a secret value **never needs to enter the model's contex
 With `redact_output` on, the server scrubs secret values from `vault_run_with_secrets` stdout/stderr, but it only replaces literal values longer than 3 characters with `[REDACTED:KEY]`. A subprocess that transforms a value — base64-encodes it, reverses it, splits it across lines — can evade redaction. Treat it as defense in depth, not a guarantee, and trust the *commands* you let an agent run.
 :::
 
-## Setup with Claude Code
+## Connecting an MCP client
 
-Add an MCP server entry whose `command` is `tvault`, whose `args` are `["mcp-server"]`, and whose `env` carries the vault passphrase. The `TVAULT_PASSPHRASE` env var is how the server unlocks the vault non-interactively — there is no prompt over stdio.
+Any MCP-capable client can launch `tvault mcp-server`. Because the server unlocks the vault from `TVAULT_PASSPHRASE` (there is no prompt over stdio), the only real decision is **how each client supplies that passphrase**. The most robust, secret-out-of-config pattern is a tiny launcher script — defined [below](#keeping-the-passphrase-out-of-every-config) — and the per-client commands here point at it (`tvault-mcp`). Swap in plain `tvault mcp-server` if you prefer to manage the passphrase yourself.
 
-Create or edit `.claude/settings.local.json` in your project:
+### Claude Code
+
+```bash
+claude mcp add tinyvault -s user -- tvault-mcp
+```
+
+Or edit `.claude/settings.local.json` directly. Claude Code expands `${TVAULT_PASSPHRASE}` from its environment, so no secret is written to the file:
 
 ```json
 {
   "mcpServers": {
-    "tvault": {
+    "tinyvault": {
       "command": "tvault",
       "args": ["mcp-server"],
-      "env": {
-        "TVAULT_PASSPHRASE": "your-vault-passphrase"
-      }
+      "env": { "TVAULT_PASSPHRASE": "${TVAULT_PASSPHRASE}" }
     }
   }
 }
 ```
 
-Or register it from the CLI:
+### Codex
 
 ```bash
-claude mcp add tvault --env TVAULT_PASSPHRASE=your-vault-passphrase -- tvault mcp-server
+codex mcp add tinyvault -- tvault-mcp
 ```
 
-::: danger Keep the passphrase out of version control
-`.claude/settings.local.json` holds your plaintext passphrase, so it must never be committed. Add it to `.gitignore`. If you would rather not put a passphrase in a config file, run the [local agent](/guide/agent) or use an [identity key](/guide/sharing) instead.
+Writes an `[mcp_servers.tinyvault]` block to `~/.codex/config.toml`.
+
+### opencode
+
+Add to the `mcp` object in `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "mcp": {
+    "tinyvault": {
+      "type": "local",
+      "command": ["tvault-mcp"],
+      "enabled": true
+    }
+  }
+}
+```
+
+opencode also resolves `{env:TVAULT_PASSPHRASE}` inside an `environment` block if you'd rather pass it explicitly.
+
+### Hermes
+
+```bash
+hermes mcp add tinyvault --command tvault-mcp
+hermes mcp test tinyvault          # verify once the passphrase is set
+```
+
+### Claude Desktop
+
+Add the same `mcpServers` block as Claude Code to `~/Library/Application Support/Claude/claude_desktop_config.json`. GUI apps don't inherit your shell environment, so the launcher (which reads the passphrase from a file) is the easiest way to feed it the passphrase.
+
+### Keeping the passphrase out of every config
+
+The cleanest setup is a one-line launcher that loads the passphrase from a single place and execs the server — so none of the agent configs above hold the secret:
+
+```sh
+#!/bin/sh
+# ~/.local/bin/tvault-mcp   (chmod +x)
+[ -f "$HOME/.config/secrets/env" ] && . "$HOME/.config/secrets/env"
+export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
+exec tvault mcp-server "$@"
+```
+
+Point every client at `tvault-mcp` and keep `export TVAULT_PASSPHRASE=…` in `~/.config/secrets/env` (or your secrets manager / the macOS Keychain). This works for CLI **and** GUI clients and keeps the passphrase out of all the JSON/TOML/YAML configs.
+
+::: danger Never commit a passphrase
+If you do embed `TVAULT_PASSPHRASE` in a config file (e.g. `.claude/settings.local.json`), it must never be committed — add it to `.gitignore`. For passphrase-free setups, run the [local agent](/guide/agent) or use an [identity key](/guide/sharing).
 :::
 
 ::: tip Optional: point at a non-default vault

@@ -11,6 +11,10 @@ TinyVault is a single-binary CLI tool and [MCP server](https://modelcontextproto
 
 > **See [SPEC.md](SPEC.md) for the full design doc** -- architecture, threat model, MCP security story, comparison with 1Password CLI / `pass` / Vault / Doppler, and roadmap.
 
+## Documentation
+
+📖 **Full documentation: [tinyvault.dev](https://tinyvault.dev)** — the guide, the complete CLI reference, the MCP tool catalog, configuration, architecture, and the threat model. The site is built from [`docs/`](docs/) (VitePress + Bun) and deployed on Vercel.
+
 ## Features
 
 - **AES-256-GCM Encryption** -- Two-tier key hierarchy with per-project data encryption keys

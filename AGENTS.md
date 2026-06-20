@@ -330,6 +330,7 @@ hand-rolled easing.
 
 - **Product framing, threat model, roadmap:** [SPEC.md](SPEC.md)
 - **Quickstart and feature list:** [README.md](README.md)
+- **Documentation site:** `docs/` (VitePress + Bun) → **[tinyvault.dev](https://tinyvault.dev)**, deployed on Vercel; auto-deploys on push to `main` that touches `docs/` (Vercel root dir `docs/`). Local dev: `cd docs && bun run docs:dev`; gate with `bun run docs:build`.
 - **Contributing guide:** [CONTRIBUTING.md](CONTRIBUTING.md)
 - **CI:** `.github/workflows/ci.yml` (test, lint, govulncheck, build)
 - **Release:** `.github/workflows/release.yml` (GoReleaser on `v*` tags)

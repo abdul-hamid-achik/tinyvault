@@ -134,8 +134,22 @@ Security Scan, Build**. All four must be green.
   updates not always repainting → drive modals blind) are documented in
   `specs/glyphrun/README.md`.
 
+## Documentation site (`docs/` → tinyvault.dev)
+
+User-facing docs live in `docs/` — a **VitePress (v1) + Bun** site deployed to
+**Vercel** at **[tinyvault.dev](https://tinyvault.dev)** (served at
+`www.tinyvault.dev`; the apex 308-redirects to www, so `SITE_URL`/canonical/
+sitemap use www). It is **git-connected**: any push to `main` that touches
+`docs/` auto-builds and deploys (Vercel project `tinyvault-docs`, root directory
+`docs/`, `bun run docs:build`, output `.vitepress/dist`). Iterate locally with
+`cd docs && bun run docs:dev`; gate with `bun run docs:build` (it fails on dead
+links). Theme + config live in `docs/.vitepress/` ("Vault Amber"). Content is
+verified against the real binary — there is **no `tvault generate` and no
+`tvault audit`** command despite older help-text mentions.
+
 ## Committing
 
 Branch off `main` for changes; ensure all four CI checks pass locally before
-pushing. Keep `AGENTS.md`, `SPEC.md`, `README.md`, and `tvault help` /
-`tvault docs` in sync when behavior changes — they cross-reference each other.
+pushing. Keep `AGENTS.md`, `SPEC.md`, `README.md`, the `docs/` site, and
+`tvault help` / `tvault docs` in sync when behavior changes — they
+cross-reference each other.
