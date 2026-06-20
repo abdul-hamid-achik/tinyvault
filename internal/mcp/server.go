@@ -51,6 +51,10 @@ func NewVaultMCPServer(v *vault.Vault, policy *AccessPolicy) *VaultMCPServer {
 	s.registerQueryTools()
 	s.registerSealTools()
 	s.registerVersionTools()
+	s.registerNavigationTools()
+	s.registerSecretMetaTools()
+	s.registerSharingTools()
+	s.registerDotenvTools()
 	s.registerResources()
 	s.registerPrompts()
 

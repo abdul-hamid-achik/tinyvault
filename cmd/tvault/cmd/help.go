@@ -423,7 +423,7 @@ func helpContent() HelpContent {
 			},
 			{
 				Name:     "Run the MCP server for an agent",
-				Commands: []string{"TVAULT_PASSPHRASE=... tvault mcp-server"},
+				Commands: []string{"TVAULT_PASSPHRASE=... tvault mcp"},
 				Description: "Add to .claude/settings.local.json or your MCP host config. The server " +
 					"speaks JSON-RPC over stdio; configure env={TVAULT_PASSPHRASE: ...}.",
 			},
@@ -517,7 +517,7 @@ func helpContent() HelpContent {
 				Problem: "The MCP server is not responding.",
 				Solution: "Check that the passphrase is set in the MCP host's env, that the vault " +
 					"directory exists and is readable, and that the policy file (if any) is " +
-					"valid YAML. 'tvault mcp-server' prints the JSON-RPC trace on stderr " +
+					"valid YAML. 'tvault mcp' prints the JSON-RPC trace on stderr " +
 					"in verbose mode.",
 			},
 		},

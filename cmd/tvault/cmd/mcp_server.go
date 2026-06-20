@@ -9,8 +9,9 @@ import (
 )
 
 var mcpServerCmd = &cobra.Command{
-	Use:   "mcp-server",
-	Short: "Start TinyVault as an MCP server (stdio)",
+	Use:     "mcp",
+	Aliases: []string{"mcp-server"},
+	Short:   "Start TinyVault as an MCP server (stdio)",
 	Long: `Start TinyVault as a Model Context Protocol server for AI agent integration.
 Communicates over stdin/stdout using JSON-RPC.
 
@@ -19,12 +20,13 @@ Configure in .claude/settings.local.json:
     "mcpServers": {
       "tvault": {
         "command": "tvault",
-        "args": ["mcp-server"]
+        "args": ["mcp"]
       }
     }
-  }`,
-	Hidden: true,
-	RunE:   runMCPServer,
+  }
+
+The "mcp-server" name still works as an alias for backward compatibility.`,
+	RunE: runMCPServer,
 }
 
 func init() {
