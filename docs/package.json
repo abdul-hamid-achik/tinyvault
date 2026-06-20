@@ -1,0 +1,22 @@
+{
+  "name": "tinyvault-docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Documentation site for TinyVault (tvault) — a local-first secrets CLI & MCP server. Built with VitePress.",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview",
+    "docs:dev": "vitepress dev",
+    "docs:build": "vitepress build",
+    "docs:preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.4",
+    "vue": "^3.5.13"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

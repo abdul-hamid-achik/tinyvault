@@ -1,0 +1,7 @@
+node_modules/
+.vitepress/dist/
+.vitepress/cache/
+.vercel/
+*.log
+.DS_Store
+.vercel

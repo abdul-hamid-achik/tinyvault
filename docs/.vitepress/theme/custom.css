@@ -1,0 +1,109 @@
+/**
+ * TinyVault docs — "Vault Amber" theme.
+ *
+ * Warm gold/amber accent (#F5A623) on a near-black background — mirrors the
+ * studio's "warm orange = a secret is revealed" accent and the vault-of-gold
+ * metaphor. Dark-first, with a readable light mode.
+ *
+ * VitePress brand vars: --vp-c-brand-1 = links/active text, -2 = hover,
+ * -3 = solid button background, -soft = tinted block backgrounds.
+ */
+
+:root {
+  /* Gold scale */
+  --tv-gold-bright: #ffc861;
+  --tv-gold: #f5a623;
+  --tv-gold-warm: #e8920c;
+  --tv-gold-deep: #b45309;
+  --tv-gold-deeper: #92400e;
+  --tv-ink: #1a1206; /* near-black ink for use on gold fills */
+
+  /* Light-mode brand: deepen the gold so links pass contrast on white. */
+  --vp-c-brand-1: #a8620a;
+  --vp-c-brand-2: #c2740c;
+  --vp-c-brand-3: var(--tv-gold);
+  --vp-c-brand-soft: rgba(245, 166, 35, 0.14);
+  --vp-c-brand: var(--vp-c-brand-1);
+
+  /* Brand (primary) buttons — dark ink on gold reads premium and is high-contrast. */
+  --vp-button-brand-border: transparent;
+  --vp-button-brand-text: var(--tv-ink);
+  --vp-button-brand-bg: var(--tv-gold);
+  --vp-button-brand-hover-border: transparent;
+  --vp-button-brand-hover-text: var(--tv-ink);
+  --vp-button-brand-hover-bg: var(--tv-gold-bright);
+  --vp-button-brand-active-border: transparent;
+  --vp-button-brand-active-text: var(--tv-ink);
+  --vp-button-brand-active-bg: var(--tv-gold-warm);
+}
+
+/**
+ * Dark mode — warm near-black surfaces + brighter gold for contrast.
+ */
+.dark {
+  --vp-c-brand-1: #f7b955;
+  --vp-c-brand-2: var(--tv-gold);
+  --vp-c-brand-3: var(--tv-gold-warm);
+  --vp-c-brand-soft: rgba(245, 166, 35, 0.16);
+
+  --vp-c-bg: #0e0d0b;
+  --vp-c-bg-alt: #161410;
+  --vp-c-bg-elv: #1b1813;
+  --vp-c-bg-soft: #1b1813;
+
+  /* Keep dark-mode brand buttons dark-ink on gold too. */
+  --vp-button-brand-text: var(--tv-ink);
+  --vp-button-brand-bg: var(--tv-gold);
+  --vp-button-brand-hover-text: var(--tv-ink);
+  --vp-button-brand-hover-bg: var(--tv-gold-bright);
+  --vp-button-brand-active-text: var(--tv-ink);
+  --vp-button-brand-active-bg: var(--tv-gold-warm);
+}
+
+/**
+ * Home hero — the big clipped-gradient project name + the soft glow behind
+ * the logo. -name-color MUST be transparent for the gradient to show through.
+ */
+:root {
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: -webkit-linear-gradient(
+    120deg,
+    #ffc861 30%,
+    #f5a623
+  );
+
+  --vp-home-hero-image-background-image: linear-gradient(
+    -45deg,
+    rgba(245, 166, 35, 0.25) 40%,
+    rgba(180, 83, 9, 0.25) 100%
+  );
+  --vp-home-hero-image-filter: blur(56px);
+}
+
+.dark {
+  --vp-home-hero-name-background: -webkit-linear-gradient(
+    120deg,
+    #ffd488 30%,
+    #f5a623
+  );
+}
+
+/**
+ * Feature-card icons + "tip"/"important" custom blocks pick up the brand color
+ * automatically. A couple of small flourishes for the vault aesthetic:
+ */
+
+/* Brand-tinted custom block (used for security callouts on content pages). */
+.vp-doc .custom-block.tip {
+  border-color: var(--vp-c-brand-2);
+}
+
+/* Inline code in brand gold for emphasis without shouting. */
+.vp-doc :not(pre) > code {
+  color: var(--vp-c-brand-1);
+}
+
+/* Slightly warmer divider under the hero on the home page. */
+.VPHome .VPFeatures {
+  --vp-c-default-soft: var(--vp-c-brand-soft);
+}

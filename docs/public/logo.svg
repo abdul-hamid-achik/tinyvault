@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" role="img" aria-label="TinyVault">
+  <defs>
+    <linearGradient id="tvGold" x1="6" y1="6" x2="42" y2="42" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFC861"/>
+      <stop offset="1" stop-color="#E8920C"/>
+    </linearGradient>
+  </defs>
+  <!-- vault door -->
+  <rect x="5.5" y="7.5" width="37" height="33" rx="6.5" stroke="url(#tvGold)" stroke-width="3"/>
+  <!-- dial ring -->
+  <circle cx="23" cy="24" r="8.5" stroke="url(#tvGold)" stroke-width="3"/>
+  <!-- dial hub -->
+  <circle cx="23" cy="24" r="2.4" fill="url(#tvGold)"/>
+  <!-- spokes -->
+  <g stroke="url(#tvGold)" stroke-width="3" stroke-linecap="round">
+    <path d="M23 15.5 V11.5"/>
+    <path d="M23 36.5 V32.5"/>
+    <path d="M31.5 24 H35.5"/>
+    <path d="M14.5 24 H10.5"/>
+  </g>
+  <!-- handle -->
+  <path d="M37 24 H40.5" stroke="url(#tvGold)" stroke-width="3" stroke-linecap="round"/>
+</svg>
