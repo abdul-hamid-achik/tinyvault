@@ -1,11 +1,11 @@
 ---
 title: MCP Tools Reference
-description: Complete reference for all 21 TinyVault MCP tools, 3 resources, and 2 prompts — their inputs, what they return, and the policy gate each sits behind.
+description: Complete reference for all 34 TinyVault MCP tools, 3 resources, and 2 prompts — their inputs, what they return, and the policy gate each sits behind.
 ---
 
 # MCP Tools Reference
 
-This is the full reference for the TinyVault MCP surface: **21 tools, 3 resources, and 2 prompts**, served over stdio by the hidden `tvault mcp-server` subcommand and built on the [modelcontextprotocol go-sdk](https://github.com/modelcontextprotocol/go-sdk). For setup — wiring `tvault` into Claude Code and other clients — see the [MCP overview](/mcp/). For the policy file that gates these tools, see [Access Policy](/mcp/access-policy).
+This is the full reference for the TinyVault MCP surface: **34 tools, 3 resources, and 2 prompts**, served over stdio by the `tvault mcp` subcommand (the older `mcp-server` name still works as an alias) and built on the [modelcontextprotocol go-sdk](https://github.com/modelcontextprotocol/go-sdk). For setup — wiring `tvault` into Claude Code and other clients — see the [MCP overview](/mcp/). For the policy file that gates these tools, see [Access Policy](/mcp/access-policy).
 
 The single most important fact: **only `vault_get_secret` returns a raw plaintext value.** Every other tool returns metadata, a path, a count, or ciphertext. That is the whole design — agents should *use* secrets without ever pulling them into the model's context.
 
@@ -34,6 +34,19 @@ The single most important fact: **only `vault_get_secret` returns a raw plaintex
 | `vault_seal_for_recipients` | No | Produce commit-safe ciphertext for recipients. |
 | `vault_secret_history` | No | Version metadata for a key. |
 | `vault_rollback_secret` | No | Restore an old version as a new one. |
+| `vault_get_current_project` | No | Report the current/default project. |
+| `vault_set_current_project` | No | Switch the current/default project. |
+| `vault_count_secrets` | No | Count the secrets in a project (no keys/values). |
+| `vault_search_projects` | No | Find projects by name/description glob. |
+| `vault_projects_overview` | No | Every accessible project with counts and timestamps. |
+| `vault_list_secrets_detailed` | No | List keys with real version + timestamps. |
+| `vault_list_secrets_global` | No | Cross-project secret discovery by metadata. |
+| `vault_share_project` | No | Grant a recipient read access (wraps the DEK). |
+| `vault_unshare_project` | No | Revoke a recipient (rotates the DEK, re-encrypts). |
+| `vault_project_recipients` | No | List the recipients a project is shared with. |
+| `vault_diff_env` | No | Drift between a `.env` file and the project. |
+| `vault_sync_env` | No | Reconcile a `.env` with the project (pull/push/mirror). |
+| `vault_export_env_encrypted` | No | Write a commit-safe `.env.encrypted` (v2) for current recipients. |
 
 ::: tip The recommended agent pattern
 Discover the surface once with `tvault docs features`. Then use the relational tools — `vault_search_secrets` and `vault_list_secrets_by_prefix` — to find keys *without* enumerating values, and use `vault_run_with_secrets` when you actually need to *use* a value. That keeps secrets out of the model context, which is exactly what `vault_get_secret` cannot guarantee.
@@ -159,6 +172,68 @@ Fast, autocomplete-style listing for a key prefix.
 - **Inputs:** `project` (optional), `prefix` (required), `limit` (optional, default `200`).
 - **Returns:** key names matching the prefix — metadata only.
 - **Policy gate:** any `access_mode`; project and secret globs.
+
+---
+
+## Navigation & discovery
+
+These tools help an agent orient itself across the vault — which project is active, what projects exist, and richer key metadata — without ever reading a value.
+
+### `vault_get_current_project`
+
+Reports the current (default) project the server is operating on.
+
+- **Inputs:** none.
+- **Returns:** the current project name. No values.
+- **Policy gate:** any `access_mode`.
+
+### `vault_set_current_project`
+
+Switches the current (default) project for subsequent calls.
+
+- **Inputs:** `name` (required).
+- **Returns:** confirmation metadata — the newly selected project. No values.
+- **Policy gate:** `CanWrite` (`read-write` or `full`); project globs.
+
+### `vault_count_secrets`
+
+Counts the secrets in a project without enumerating keys or values.
+
+- **Inputs:** `project` (optional).
+- **Returns:** a count only — no key names, no values.
+- **Policy gate:** any `access_mode`; project globs.
+
+### `vault_search_projects`
+
+Finds projects by a glob (`*`) over name and/or description.
+
+- **Inputs:** `name_like` (optional), `description_like` (optional), `limit` (optional).
+- **Returns:** matching project names, descriptions, and secret counts (filtered by project globs). No values.
+- **Policy gate:** any `access_mode`; project globs.
+
+### `vault_projects_overview`
+
+Lists every accessible project with its description, secret count, and timestamps in one call.
+
+- **Inputs:** none.
+- **Returns:** for each project, `description`, `secret_count`, `created_at`, and `updated_at` (filtered by project globs). No values.
+- **Policy gate:** any `access_mode`; project globs.
+
+### `vault_list_secrets_detailed`
+
+Lists keys with their **real** version number and created/updated timestamps. Use this instead of `vault_list_secrets`, which reports version `1` for every key.
+
+- **Inputs:** `project` (optional).
+- **Returns:** key names with accurate version and timestamp metadata. Never values.
+- **Policy gate:** any `access_mode`; project and per-key secret globs.
+
+### `vault_list_secrets_global`
+
+Cross-project secret discovery: search key metadata across every accessible project at once.
+
+- **Inputs:** `prefix` (optional), `name_like` (optional), `since` (optional), `until` (optional), `min_version` (optional), `limit` (optional).
+- **Returns:** matching keys (with their project) and metadata only — no values.
+- **Policy gate:** any `access_mode`; project and per-key secret globs.
 
 ---
 
@@ -304,6 +379,74 @@ Unlike `vault_get_secret` (plaintext into the model) or `vault_export_env` (plai
 
 ---
 
+## Sharing
+
+These tools manage which X25519 recipients can open a project — the agent-facing equivalent of `tvault projects share` / `unshare` / `recipients`. None of them returns a secret value.
+
+### `vault_share_project`
+
+Grants a recipient read access to a project by wrapping that project's DEK to their public key.
+
+- **Inputs:** `recipient` (required, a `tvault1…` public key), `project` (optional).
+- **Returns:** confirmation metadata — the project and the added recipient. No values.
+- **Policy gate:** `CanWrite`; project globs.
+
+### `vault_unshare_project`
+
+Revokes a recipient. This is **true revocation**: it rotates the project DEK and re-encrypts every value *and* its version history under the fresh key, re-wrapping only to the remaining recipients.
+
+- **Inputs:** `recipient` (required, a `tvault1…` public key), `project` (optional).
+- **Returns:** confirmation metadata. No values.
+- **Policy gate:** `CanWrite`; project globs.
+
+::: tip Why a rotation, not just a re-wrap
+A removed recipient may have cached the old DEK, so merely dropping their stanza would be security theater. `vault_unshare_project` re-encrypts everything under a new DEK so an old copy of the vault becomes useless to them.
+:::
+
+### `vault_project_recipients`
+
+Lists the public recipients a project is currently shared with.
+
+- **Inputs:** `project` (optional).
+- **Returns:** the `tvault1…` public recipients of the project — metadata only, no values.
+- **Policy gate:** any `access_mode`; project globs.
+
+---
+
+## .env
+
+A trio of tools for working with `.env` files against the vault — comparing drift, reconciling, and writing commit-safe ciphertext. Verdicts and counts only; raw values never appear in a response.
+
+### `vault_diff_env`
+
+Compares a `.env` file on disk against the project and reports the drift.
+
+- **Inputs:** `file` (required), `project` (optional), `compare_values` (optional).
+- **Returns:** the key sets `only_in_vault`, `only_in_file`, and `in_both`; with `compare_values`, each shared key also gets a `same` / `differs` verdict. **Never the values themselves.**
+- **Policy gate:** any `access_mode` (value comparison audits each read); project and per-key secret globs.
+
+### `vault_sync_env`
+
+Reconciles a `.env` file with the project in one of three directions.
+
+- **Inputs:** `direction` (required: `pull` | `push` | `mirror`), `path` (optional), `project` (optional), `overwrite` (optional).
+- **Returns:** counts of what was pulled, pushed, or mirrored. No values.
+- **Policy gate:** `pull` reads (any `access_mode`); `push` and `mirror` are writes and require `CanWrite`. Project and per-key secret globs apply.
+
+### `vault_export_env_encrypted`
+
+Writes a commit-safe `.env.encrypted` (v2) sealed to the project's **current** recipients — the asymmetric, KEK-independent format that is safe to commit.
+
+- **Inputs:** `project` (optional), `output_path` (optional), `keys` (optional list).
+- **Returns:** `{ path }` (or the ciphertext) — only ciphertext, never plaintext. Errors if the project has no recipients.
+- **Policy gate:** any `access_mode`; project and per-key secret globs.
+
+::: tip Seals to current recipients, not an arbitrary key
+Unlike `vault_seal_for_recipients` (which takes explicit recipient keys), `vault_export_env_encrypted` seals to whoever the project is already shared with. Share the project first (`vault_share_project`) if the recipient list is empty.
+:::
+
+---
+
 ## Resources
 
 The server exposes three read-only MCP resources. All return JSON, contain **metadata only**, and are filtered by the same policy globs as the tools.
@@ -327,7 +470,7 @@ Two MCP prompts give clients ready-made starting points:
 
 ## See also
 
-- [MCP Overview & Setup](/mcp/) — wiring `tvault mcp-server` into Claude Code and other clients.
+- [MCP Overview & Setup](/mcp/) — wiring `tvault mcp` into Claude Code and other clients.
 - [Access Policy](/mcp/access-policy) — the `mcp-policy.yaml` fields that gate every tool above.
 - [Security & Threat Model](/reference/security) — why redaction is a safety net, and what the real controls are.
 - [Sharing Secrets](/guide/sharing) — the recipient model behind `vault_seal_for_recipients`.

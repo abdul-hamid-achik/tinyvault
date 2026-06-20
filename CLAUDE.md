@@ -1,9 +1,9 @@
 # CLAUDE.md — working in this repo with Claude Code
 
 TinyVault is a **single Go binary**: a local-first secrets CLI (`tvault`) plus
-an MCP server, backed by one encrypted bbolt file. No servers, no accounts,
-no cloud. There is also an interactive terminal studio UI, `tvault studio`
-(aliases: `browse`, `ui`).
+an MCP server (`tvault mcp`, alias `mcp-server`), backed by one encrypted bbolt
+file. No servers, no accounts, no cloud. There is also an interactive terminal
+studio UI, `tvault studio` (aliases: `browse`, `ui`).
 
 **Read these first — they are the source of truth:**
 - [AGENTS.md](AGENTS.md) — project structure, code conventions, security

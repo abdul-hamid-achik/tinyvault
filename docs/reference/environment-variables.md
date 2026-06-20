@@ -13,7 +13,7 @@ An environment variable never overrides an explicit command-line flag. The gener
 
 | Variable | Reads it | What it does |
 | --- | --- | --- |
-| `TVAULT_PASSPHRASE` | `unlock`, `init`, `agent start`, `studio`, `mcp-server` | Vault passphrase for non-interactive unlock; skips the prompt. |
+| `TVAULT_PASSPHRASE` | `unlock`, `init`, `agent start`, `studio`, `mcp` | Vault passphrase for non-interactive unlock; skips the prompt. |
 | `TVAULT_DIR` | every command | Vault directory override. Default `~/.tvault`. |
 | `TVAULT_NO_AGENT` | `get`, `env`, `run` | If set, bypass a running agent and unlock directly (same as `--no-agent`). |
 | `TVAULT_AGENT_TOKEN` | agent clients (`get` / `env` / `run`) | Capability token sent to a `--require-token` agent. |
@@ -48,7 +48,7 @@ Precedence for the vault directory is:
 
 ### `TVAULT_PASSPHRASE`
 
-Supplies the vault passphrase so commands that need to decrypt the master key can run without an interactive prompt. It is read by `unlock`, `init`, `agent start`, `studio`, and the `mcp-server` subcommand.
+Supplies the vault passphrase so commands that need to decrypt the master key can run without an interactive prompt. It is read by `unlock`, `init`, `agent start`, `studio`, and the `mcp` subcommand.
 
 ```bash
 # CI: unlock without a TTY

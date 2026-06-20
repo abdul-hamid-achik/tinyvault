@@ -85,7 +85,7 @@ The unifier for docker/bun/ssh/CI. **Build the agent first; everything else atta
 | **`tvault hook`** — direnv-style shell autoload for bun/node/any dotenv | The everyday DX win | **M** | ✅ **Landed (MVP):** `tvault hook bash\|zsh\|fish\|direnv` prints a `tvault_load` snippet that sources `tvault env --format shell` output (already shell-quoted — no value is interpolated into the hook text, closing the injection vector). It leans on the agent for prompt-free loading. **Still gated/opt-in:** loading is explicit (`tvault_load`), not silent-on-`cd`; reference-injection-over-plaintext and auto-load-on-cd remain deferred along with the `tvault serve` broker + capability tokens below. |
 | **Docker integration** — BuildKit `--mount=type=secret` provider, compose env injection, container entrypoint wrapper | "Use it across docker" | **L** | Builds cleanly on `run`/`env` + the broker. |
 | **`tvault ssh host -- cmd`** — inject secrets into a remote command without writing them to the remote disk | "Pass data safely over ssh" | **M** | Stream over the ssh channel into the remote process env; never touch remote disk. |
-| **Transport-aware MCP + ephemeral tokens** — `mcp-server --connect unix://…agent.sock`, `tvault token issue` (short-lived, policy-bound) | The agent-fetch-in-CI/over-ssh story | **M** | Lets agents fetch through the broker with scoped, expiring creds instead of `TVAULT_PASSPHRASE`. |
+| **Transport-aware MCP + ephemeral tokens** — `mcp --connect unix://…agent.sock`, `tvault token issue` (short-lived, policy-bound) | The agent-fetch-in-CI/over-ssh story | **M** | Lets agents fetch through the broker with scoped, expiring creds instead of `TVAULT_PASSPHRASE`. |
 
 ---
 

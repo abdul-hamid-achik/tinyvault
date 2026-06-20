@@ -20,7 +20,7 @@ The policy decides, per request, whether the server will:
 It is a gate in front of the server's tool handlers. It is **not** encryption, and it is **not** a sandbox for the agent process. An agent that reads a value over `vault_get_secret` has that value; the policy's job is to shrink what the agent is *allowed to ask for* in the first place.
 
 ::: info Loaded once, from disk
-The policy is loaded when the `tvault mcp-server` process starts. The model can call `vault_status` to discover its own access level, but it cannot edit the file or escalate its permissions mid-session. To change the policy, edit the file and restart the server.
+The policy is loaded when the `tvault mcp` process starts. The model can call `vault_status` to discover its own access level, but it cannot edit the file or escalate its permissions mid-session. To change the policy, edit the file and restart the server.
 :::
 
 ## The default policy (file absent)
@@ -193,6 +193,6 @@ Have the agent learn the surface once with `tvault docs features`, then use the 
 ## See also
 
 - [MCP Tools Reference](/mcp/tools) — every tool, what it returns, and the access it requires.
-- [MCP overview & setup](/mcp/) — wiring `tvault mcp-server` into Claude Code and other clients.
+- [MCP overview & setup](/mcp/) — wiring `tvault mcp` into Claude Code and other clients.
 - [Security model](/reference/security) — the threat model behind redaction, exec, and the recipient layer.
 - [Sharing secrets](/guide/sharing) — true revocation and committable, recipient-encrypted secrets.

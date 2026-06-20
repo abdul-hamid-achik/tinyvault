@@ -256,7 +256,7 @@ cmd/tvault/
     projects.go / use.go
     backup.go
     rotate.go
-    mcp_server.go            # starts the MCP server
+    mcp_server.go            # tvault mcp (alias: mcp-server) — starts the MCP server
     ci.go                    # generate CI workflow helpers
     completion.go
     output.go                # color output helpers
@@ -359,7 +359,7 @@ The MCP server is the most security-sensitive surface. The design rules:
 
 ## 4. The MCP surface
 
-21 tools, 2 prompts, 3 resources. All registered through
+34 tools, 2 prompts, 3 resources. All registered through
 `github.com/modelcontextprotocol/go-sdk` v1.4.1.
 
 ### 4.1 Tools
@@ -387,6 +387,19 @@ The MCP server is the most security-sensitive surface. The design rules:
 | `vault_seal_for_recipients`   | no (ciphertext out) | no       | no                 | `CanAccessProject` + `CanAccessSecret` |
 | `vault_secret_history`        | no            | no             | no                 | `CanAccessProject` + `CanAccessSecret` |
 | `vault_rollback_secret`       | no            | yes            | no                 | `CanWrite` + `CanAccessProject` + `CanAccessSecret` |
+| `vault_get_current_project`   | no            | no             | no                 | always allowed        |
+| `vault_set_current_project`   | no            | yes (config)   | no                 | `CanWrite` + `CanAccessProject` |
+| `vault_count_secrets`         | no            | no             | no                 | `CanAccessProject`    |
+| `vault_search_projects`       | no            | no             | no                 | `CanAccessProject`    |
+| `vault_projects_overview`     | no            | no             | no                 | `CanAccessProject`    |
+| `vault_list_secrets_detailed` | no            | no             | no                 | `CanAccessProject` + `CanAccessSecret` |
+| `vault_list_secrets_global`   | no            | no             | no                 | `CanAccessProject` + `CanAccessSecret` |
+| `vault_share_project`         | no            | yes            | no                 | `CanWrite` + `CanAccessProject` |
+| `vault_unshare_project`       | no            | yes (re-key)   | no                 | `CanWrite` + `CanAccessProject` |
+| `vault_project_recipients`    | no            | no             | no                 | `CanAccessProject`    |
+| `vault_diff_env`              | no (verdicts only) | no        | no                 | `CanAccessProject` + `CanAccessSecret` |
+| `vault_sync_env`              | no            | pull: no / push,mirror: yes | no    | `CanAccessProject` + `CanAccessSecret` (+ `CanWrite` for push/mirror) |
+| `vault_export_env_encrypted`  | no (ciphertext out) | no       | no                 | `CanAccessProject` + `CanAccessSecret` |
 
 The value-returning tools are deliberately few and each returns the value
 only when the agent has no alternative. `vault_seal_for_recipients` is the
@@ -537,7 +550,7 @@ tvault agent start                # unlock once; serve reads over a unix socket 
 tvault agent status / stop        # query / stop the running agent
 tvault hook zsh                   # print a shell/direnv snippet (tvault_load) using the agent
 
-tvault mcp-server                 # start the MCP server on stdio
+tvault mcp                        # start the MCP server on stdio (alias: mcp-server)
 tvault completion bash|zsh|...    # shell completion
 ```
 
@@ -787,7 +800,7 @@ passphrase prompt and the ~200 ms Argon2id derivation for daily use.
   `via:agent` and the peer uid/pid. `tvault hook <bash|zsh|fish|direnv>` prints
   a `tvault_load` snippet that sources `tvault env` output (already shell-quoted
   — no value is interpolated into the hook text). **Windows** is unsupported
-  (the command reports it clearly); use the direct CLI or `mcp-server`.
+  (the command reports it clearly); use the direct CLI or `mcp`.
 
 - **Capability tokens (`--require-token`), and what they are NOT.** The agent's
   default access control is the **same-uid** peer-credential check: *any*
@@ -904,7 +917,7 @@ surfaces dilutes the security story.
     "mcpServers": {
       "tvault": {
         "command": "tvault",
-        "args": ["mcp-server"],
+        "args": ["mcp"],
         "env": { "TVAULT_PASSPHRASE": "<your-passphrase>" }
       }
     }

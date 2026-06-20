@@ -225,7 +225,7 @@ Exit codes let scripts branch on the failure mode:
 
 ## A note for AI agents
 
-The same binary is the [MCP server](/mcp/) (via the hidden `mcp-server` subcommand) and an interactive terminal [studio](/guide/studio). Two honesty caveats to internalize early:
+The same binary is the [MCP server](/mcp/) (via the `mcp` subcommand) and an interactive terminal [studio](/guide/studio). Two honesty caveats to internalize early:
 
 ::: warning
 MCP **output redaction** is a safety net, not a security control. It only replaces literal secret values longer than three characters in tool output and can be evaded by transforming a value before printing it. Treat it as defense-in-depth, never as the boundary. The MCP server never returns a raw secret value **except** `vault_get_secret`, which warns when it does.

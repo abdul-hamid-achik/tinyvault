@@ -20,7 +20,7 @@ TinyVault is a single-binary CLI tool and [MCP server](https://modelcontextproto
 - **AES-256-GCM Encryption** -- Two-tier key hierarchy with per-project data encryption keys
 - **Argon2id Key Derivation** -- Memory-hard passphrase hashing resistant to GPU/ASIC attacks
 - **Single Binary** -- One `tvault` binary for CLI use and MCP server mode
-- **MCP Server** -- 21 tools: AI agents can manage secrets via the Model Context Protocol (stdio) without the values ever entering the model context
+- **MCP Server** -- 34 tools: AI agents can manage secrets via the Model Context Protocol (stdio) without the values ever entering the model context
 - **Multi-Project** -- Organize secrets into projects with independent encryption keys
 - **.env Ecosystem** -- Safe dotenv parser (no shell expansion), `tvault://` placeholder interpolation, two-way sync (pull/push/mirror), and `.env.encrypted` files (Rails credentials pattern, safe to commit)
 - **Share & commit secrets** -- X25519 recipients (age-style): share a project without the passphrase, commit self-decrypting secrets via `git-filter` (transparent clean/smudge) or v2 `.env.encrypted`, and seal for recipients over MCP. Revocation rotates the key and re-encrypts.
@@ -173,7 +173,7 @@ peers; the agent caches **only the KEK** (not an open database), so direct CLI
 access keeps working between requests, and it **auto-locks after 15m idle**
 (`--idle`), zeroing the KEK on stop/idle/signal. Bypass it any time with
 `--no-agent` or `TVAULT_NO_AGENT=1`. Not available on Windows (use the direct
-CLI or `mcp-server`). See `tvault docs agent`.
+CLI or `mcp`). See `tvault docs agent`.
 
 For an OS-confined delegate (a different uid, a container with the socket
 bind-mounted, a sandbox) you can run the agent with `--require-token
@@ -298,7 +298,7 @@ Add to `.claude/settings.local.json`:
   "mcpServers": {
     "tvault": {
       "command": "tvault",
-      "args": ["mcp-server"],
+      "args": ["mcp"],
       "env": {
         "TVAULT_PASSPHRASE": "your-vault-passphrase"
       }
@@ -332,6 +332,19 @@ Add to `.claude/settings.local.json`:
 | `vault_seal_for_recipients` | Seal secrets to X25519 recipients (returns ciphertext only; openable with `decrypt-env --identity`) |
 | `vault_secret_history` | List a secret's version history (metadata only, never values) |
 | `vault_rollback_secret` | Restore an earlier version as a new version (returns version numbers only) |
+| `vault_get_current_project` | Report the current/default project |
+| `vault_set_current_project` | Switch the current/default project |
+| `vault_count_secrets` | Count secrets in a project (no keys or values) |
+| `vault_search_projects` | Find projects by name/description glob (`*`) |
+| `vault_projects_overview` | Every accessible project with description, secret count, and timestamps |
+| `vault_list_secrets_detailed` | List keys with their real version and created/updated timestamps |
+| `vault_list_secrets_global` | Cross-project secret discovery by prefix, name, time, or version |
+| `vault_share_project` | Grant an X25519 recipient (`tvault1…`) read access (wraps the DEK) |
+| `vault_unshare_project` | Revoke a recipient (rotates the DEK and re-encrypts every value + version) |
+| `vault_project_recipients` | List the public recipients a project is shared with |
+| `vault_diff_env` | Drift between a `.env` file and the project (verdicts only, never values) |
+| `vault_sync_env` | Reconcile a `.env` with the project: pull / push / mirror |
+| `vault_export_env_encrypted` | Write a commit-safe `.env.encrypted` (v2) sealed to the project's current recipients (ciphertext only) |
 
 The recommended pattern for an agent is to discover the surface once via
 `tvault docs features`, then use the relational tools
@@ -463,7 +476,7 @@ tvault (single binary)
     crypto/         # AES-256-GCM, Argon2id, key generation
     store/          # bbolt storage layer
     vault/          # High-level vault operations
-    mcp/            # MCP server (21 tools, access policy, redaction)
+    mcp/            # MCP server (34 tools, access policy, redaction)
     validation/     # Input validation
 ```
 
