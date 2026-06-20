@@ -134,6 +134,9 @@ internal/
     vault_test.go            # Vault lifecycle tests
     query_test.go            # Relational query tests
     encrypted_env_test.go    # End-to-end encrypted .env round-trip via vault
+  identity/
+    identity.go              # X25519 identity key files: New/List/Load/File/Dir (single source of truth for CLI + MCP)
+    identity_test.go         # New/List/Load round-trip + name validation
   mcp/
     server.go                # VaultMCPServer, tool registration, Run()
     tools_projects.go        # vault_list/create/delete_project
@@ -144,6 +147,11 @@ internal/
     tools_generate.go        # vault_generate_secret (random secret, never returns value)
     tools_query.go           # vault_search_secrets, vault_list_secrets_by_prefix,
                              # vault_audit_log_since (relational MCP tools)
+    tools_navigation.go      # vault_get/set_current_project, count_secrets, search_projects, projects_overview
+    tools_secrets_meta.go    # vault_list_secrets_detailed, vault_list_secrets_global
+    tools_sharing.go         # vault_share/unshare_project, vault_project_recipients
+    tools_dotenv.go          # vault_diff_env, vault_sync_env, vault_export_env_encrypted
+    tools_identity.go        # vault_identity_new, vault_identity_list (public recipient only)
     config.go                # AccessPolicy, LoadPolicy, allow/deny pattern matching
     redact.go                # redactSecrets() replaces values with [REDACTED:KEY]
     prompts.go               # MCP prompts (setup-project, inject-secrets)

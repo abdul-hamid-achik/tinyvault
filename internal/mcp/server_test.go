@@ -273,8 +273,8 @@ func TestMCPServerIntegration(t *testing.T) {
 			}
 			tools = append(tools, tool)
 		}
-		if len(tools) != 34 {
-			t.Errorf("expected 34 tools, got %d", len(tools))
+		if len(tools) != 36 {
+			t.Errorf("expected 36 tools, got %d", len(tools))
 		}
 		toolNames := make(map[string]bool)
 		for _, tool := range tools {
@@ -315,6 +315,8 @@ func TestMCPServerIntegration(t *testing.T) {
 			"vault_diff_env",
 			"vault_sync_env",
 			"vault_export_env_encrypted",
+			"vault_identity_new",
+			"vault_identity_list",
 		} {
 			if !toolNames[name] {
 				t.Errorf("missing tool: %s", name)

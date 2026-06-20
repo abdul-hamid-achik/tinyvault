@@ -1,12 +1,10 @@
 package cmd
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 
@@ -14,6 +12,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/crypto"
+	"github.com/abdul-hamid-achik/tinyvault/internal/identity"
 )
 
 // envIdentityKey is the environment variable that carries a private identity
@@ -25,8 +24,6 @@ const envIdentityKey = "TVAULT_IDENTITY_KEY"
 // X25519 keypairs used by the recipient layer (sharing / committable
 // secrets), not derived from the vault passphrase. Generating one needs
 // neither an initialized nor an unlocked vault.
-
-var identityNameRE = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
 var identityCmd = &cobra.Command{
 	Use:   "identity",
@@ -88,20 +85,14 @@ func init() {
 		"Allow printing the private key to a non-terminal (e.g. a pipe)")
 }
 
-func identitiesDir() string { return filepath.Join(getVaultDir(), "identities") }
+func identitiesDir() string { return identity.Dir(getVaultDir()) }
 
 // resolveIdentityFile validates an identity name and returns the path to its
-// key file. The name is constrained to identityNameRE so a caller-supplied
+// key file. The name is constrained by internal/identity so a caller-supplied
 // value (flag or environment) can never traverse outside the identities
 // directory (e.g. "--identity ../../etc/x").
 func resolveIdentityFile(name string) (string, error) {
-	if name == "" {
-		name = "default"
-	}
-	if !identityNameRE.MatchString(name) {
-		return "", fmt.Errorf("invalid identity name %q (use letters, digits, '-', '_')", name)
-	}
-	return filepath.Join(identitiesDir(), name+".key"), nil
+	return identity.File(getVaultDir(), name)
 }
 
 // resolveIdentity returns the identity to decrypt with, plus a source tag
@@ -120,6 +111,7 @@ func resolveIdentity(name string) (*crypto.Identity, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
+	//nolint:gosec // keyPath comes from identity.File, which validates the name (no traversal)
 	if _, statErr := os.Stat(keyPath); statErr == nil {
 		id, lerr := loadIdentity(keyPath)
 		if lerr != nil {
@@ -173,28 +165,9 @@ func runIdentityNew(_ *cobra.Command, args []string) error {
 	if len(args) == 1 {
 		name = args[0]
 	}
-	if !identityNameRE.MatchString(name) {
-		return fmt.Errorf("invalid identity name %q (use letters, digits, '-', '_')", name)
-	}
-
-	dir := identitiesDir()
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("create identities dir: %w", err)
-	}
-	path := filepath.Join(dir, name+".key")
-	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("identity %q already exists at %s", name, path)
-	}
-
-	id, err := crypto.GenerateIdentity()
+	recipient, path, err := identity.New(getVaultDir(), name)
 	if err != nil {
 		return err
-	}
-	recipient := crypto.EncodeRecipient(id.Recipient())
-	content := fmt.Sprintf("# tvault identity %q — KEEP SECRET, never commit or share this file\n# recipient: %s\n%s\n",
-		name, recipient, crypto.EncodeIdentity(id))
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		return fmt.Errorf("write identity: %w", err)
 	}
 
 	if jsonOutput {
@@ -254,31 +227,16 @@ func runIdentityList(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-// loadIdentity reads an identity key file, skipping comment/blank lines. It
-// warns (but does not fail) if the file is group/world-readable, since the
+// loadIdentity reads an identity key file via internal/identity, but first
+// warns (without failing) if the file is group/world-readable, since the
 // private key inside is meant to be 0600.
 func loadIdentity(path string) (*crypto.Identity, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	if info, serr := f.Stat(); serr == nil && info.Mode().Perm()&0o077 != 0 {
+	//nolint:gosec // path comes from identity.File, which validates the name (no traversal)
+	if info, serr := os.Stat(path); serr == nil && info.Mode().Perm()&0o077 != 0 {
 		fmt.Fprintf(os.Stderr, "warning: identity file %s is group/world-readable (mode %#o); run: chmod 600 %s\n",
 			path, info.Mode().Perm(), path)
 	}
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		return crypto.DecodeIdentity(line)
-	}
-	if err := sc.Err(); err != nil {
-		return nil, err
-	}
-	return nil, fmt.Errorf("no identity key found in %s", path)
+	return identity.Load(path)
 }
 
 func runIdentityExport(_ *cobra.Command, args []string) error {

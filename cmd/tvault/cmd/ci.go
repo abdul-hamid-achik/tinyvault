@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+
+	"github.com/abdul-hamid-achik/tinyvault/internal/identity"
 )
 
 var (
@@ -60,7 +62,7 @@ func runCIInit(_ *cobra.Command, _ []string) error {
 	default:
 		return fmt.Errorf("unknown mode: %s (valid: passphrase, identity)", ciMode)
 	}
-	if ciMode == "identity" && !identityNameRE.MatchString(ciIdentity) {
+	if ciMode == "identity" && !identity.ValidName(ciIdentity) {
 		return fmt.Errorf("invalid identity name %q (use letters, digits, '-', '_')", ciIdentity)
 	}
 

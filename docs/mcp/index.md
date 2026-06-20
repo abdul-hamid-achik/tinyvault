@@ -1,6 +1,6 @@
 ---
 title: MCP Server
-description: Connect AI agents to TinyVault over the Model Context Protocol — one Go binary that serves 34 tools over stdio while keeping secret values out of the model context.
+description: Connect AI agents to TinyVault over the Model Context Protocol — one Go binary that serves 36 tools over stdio while keeping secret values out of the model context.
 ---
 
 # MCP Server
@@ -19,7 +19,7 @@ tvault mcp
 
 You rarely run this by hand — your MCP host (Claude Code, Claude Desktop, or any MCP client) launches it for you. The server is a thin **policy-and-redaction layer** over the same vault API the CLI uses: every call is checked against an [access policy](/mcp/access-policy), privileged actions are audited, and outputs are filtered so plaintext stays out of the conversation.
 
-It exposes **34 tools, 3 resources, and 2 prompts**, built on the official [modelcontextprotocol go-sdk](https://github.com/modelcontextprotocol/go-sdk).
+It exposes **36 tools, 3 resources, and 2 prompts**, built on the official [modelcontextprotocol go-sdk](https://github.com/modelcontextprotocol/go-sdk).
 
 ::: info Same vault, same crypto
 The MCP server is not a separate datastore. It unlocks the one encrypted bbolt vault at `~/.tvault/vault.db` and reads and writes through the identical AES-256-GCM path as the CLI and [studio](/guide/studio). See [Architecture](/reference/architecture).
@@ -37,7 +37,7 @@ The design goal is that a secret value **never needs to enter the model's contex
 | `vault_seal_for_recipients` | Returns commit-safe ciphertext (or just a path) |
 | `vault_get_secret` | **The one exception** — returns the cleartext value with a warning |
 
-`vault_get_secret` is the single tool that returns a raw value. It returns `{key, value, warning}`, where the warning reminds the caller the value is now in the model context. Prefer `vault_run_with_secrets` for *using* a value, and the search tools (`vault_search_secrets`, `vault_list_secrets_by_prefix`) for *finding* keys. The [Tools Reference](/mcp/tools) documents all 34.
+`vault_get_secret` is the single tool that returns a raw value. It returns `{key, value, warning}`, where the warning reminds the caller the value is now in the model context. Prefer `vault_run_with_secrets` for *using* a value, and the search tools (`vault_search_secrets`, `vault_list_secrets_by_prefix`) for *finding* keys. The [Tools Reference](/mcp/tools) documents all 36.
 
 ::: warning Redaction is a safety net, not a control
 With `redact_output` on, the server scrubs secret values from `vault_run_with_secrets` stdout/stderr, but it only replaces literal values longer than 3 characters with `[REDACTED:KEY]`. A subprocess that transforms a value — base64-encodes it, reverses it, splits it across lines — can evade redaction. Treat it as defense in depth, not a guarantee, and trust the *commands* you let an agent run.
@@ -171,7 +171,7 @@ If the server fails to start, the exit code tells you why: `3` vault locked, `5`
 
 ## See also
 
-- [Tools Reference](/mcp/tools) — all 34 tools, their inputs, and exactly what each returns
+- [Tools Reference](/mcp/tools) — all 36 tools, their inputs, and exactly what each returns
 - [Access Policy](/mcp/access-policy) — scope an agent with `mcp-policy.yaml` (modes, globs, exec gate)
 - [Local Agent](/guide/agent) — unlock once, skip the passphrase prompt
 - [Security & Threat Model](/reference/security) — what redaction and tokens do and do not protect
