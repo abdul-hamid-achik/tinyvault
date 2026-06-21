@@ -20,6 +20,8 @@ func TestExitCode(t *testing.T) {
 		{fmt.Errorf("wrap: %w", vault.ErrProjectNotFound), ExitNotFound},
 		{vault.ErrNotInitialized, ExitNotInitialized},
 		{vault.ErrWrongPassphrase, ExitWrongPassphrase},
+		{vault.ErrVaultBusy, ExitBusy},
+		{fmt.Errorf("open: %w", vault.ErrVaultBusy), ExitBusy},
 	}
 	for _, c := range cases {
 		if got := ExitCode(c.err); got != c.want {

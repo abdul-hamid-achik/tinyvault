@@ -15,10 +15,11 @@ Quick fixes for the things people actually hit. For the long-form CLI manual, `t
 | --- | --- |
 | `0` | Success |
 | `1` | Generic error |
-| `3` | Vault is locked |
+| `3` | Vault is locked at rest |
 | `4` | Secret or project not found |
 | `5` | Vault not initialized |
 | `6` | Wrong passphrase |
+| `7` | Vault database is in use by another process (e.g. a running `tvault studio`) |
 
 ## "Vault is locked" / "wrong passphrase"
 
@@ -43,8 +44,16 @@ By default the vault lives at `~/.tvault/vault.db` (override with `--vault` or `
 The MCP server (`tvault mcp`) speaks JSON-RPC over stdio and **unlocks the vault at startup** — there is no prompt over a pipe.
 
 - **"Connection closed" right away** → the server couldn't unlock. The host must pass `TVAULT_PASSPHRASE` in the server's `env`. The cleanest fix is a small launcher that loads it from one place — see [MCP Overview → Keeping the passphrase out of every config](/mcp/#keeping-the-passphrase-out-of-every-config).
-- **`open bolt db: timeout`** → another `tvault` process already holds the vault. The on-disk store ([bbolt](https://github.com/etcd-io/bbolt)) is **single-writer**, so a running MCP server or [agent](/guide/agent) locks the file. Stop the other process (e.g. the previous MCP connection, or `tvault agent stop`) and retry. After changing the passphrase, **restart your agent/MCP sessions** so they reconnect.
+- **After changing the passphrase** the cached key is stale → **restart your MCP/agent sessions** so they reconnect with the new one.
 - **Tools appear but calls are denied** → the [Access Policy](/mcp/access-policy) is gating them (`access_mode`, `allow_exec`, project/secret globs). Check `~/.tvault/mcp-policy.yaml`.
+
+## "vault is locked by another tvault process" (exit code `7`)
+
+The on-disk store ([bbolt](https://github.com/etcd-io/bbolt)) is **single-writer**: only one process can hold the database open at a time.
+
+`tvault mcp` and [`tvault agent`](/guide/agent) **no longer block the CLI** — they cache only the key and reopen the vault per request, releasing the lock between calls, so `set`/`get`/`run`/`import` keep working alongside them. The remaining long-lived holder is **`tvault studio`**, which keeps the vault open for the duration of the interactive session.
+
+If you hit exit code `7` (or doctor reports *"in use by another process"*), quit the other `tvault studio` window (or whatever foreground process is holding it) and retry. This used to surface as an opaque `open bolt db: timeout`.
 
 ## `tvault agent` says "unix-only"
 

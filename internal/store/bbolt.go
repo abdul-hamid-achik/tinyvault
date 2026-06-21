@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	bolt "go.etcd.io/bbolt"
+	bolterrors "go.etcd.io/bbolt/errors"
 )
 
 // Sentinel errors.
@@ -21,6 +22,12 @@ var (
 	ErrProjectNotFound      = fmt.Errorf("project %w", ErrNotFound)
 	ErrSecretNotFound       = fmt.Errorf("secret %w", ErrNotFound)
 	ErrDuplicateProjectName = errors.New("project name already exists")
+
+	// ErrVaultBusy is returned when bbolt cannot obtain its exclusive lock
+	// within the open timeout — another process (e.g. a running `tvault mcp`
+	// or `tvault studio`) holds the database open. Distinct from a vault that
+	// is merely locked-at-rest.
+	ErrVaultBusy = errors.New("vault database is in use by another process")
 )
 
 // Bucket names used in the bbolt database.
@@ -54,6 +61,12 @@ func NewBoltStore(path string) (*BoltStore, error) {
 
 	db, err := bolt.Open(path, 0o600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
+		// A lock timeout means another process holds bbolt's exclusive lock;
+		// surface a dedicated sentinel so callers can give a clear message and
+		// a distinct exit code instead of an opaque "timeout".
+		if errors.Is(err, bolterrors.ErrTimeout) {
+			return nil, ErrVaultBusy
+		}
 		return nil, fmt.Errorf("open bolt db: %w", err)
 	}
 

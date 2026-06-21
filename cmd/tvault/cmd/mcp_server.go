@@ -3,6 +3,7 @@ package cmd
 import (
 	"path/filepath"
 
+	"github.com/abdul-hamid-achik/tinyvault/internal/crypto"
 	tvmcp "github.com/abdul-hamid-achik/tinyvault/internal/mcp"
 
 	"github.com/spf13/cobra"
@@ -34,11 +35,20 @@ func init() {
 }
 
 func runMCPServer(cmd *cobra.Command, _ []string) error {
+	// Unlock once to derive + validate the KEK, then close the vault so bbolt's
+	// exclusive lock is released. The server reopens the vault per request (see
+	// NewReopeningVaultMCPServer), so a long-running `tvault mcp` no longer
+	// blocks `tvault set/get/run/import` on the same machine.
 	v, err := openAndUnlockVault()
 	if err != nil {
 		return err
 	}
-	defer v.Close()
+	kek, err := v.KEK()
+	_ = v.Close() // release the bbolt lock immediately
+	if err != nil {
+		return err
+	}
+	defer crypto.ZeroBytes(kek)
 
 	policyPath := filepath.Join(getVaultDir(), "mcp-policy.yaml")
 	policy, _ := tvmcp.LoadPolicy(policyPath) //nolint:errcheck // falls back to default policy below
@@ -46,6 +56,7 @@ func runMCPServer(cmd *cobra.Command, _ []string) error {
 		policy = tvmcp.DefaultPolicy()
 	}
 
-	srv := tvmcp.NewVaultMCPServer(v, policy)
+	srv := tvmcp.NewReopeningVaultMCPServer(getVaultDir(), kek, policy)
+	defer srv.Close()
 	return srv.Run(cmd.Context())
 }

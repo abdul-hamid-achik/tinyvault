@@ -165,8 +165,12 @@ Reveals, writes, runs, exports, and rollbacks are recorded in the vault's audit 
 
 The model also **cannot escalate** its own access. The policy is loaded from disk at server start and cannot be changed at runtime. An agent can call `vault_status` to learn what it is allowed to do, but not to widen it.
 
+## Runs alongside the CLI
+
+The server validates the passphrase once at startup, then caches **only the key** and reopens the vault per request — it does not keep the [bbolt](https://github.com/etcd-io/bbolt) database locked for its lifetime. So a long-running `tvault mcp` no longer blocks `tvault set`/`get`/`run`/`import` on the same machine; the lock is free between calls. (This mirrors the [local agent](/guide/agent).) The remaining long-lived holder is `tvault studio`, the interactive UI.
+
 ::: info Exit codes
-If the server fails to start, the exit code tells you why: `3` vault locked, `5` not initialized, `6` wrong passphrase. (`0` is ok, `1` is a generic error, `4` is not found.)
+If the server fails to start, the exit code tells you why: `3` vault locked at rest, `5` not initialized, `6` wrong passphrase, `7` the database is in use by another process. (`0` is ok, `1` is a generic error, `4` is not found.)
 :::
 
 ## See also

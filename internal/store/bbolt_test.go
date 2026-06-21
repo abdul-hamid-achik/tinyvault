@@ -26,6 +26,35 @@ func newTestStore(t *testing.T) *BoltStore {
 // Store creation
 // ---------------------------------------------------------------------------
 
+func TestNewBoltStore_BusyReturnsErrVaultBusy(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "vault.db")
+
+	first, err := NewBoltStore(path)
+	if err != nil {
+		t.Fatalf("first NewBoltStore: %v", err)
+	}
+	defer first.Close()
+
+	// A second open while the first holds bbolt's exclusive lock must fail with
+	// ErrVaultBusy (not an opaque "open bolt db: timeout").
+	second, err := NewBoltStore(path)
+	if second != nil {
+		second.Close()
+	}
+	if !errors.Is(err, ErrVaultBusy) {
+		t.Fatalf("second NewBoltStore: got %v, want ErrVaultBusy", err)
+	}
+
+	// After the first closes, the path is openable again.
+	first.Close()
+	third, err := NewBoltStore(path)
+	if err != nil {
+		t.Fatalf("third NewBoltStore after close: %v", err)
+	}
+	third.Close()
+}
+
 func TestNewBoltStore_CreatesFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "vault.db")

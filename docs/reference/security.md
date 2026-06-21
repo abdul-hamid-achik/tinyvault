@@ -195,10 +195,11 @@ Scripts and CI can branch on TinyVault's exit codes.
 |------|---------|
 | `0` | success |
 | `1` | generic error |
-| `3` | vault is locked |
+| `3` | vault is locked at rest |
 | `4` | secret or project not found |
 | `5` | vault is not initialized |
 | `6` | wrong passphrase |
+| `7` | vault database is in use by another process |
 
 ```bash
 tvault get API_KEY >/dev/null 2>&1

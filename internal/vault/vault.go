@@ -57,6 +57,9 @@ func Create(dir, passphrase string) (*Vault, error) {
 	s, err := store.NewBoltStore(dbPath)
 	if err != nil {
 		crypto.ZeroBytes(kek)
+		if errors.Is(err, store.ErrVaultBusy) {
+			return nil, ErrVaultBusy
+		}
 		return nil, fmt.Errorf("open store: %w", err)
 	}
 
@@ -103,6 +106,9 @@ func Open(dir string) (*Vault, error) {
 
 	s, err := store.NewBoltStore(dbPath)
 	if err != nil {
+		if errors.Is(err, store.ErrVaultBusy) {
+			return nil, ErrVaultBusy
+		}
 		return nil, fmt.Errorf("open store: %w", err)
 	}
 

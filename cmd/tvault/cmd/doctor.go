@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -133,6 +134,12 @@ func checkVaultDir(dir string) []doctorCheck {
 func checkVault(dir string) []doctorCheck {
 	v, err := vault.Open(dir)
 	if err != nil {
+		if errors.Is(err, vault.ErrVaultBusy) {
+			// The db file exists but bbolt's lock is held elsewhere — don't
+			// mis-report this as "not initialized" (the historical bug).
+			return []doctorCheck{{Name: "vault", Status: statusWarn,
+				Detail: "in use by another tvault process (db is open — e.g. a running 'tvault mcp' or 'tvault studio')"}}
+		}
 		return []doctorCheck{{Name: "vault", Status: statusWarn, Detail: "not initialized — run 'tvault init'"}}
 	}
 	defer v.Close()
