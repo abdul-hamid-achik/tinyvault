@@ -124,6 +124,7 @@ export default defineConfig({
           collapsed: false,
           items: [
             { text: 'Pulumi & IaC', link: '/guide/pulumi' },
+            { text: 'DigitalOcean & SSH', link: '/guide/digitalocean' },
           ],
         },
         {
