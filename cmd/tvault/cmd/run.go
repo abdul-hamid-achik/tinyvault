@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"sort"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -16,6 +18,8 @@ import (
 var (
 	runEnvFile    string
 	runEnvNoVault bool
+	runOnly       []string
+	runPrefix     string
 )
 
 var runCmd = &cobra.Command{
@@ -37,10 +41,17 @@ Use "--" to separate the tvault flags from the command's own flags:
   tvault run -- docker compose up --build         # compose gets flags
   tvault run python manage.py runserver            # no flag conflict
 
+Inject only a subset of the project's secrets (least privilege) with
+--only (an explicit allowlist) and/or --prefix (every key with that
+prefix). A key is injected if it matches either selector. Explicit
+${tvault://...} references in --env-file still resolve against the full
+project, so the filters only narrow the bulk auto-injection.
+
 Examples:
   tvault run -- npm start
   tvault run --env-file .env -- npm start
-  tvault run --env-file .env.production -- ./deploy.sh`,
+  tvault run --only DIGITALOCEAN_TOKEN,NUXT_DATABASE_URL -- pulumi up
+  tvault run --prefix NUXT_ -- bun run dev`,
 	RunE: runRun,
 }
 
@@ -48,11 +59,17 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 	runCmd.Flags().StringVarP(&runEnvFile, "env-file", "e", "", "Dotenv file to load (vault values are merged on top)")
 	runCmd.Flags().BoolVar(&runEnvNoVault, "no-vault", false, "Do not load vault secrets; only use --env-file values")
+	runCmd.Flags().StringSliceVar(&runOnly, "only", nil, "Inject only these secret keys (comma-separated allowlist)")
+	runCmd.Flags().StringVar(&runPrefix, "prefix", "", "Inject only secret keys with this prefix")
 }
 
 func runRun(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("command is required")
+	}
+
+	if runEnvNoVault && (len(runOnly) > 0 || runPrefix != "") {
+		return fmt.Errorf("--only/--prefix select vault secrets and cannot be combined with --no-vault")
 	}
 
 	// Handle -- separator.
@@ -103,8 +120,21 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return val, nil
 	}
 
-	merged := make(map[string]string, len(vaultSecrets))
-	for k, v := range vaultSecrets {
+	// --only/--prefix narrow the bulk auto-injection (least privilege). The
+	// full set stays available to the resolver above, so explicit
+	// ${tvault://...} references in an env file still work.
+	injected := vaultSecrets
+	if len(runOnly) > 0 || runPrefix != "" {
+		var missing []string
+		injected, missing = selectSecrets(vaultSecrets, runOnly, runPrefix)
+		if len(missing) > 0 {
+			fmt.Fprintf(os.Stderr, "warning: --only key(s) not found in project %q: %s\n",
+				project, strings.Join(missing, ", "))
+		}
+	}
+
+	merged := make(map[string]string, len(injected))
+	for k, v := range injected {
 		merged[k] = v
 	}
 
@@ -175,4 +205,30 @@ func runRun(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// selectSecrets returns the subset of all whose keys match the --only allowlist
+// or the --prefix (union semantics: a key is kept if it matches either). It also
+// reports any --only keys that are absent from the project, so a typo surfaces
+// as a warning rather than silently injecting nothing.
+func selectSecrets(all map[string]string, only []string, prefix string) (selected map[string]string, missingOnly []string) {
+	onlySet := make(map[string]bool, len(only))
+	for _, k := range only {
+		onlySet[k] = true
+	}
+
+	selected = make(map[string]string)
+	for k, v := range all {
+		if onlySet[k] || (prefix != "" && strings.HasPrefix(k, prefix)) {
+			selected[k] = v
+		}
+	}
+
+	for _, k := range only {
+		if _, ok := all[k]; !ok {
+			missingOnly = append(missingOnly, k)
+		}
+	}
+	sort.Strings(missingOnly)
+	return selected, missingOnly
 }

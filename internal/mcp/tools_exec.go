@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -16,6 +17,7 @@ type runWithSecretsInput struct {
 	Project        string   `json:"project,omitempty" jsonschema:"Project name. If omitted uses the current project."`
 	Command        string   `json:"command" jsonschema:"The command to execute (e.g. 'npm start')."`
 	Secrets        []string `json:"secrets,omitempty" jsonschema:"Specific secret keys to inject. If omitted all project secrets are injected."`
+	Prefix         string   `json:"prefix,omitempty" jsonschema:"Inject only secret keys with this prefix (least privilege). Combined with 'secrets' as a union."`
 	TimeoutSeconds int      `json:"timeout_seconds,omitempty" jsonschema:"Maximum execution time in seconds. Default: 300."`
 }
 
@@ -23,6 +25,32 @@ type runResult struct {
 	ExitCode int    `json:"exit_code"`
 	Stdout   string `json:"stdout"`
 	Stderr   string `json:"stderr"`
+}
+
+// filterExecSecrets narrows allSecrets to the requested subset. 'only' is a
+// strict allowlist — a named key that is absent is an error, so an agent's typo
+// fails loudly; 'prefix' adds every matching key on top (union). With neither
+// set, all secrets are returned unchanged.
+func filterExecSecrets(allSecrets map[string]string, only []string, prefix, project string) (map[string]string, error) {
+	if len(only) == 0 && prefix == "" {
+		return allSecrets, nil
+	}
+	secrets := make(map[string]string)
+	for _, key := range only {
+		val, ok := allSecrets[key]
+		if !ok {
+			return nil, fmt.Errorf("secret %q not found in project %q", key, project)
+		}
+		secrets[key] = val
+	}
+	if prefix != "" {
+		for k, v := range allSecrets {
+			if strings.HasPrefix(k, prefix) {
+				secrets[k] = v
+			}
+		}
+	}
+	return secrets, nil
 }
 
 func (s *VaultMCPServer) registerExecTools() {
@@ -50,17 +78,9 @@ func (s *VaultMCPServer) handleRunWithSecrets(ctx context.Context, _ *sdkmcp.Cal
 		return nil, runResult{}, fmt.Errorf("get secrets: %w", err)
 	}
 
-	// Filter to requested secrets if specified.
-	secrets := allSecrets
-	if len(input.Secrets) > 0 {
-		secrets = make(map[string]string, len(input.Secrets))
-		for _, key := range input.Secrets {
-			val, ok := allSecrets[key]
-			if !ok {
-				return nil, runResult{}, fmt.Errorf("secret %q not found in project %q", key, project)
-			}
-			secrets[key] = val
-		}
+	secrets, err := filterExecSecrets(allSecrets, input.Secrets, input.Prefix, project)
+	if err != nil {
+		return nil, runResult{}, err
 	}
 
 	timeout := time.Duration(input.TimeoutSeconds) * time.Second
