@@ -81,6 +81,7 @@ cmd/tvault/
     ci.go                    # tvault ci init --mode=passphrase|identity (generate CI workflow files)
     studio.go                # tvault studio (aliases: browse, ui) (cobra wiring + TTY checks; calls studio pkg)
     doctor.go                # tvault doctor (read-only setup diagnostics; --json)
+    selfupdate.go            # tvault self-update (alias: upgrade) — checksum-verified in-place binary update
     audit_helper.go          # recordAudit(): CLI/TUI audit logging (MCP-vocab actions)
     config_helper.go         # typed ~/.tvault/config.yaml (browse: defaults)
     completion.go            # Shell completion
