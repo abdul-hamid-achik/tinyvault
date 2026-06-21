@@ -182,10 +182,11 @@ Scripts that read these variables will want to branch on the process exit code:
 | --- | --- |
 | `0` | Success. |
 | `1` | Generic error. |
-| `3` | Vault is locked. |
+| `3` | Vault is locked at rest. |
 | `4` | Secret or project not found. |
 | `5` | Vault not initialized. |
 | `6` | Wrong passphrase. |
+| `7` | Vault database is in use by another process. |
 
 ## See also
 

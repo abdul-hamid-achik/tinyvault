@@ -20,6 +20,34 @@ func createTestVault(t *testing.T) *Vault {
 	return v
 }
 
+func TestOpen_BusyReturnsErrVaultBusy(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "vault")
+	v, err := Create(dir, testPassphrase)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	defer v.Close()
+
+	// While v holds the database open, a second Open must report ErrVaultBusy
+	// (a clear "locked by another process"), never ErrNotInitialized.
+	if _, oerr := Open(dir); !errors.Is(oerr, ErrVaultBusy) {
+		t.Fatalf("Open while busy: got %v, want ErrVaultBusy", oerr)
+	}
+	if errors.Is(ErrVaultBusy, ErrNotInitialized) {
+		t.Fatal("ErrVaultBusy must be distinct from ErrNotInitialized")
+	}
+
+	// Once closed, Open succeeds again.
+	if cerr := v.Close(); cerr != nil {
+		t.Fatalf("close: %v", cerr)
+	}
+	reopened, oerr := Open(dir)
+	if oerr != nil {
+		t.Fatalf("Open after close: %v", oerr)
+	}
+	reopened.Close()
+}
+
 func TestCreate_NewVault(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "vault")
 	v, err := Create(dir, testPassphrase)

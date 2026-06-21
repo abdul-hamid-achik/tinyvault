@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	ivault "github.com/abdul-hamid-achik/tinyvault/internal/vault"
@@ -33,6 +34,29 @@ func TestDoctorUninitializedDoesNotFail(t *testing.T) {
 	withVaultDir(t, filepath.Join(t.TempDir(), "nope"))
 	if err := runDoctor(nil, nil); err != nil {
 		t.Errorf("doctor on an uninitialized dir should warn, not fail: %v", err)
+	}
+}
+
+func TestDoctorReportsBusyNotUninitialized(t *testing.T) {
+	// Regression for the PROPOSAL bug: a vault whose db is held open by another
+	// process must report "in use by another process", NOT "not initialized".
+	dir := t.TempDir()
+	v, err := ivault.Create(dir, "p")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	defer v.Close() // keep the bbolt lock held for the duration of the check
+
+	checks := checkVault(dir)
+	if len(checks) == 0 {
+		t.Fatal("checkVault returned no checks")
+	}
+	detail := checks[0].Detail
+	if !strings.Contains(detail, "in use by another") {
+		t.Errorf("checkVault on a busy vault = %q, want it to mention another process", detail)
+	}
+	if strings.Contains(detail, "not initialized") {
+		t.Errorf("checkVault on a busy vault must not say 'not initialized', got %q", detail)
 	}
 }
 

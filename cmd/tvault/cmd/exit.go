@@ -13,10 +13,11 @@ import (
 const (
 	ExitOK              = 0
 	ExitError           = 1 // generic failure
-	ExitLocked          = 3 // vault is locked
+	ExitLocked          = 3 // vault is locked at rest
 	ExitNotFound        = 4 // secret or project not found
 	ExitNotInitialized  = 5 // no vault — run 'tvault init'
 	ExitWrongPassphrase = 6 // unlock failed
+	ExitBusy            = 7 // vault database is held open by another process
 )
 
 // ExitCode maps an error returned from Execute() to a process exit code.
@@ -25,6 +26,8 @@ func ExitCode(err error) int {
 	switch {
 	case err == nil:
 		return ExitOK
+	case errors.Is(err, vault.ErrVaultBusy):
+		return ExitBusy
 	case errors.Is(err, vault.ErrLocked):
 		return ExitLocked
 	case errors.Is(err, vault.ErrNotInitialized):

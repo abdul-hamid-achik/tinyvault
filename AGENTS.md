@@ -138,7 +138,8 @@ internal/
     identity.go              # X25519 identity key files: New/List/Load/File/Dir (single source of truth for CLI + MCP)
     identity_test.go         # New/List/Load round-trip + name validation
   mcp/
-    server.go                # VaultMCPServer, tool registration, Run()
+    server.go                # VaultMCPServer, tool registration, Run(); reopen-per-request middleware
+    reopen_test.go           # coexistence: server doesn't hold the bbolt lock; reopens per request
     tools_projects.go        # vault_list/create/delete_project
     tools_secrets.go         # vault_list/get/set/delete_secret
     tools_exec.go            # vault_run_with_secrets (exec + output redaction)
@@ -276,13 +277,20 @@ go build -o tvault ./cmd/tvault        # wrong (root is gitignored with /tvault)
 
 ## MCP Go SDK Notes
 
-Using `github.com/modelcontextprotocol/go-sdk` v1.4.1:
+Using `github.com/modelcontextprotocol/go-sdk` v1.6.1:
 
 - `jsonschema` struct tags are plain description strings: `jsonschema:"Project name"`
 - Tool registration: `mcp.AddTool[In, Out](server, tool, handler)`
 - Handler signature: `func(ctx, *mcp.CallToolRequest, Input) (*mcp.CallToolResult, Output, error)`
 - Testing: `mcp.NewInMemoryTransports()` -- connect server first, then client
 - Production: `mcp.StdioTransport{}` for stdio mode
+- **Reopen-per-request invariant.** `tvault mcp` (`NewReopeningVaultMCPServer`)
+  must NOT hold the vault open — bbolt is single-writer and that would block the
+  CLI. It caches the KEK and reopens+unlocks per request via
+  `Server.AddReceivingMiddleware` (`vaultMiddleware`, gating `tools/call` +
+  `resources/read` through `methodNeedsVault`), serialized by a mutex, exactly
+  like the agent. Don't "optimize" it into a held-open vault. `NewVaultMCPServer`
+  (held-open) stays for tests only.
 
 ## Commit Checklist
 

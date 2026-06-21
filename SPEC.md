@@ -360,7 +360,9 @@ The MCP server is the most security-sensitive surface. The design rules:
 ## 4. The MCP surface
 
 36 tools, 2 prompts, 3 resources. All registered through
-`github.com/modelcontextprotocol/go-sdk` v1.4.1.
+`github.com/modelcontextprotocol/go-sdk` v1.6.1.
+
+**Open model — KEK-only, reopen-per-request.** Like the [agent](#_5-5-the-local-agent-tvault-agent-hooks), `tvault mcp` does **not** hold the bbolt database open for its lifetime — doing so would take bbolt's exclusive file lock and block every other `tvault` process (`set`/`get`/`run`/`import`) with an opaque timeout. Instead the server validates the passphrase once at startup, caches **only the KEK**, closes the vault, and then reopens + `UnlockWithKEK`s it for the duration of each request via SDK receiving middleware (`methodNeedsVault` gates `tools/call` and `resources/read`), serialized by a mutex. The lock is free between requests, so the CLI keeps working alongside a running server. The cached KEK is zeroed on shutdown. A contended open surfaces as `vault.ErrVaultBusy` (exit code `7`), not the old `open bolt db: timeout`.
 
 ### 4.1 Tools
 

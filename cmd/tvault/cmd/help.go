@@ -230,10 +230,11 @@ func helpContent() HelpContent {
 			ExitCodes: []string{
 				"0   success",
 				"1   generic failure (see stderr for the message)",
-				"3   vault is locked",
+				"3   vault is locked at rest",
 				"4   secret or project not found",
 				"5   vault not initialized (run 'tvault init')",
 				"6   unlock failed (wrong passphrase)",
+				"7   vault database is in use by another process (e.g. a running 'tvault mcp'/'tvault studio')",
 			},
 			Filesystem: []string{
 				"~/.tvault/vault.db                 encrypted bbolt vault (0600)",

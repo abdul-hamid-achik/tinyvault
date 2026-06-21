@@ -211,10 +211,11 @@ Scripts can branch on `tvault`'s exit status:
 | --- | --- |
 | `0` | Success. |
 | `1` | Generic error. |
-| `3` | Vault is locked. |
+| `3` | Vault is locked at rest. |
 | `4` | Secret or project not found. |
 | `5` | Vault not initialized. |
 | `6` | Wrong passphrase. |
+| `7` | Vault database is in use by another process. |
 
 ```bash
 if ! tvault get API_KEY --project myapp >/dev/null 2>&1; then

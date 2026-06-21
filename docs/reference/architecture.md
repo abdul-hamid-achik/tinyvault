@@ -303,10 +303,11 @@ Front ends share one set of exit codes, which makes scripting and CI predictable
 | --- | --- |
 | `0` | Success |
 | `1` | Generic error |
-| `3` | Vault is locked |
+| `3` | Vault is locked at rest |
 | `4` | Secret or project not found |
 | `5` | Vault not initialized |
 | `6` | Wrong passphrase |
+| `7` | Vault database is in use by another process |
 
 ```bash
 tvault get DATABASE_URL
