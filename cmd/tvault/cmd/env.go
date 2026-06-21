@@ -15,11 +15,12 @@ import (
 )
 
 var (
-	envFormat   string
-	envExport   bool
-	envK8sName  string
-	envK8sNs    string
-	envIdentity string
+	envFormat      string
+	envExport      bool
+	envK8sName     string
+	envK8sNs       string
+	envIdentity    string
+	envPulumiStack string
 )
 
 var envCmd = &cobra.Command{
@@ -35,17 +36,19 @@ Examples:
   tvault env --format=dotenv > .env
   tvault env --format=yaml > secrets.yaml
   tvault env --format=k8s-secret --name=my-secrets > secret.yaml
+  tvault env --format=pulumi-config --stack=prod | sh   # push into Pulumi config
   source <(tvault env)`,
 	RunE: runEnv,
 }
 
 func init() {
 	rootCmd.AddCommand(envCmd)
-	envCmd.Flags().StringVarP(&envFormat, "format", "f", "shell", "Output format: shell, dotenv, json, yaml, k8s-secret")
+	envCmd.Flags().StringVarP(&envFormat, "format", "f", "shell", "Output format: shell, dotenv, json, yaml, k8s-secret, pulumi-config")
 	envCmd.Flags().BoolVarP(&envExport, "export", "e", true, "Include 'export' prefix (shell format only)")
 	envCmd.Flags().StringVar(&envK8sName, "name", "", "Kubernetes Secret name (required for k8s-secret format)")
 	envCmd.Flags().StringVar(&envK8sNs, "namespace", "default", "Kubernetes namespace (k8s-secret format)")
 	envCmd.Flags().StringVar(&envIdentity, "identity", "", "Decrypt a shared project with this X25519 identity instead of the passphrase")
+	envCmd.Flags().StringVar(&envPulumiStack, "stack", "", "Pulumi stack to target (pulumi-config format; optional)")
 }
 
 // envSecrets returns the project's decrypted secrets, either via the
@@ -164,11 +167,42 @@ func runEnv(_ *cobra.Command, _ []string) error {
 			encoded := base64.StdEncoding.EncodeToString([]byte(v))
 			fmt.Printf("  %s: %s\n", k, encoded)
 		}
+	case "pulumi-config":
+		// Emit `pulumi config set --secret KEY VALUE` lines, shell-quoted so the
+		// output is safe to pipe to `sh`. Prefer `tvault run -- pulumi up` when
+		// you can — it keeps values out of Pulumi's state file and your shell
+		// history entirely; this is for teams that want them in Pulumi config.
+		stackArg := ""
+		if envPulumiStack != "" {
+			stackArg = " --stack " + shellArgQuote(envPulumiStack)
+		}
+		for _, k := range keys {
+			fmt.Printf("pulumi config set --secret%s %s %s\n", stackArg, k, shellArgQuote(secrets[k]))
+		}
 	default:
-		return fmt.Errorf("unknown format: %s (valid: shell, dotenv, json, yaml, k8s-secret)", envFormat)
+		return fmt.Errorf("unknown format: %s (valid: shell, dotenv, json, yaml, k8s-secret, pulumi-config)", envFormat)
 	}
 
 	return nil
+}
+
+// shellArgQuote quotes a value for use as a shell command argument (not an
+// assignment RHS). Unlike escapeShellValue, it also guards glob metacharacters
+// (* ? [) and other word-splitting/expansion chars, since `pulumi config set
+// KEY VALUE` output is meant to be piped to `sh`. It single-quotes anything
+// outside a conservative safe set (the shlex.quote convention).
+func shellArgQuote(s string) string {
+	if s == "" {
+		return "''"
+	}
+	for _, r := range s {
+		safe := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || strings.ContainsRune("@%+=:,./-_", r)
+		if !safe {
+			return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+		}
+	}
+	return s
 }
 
 func escapeShellValue(s string) string {

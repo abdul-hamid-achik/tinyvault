@@ -250,11 +250,12 @@ func helpContent() HelpContent {
 				"in internal/mcp. The TVault command itself never prints secrets to stdout, " +
 				"even with --json. Use 'tvault env' or 'tvault get' to read a value.",
 			Formats: []string{
-				"shell       export KEY=VALUE  (eval-able; default for 'tvault env')",
-				"dotenv      KEY=VALUE         (one per line; safe for .env files)",
-				"json        {\"KEY\":\"VALUE\"}    (object form)",
-				"yaml        KEY: VALUE        (mapping)",
-				"k8s-secret  apiVersion: v1, kind: Secret, data: {KEY: base64}",
+				"shell         export KEY=VALUE  (eval-able; default for 'tvault env')",
+				"dotenv        KEY=VALUE         (one per line; safe for .env files)",
+				"json          {\"KEY\":\"VALUE\"}    (object form)",
+				"yaml          KEY: VALUE        (mapping)",
+				"k8s-secret    apiVersion: v1, kind: Secret, data: {KEY: base64}",
+				"pulumi-config pulumi config set --secret KEY VALUE  (optional --stack; pipe to sh)",
 			},
 			GoldenRule: "Anything that prints a secret value goes through 'tvault get' or " +
 				"'tvault env'. Everything else prints structure. If you are scripting, " +
