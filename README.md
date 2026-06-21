@@ -43,11 +43,17 @@ TinyVault is built to be driven by agents without secret values ever entering th
 # Homebrew (macOS/Linux)
 brew install abdul-hamid-achik/tap/tvault
 
+# Install script (Linux/macOS) — detects OS/arch, verifies checksum.
+# Ideal for a server or a fresh DigitalOcean droplet over SSH:
+curl -fsSL https://raw.githubusercontent.com/abdul-hamid-achik/tinyvault/main/scripts/install.sh | sh
+
 # Go install
 go install github.com/abdul-hamid-achik/tinyvault/cmd/tvault@latest
 
-# Or download a release binary from GitHub
+# Or download a release binary (.tar.gz / .deb / .rpm / .apk) from GitHub
 ```
+
+Deploying to a server? See [Deploy to DigitalOcean & SSH servers](https://tinyvault.dev/guide/digitalocean) for the passphrase-free, manage-over-SSH workflow.
 
 ## Quick Start
 
