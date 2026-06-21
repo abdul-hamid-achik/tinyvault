@@ -1,0 +1,79 @@
+version: 1
+name: cli_mcp_coexist
+
+intent: |
+  Regression test for the MCP↔CLI coexistence fix (PROPOSAL #1a): a running
+  `tvault mcp` server must NOT hold the bbolt lock for its lifetime, so concurrent
+  CLI commands keep working instead of timing out with `open bolt db: timeout`.
+
+  The target boots `tvault mcp` in the background (its stdin held open by a
+  `sleep` so the stdio server stays alive), waits for it to come up, then — while
+  the server is still running — runs `tvault get DB_URL` and
+  `tvault run -- sh -c 'echo INJECTED=$DB_URL'` against the SAME vault. Both must
+  succeed. Before the fix, the second tvault process blocked on the exclusive
+  bbolt lock and failed; after it (reopen-per-request), the lock is free between
+  requests and the chain exits 0 with the injected value on screen.
+
+target:
+  cmd:
+    - "/bin/sh"
+    - "-c"
+    - |
+      ( sleep 30 | ./bin/tvault mcp >/dev/null 2>&1 ) &
+      sleep 2                       # let mcp boot, unlock, and release the lock
+      ./bin/tvault get DB_URL && ./bin/tvault run -- sh -c 'echo INJECTED=$DB_URL'
+      rc=$?
+      pkill -f 'bin/tvault mcp' 2>/dev/null
+      exit $rc
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/cli-mcp-coexist"
+    TVAULT_PASSPHRASE: "glyphpass"
+    TVAULT_NO_AGENT: "1"
+  timeoutMs: 30000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: forbid
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/cli-mcp-coexist"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-mcp-coexist TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-mcp-coexist TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 25000
+  - snapshot: result
+
+outcomes:
+  - id: clean_exit
+    description: the concurrent get + run chain succeeds while tvault mcp is running
+    verify:
+      process:
+        exitCode: 0
+  - id: run_injects_env
+    description: run injects the secret into the child even with mcp up
+    verify:
+      screen:
+        contains: "INJECTED=postgres://glyph"
+  - id: no_lock_timeout
+    description: no opaque bbolt lock timeout surfaced
+    verify:
+      screen:
+        notContains: "timeout"
+  - id: not_blocked_by_mcp
+    description: the CLI was not blocked by the running MCP server
+    verify:
+      screen:
+        notContains: "locked by another"

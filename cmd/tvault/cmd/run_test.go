@@ -2,8 +2,36 @@ package cmd
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
+
+func TestRunOnlyPrefixConflictWithNoVault(t *testing.T) {
+	oldNoVault, oldOnly, oldPrefix := runEnvNoVault, runOnly, runPrefix
+	t.Cleanup(func() { runEnvNoVault, runOnly, runPrefix = oldNoVault, oldOnly, oldPrefix })
+
+	for _, c := range []struct {
+		name   string
+		only   []string
+		prefix string
+	}{
+		{"only", []string{"DB_URL"}, ""},
+		{"prefix", nil, "NUXT_"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			runEnvNoVault, runOnly, runPrefix = true, c.only, c.prefix
+			// The conflict is checked before any vault access, so a nil cmd and a
+			// dummy command argument are enough to reach it.
+			err := runRun(nil, []string{"true"})
+			if err == nil {
+				t.Fatal("expected an error combining --no-vault with --only/--prefix")
+			}
+			if !strings.Contains(err.Error(), "--no-vault") {
+				t.Errorf("error should mention --no-vault, got: %v", err)
+			}
+		})
+	}
+}
 
 func TestSelectSecrets(t *testing.T) {
 	all := map[string]string{

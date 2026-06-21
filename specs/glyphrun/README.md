@@ -61,6 +61,9 @@ every top-level command at least once.
 | `cli_delete.yml`           | `delete` (with `-y`) |
 | `cli_projects.yml`         | `projects create/list/delete` · `use` |
 | `cli_env_run.yml`          | `env --format dotenv` · `run -- …` (env injection) |
+| `cli_run_only_prefix.yml`  | `run --only` / `--prefix` (least-privilege subset injection) |
+| `cli_env_pulumi.yml`       | `env --format pulumi-config --stack` (Pulumi config lines) |
+| `cli_mcp_coexist.yml`      | `mcp` running + concurrent `get`/`run` (lock coexistence) |
 | `cli_history_rollback.yml` | `history` · `rollback --to` · `get` |
 | `cli_search.yml`           | `search --prefix` · `list --prefix` |
 | `cli_seal_open.yml`        | `identity new` · `seal --recipient` · `open --identity` |
