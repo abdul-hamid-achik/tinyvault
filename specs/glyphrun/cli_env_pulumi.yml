@@ -1,0 +1,66 @@
+version: 1
+name: cli_env_pulumi
+
+intent: |
+  Exercise the pulumi-config export format (PROPOSAL #4): `tvault env --format
+  pulumi-config --stack <s>` emits one `pulumi config set --secret` line per
+  secret, shell-quoted and targeting the given stack.
+
+  The vault holds DIGITALOCEAN_TOKEN and NUXT_DATABASE_URL. The target runs the
+  export and we assert both `pulumi config set --secret --stack prod …` lines
+  render with the right keys and values.
+
+target:
+  cmd:
+    - "/bin/sh"
+    - "-c"
+    - "./bin/tvault env --format pulumi-config --stack prod"
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/cli-env-pulumi"
+    TVAULT_PASSPHRASE: "glyphpass"
+    TVAULT_NO_AGENT: "1"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: forbid
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/cli-env-pulumi"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-env-pulumi TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-env-pulumi TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DIGITALOCEAN_TOKEN dop_glyph"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-env-pulumi TVAULT_PASSPHRASE=glyphpass ./bin/tvault set NUXT_DATABASE_URL pg_glyph"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 15000
+  - snapshot: result
+
+outcomes:
+  - id: clean_exit
+    description: env --format pulumi-config exits 0
+    verify:
+      process:
+        exitCode: 0
+  - id: do_token_line
+    description: emits a pulumi config set line for the DO token on the prod stack
+    verify:
+      screen:
+        contains: "pulumi config set --secret --stack prod DIGITALOCEAN_TOKEN dop_glyph"
+  - id: nuxt_line
+    description: emits a pulumi config set line for the database URL
+    verify:
+      screen:
+        contains: "pulumi config set --secret --stack prod NUXT_DATABASE_URL pg_glyph"

@@ -1,0 +1,74 @@
+version: 1
+name: cli_run_only_prefix
+
+intent: |
+  Exercise least-privilege injection (PROPOSAL #3): `tvault run --only` and
+  `--prefix` must inject ONLY the selected subset of a project's secrets into the
+  child environment, leaving the rest unset.
+
+  The vault holds three secrets: DIGITALOCEAN_TOKEN, NUXT_DATABASE_URL, OTHER_KEY.
+  The target runs:
+    run --only DIGITALOCEAN_TOKEN -- … prints tok + other
+    run --prefix NUXT_           -- … prints nuxt + tok
+  We assert --only injected DIGITALOCEAN_TOKEN but NOT OTHER_KEY (other=[]), and
+  --prefix injected NUXT_DATABASE_URL but NOT DIGITALOCEAN_TOKEN (tok=[]).
+
+target:
+  cmd:
+    - "/bin/sh"
+    - "-c"
+    - |
+      ./bin/tvault run --only DIGITALOCEAN_TOKEN -- sh -c 'echo "ONLY tok=[$DIGITALOCEAN_TOKEN] other=[$OTHER_KEY]"' && \
+      echo --- && \
+      ./bin/tvault run --prefix NUXT_ -- sh -c 'echo "PREFIX nuxt=[$NUXT_DATABASE_URL] tok=[$DIGITALOCEAN_TOKEN]"'
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/cli-run-only"
+    TVAULT_PASSPHRASE: "glyphpass"
+    TVAULT_NO_AGENT: "1"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: forbid
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/cli-run-only"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-run-only TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-run-only TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DIGITALOCEAN_TOKEN dop_glyph"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-run-only TVAULT_PASSPHRASE=glyphpass ./bin/tvault set NUXT_DATABASE_URL pg_glyph"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/cli-run-only TVAULT_PASSPHRASE=glyphpass ./bin/tvault set OTHER_KEY other_glyph"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 15000
+  - snapshot: result
+
+outcomes:
+  - id: clean_exit
+    description: both run invocations exit 0
+    verify:
+      process:
+        exitCode: 0
+  - id: only_injects_allowlisted
+    description: --only injected DIGITALOCEAN_TOKEN but not OTHER_KEY
+    verify:
+      screen:
+        contains: "ONLY tok=[dop_glyph] other=[]"
+  - id: prefix_injects_matching
+    description: --prefix injected NUXT_DATABASE_URL but not DIGITALOCEAN_TOKEN
+    verify:
+      screen:
+        contains: "PREFIX nuxt=[pg_glyph] tok=[]"
