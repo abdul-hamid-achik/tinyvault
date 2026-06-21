@@ -50,6 +50,22 @@ tvault run --no-vault --env-file .env -- npm test
 With `--no-vault`, any `tvault://` placeholders in the file cannot be resolved (the vault is not loaded) and `run` will error. Use `--no-vault` only for files that contain literal values.
 :::
 
+### Injecting only a subset (least privilege)
+
+By default `run` injects **every** secret in the project. When you wrap a third-party tool (`pulumi`, `terraform`, `docker`), inject only the keys it needs to shrink the blast radius:
+
+```bash
+tvault run --only DIGITALOCEAN_TOKEN,NUXT_DATABASE_URL,NUXT_REDIS_URL -- pulumi up
+tvault run --prefix NUXT_ -- bun run dev
+```
+
+- `--only` is an explicit allowlist (comma-separated). A listed key that doesn't exist prints a warning to stderr (so typos surface) but doesn't fail.
+- `--prefix` injects every key with that prefix.
+- Given both, a key is injected if it matches **either** (union).
+- Explicit `${tvault://...}` references in `--env-file` still resolve against the full project — the filters only narrow the bulk auto-injection.
+
+`--only`/`--prefix` cannot be combined with `--no-vault` (there are no vault secrets to select).
+
 ### Signal forwarding and exit codes
 
 `tvault run` forwards `SIGINT` and `SIGTERM` to the child process, so `Ctrl-C` and orderly shutdowns reach your application. When the child exits, `tvault` propagates the child's exit code as its own. This makes `tvault run` safe to use as a process wrapper in supervisors, Procfiles, and CI steps.
@@ -60,6 +76,8 @@ With `--no-vault`, any `tvault://` placeholders in the file cannot be resolved (
 | --- | --- |
 | `-e`, `--env-file <path>` | Merge a dotenv file; vault values win on conflict. |
 | `--no-vault` | Skip vault secrets; use only `--env-file` values. |
+| `--only <k1,k2>` | Inject only these secret keys (comma-separated allowlist). |
+| `--prefix <p>` | Inject only secret keys with this prefix. |
 
 ## tvault env — emit secrets for your shell
 

@@ -382,8 +382,8 @@ func fullCatalog() docsCatalog {
 			{
 				Slug:        "run",
 				Title:       "tvault run",
-				Description: "Runs a command with project secrets injected as environment variables. Optionally merges a .env file with the vault, vault winning on conflict. Values containing ${tvault://...} references in the .env file are resolved against the vault at run time.",
-				Example:     "  tvault run --env-file .env -- npm start\n  tvault run --env-file .env.production -- ./deploy.sh\n  tvault run --no-vault -- npm test    # use only .env values",
+				Description: "Runs a command with project secrets injected as environment variables. Optionally merges a .env file with the vault, vault winning on conflict. Values containing ${tvault://...} references in the .env file are resolved against the vault at run time. Use --only KEY1,KEY2 or --prefix PREFIX to inject only a subset (least privilege); a key matching either selector is injected, and explicit ${tvault://...} references still resolve against the full project.",
+				Example:     "  tvault run --env-file .env -- npm start\n  tvault run --only DIGITALOCEAN_TOKEN,NUXT_DATABASE_URL -- pulumi up\n  tvault run --prefix NUXT_ -- bun run dev\n  tvault run --no-vault -- npm test    # use only .env values",
 			},
 			{
 				Slug:        "mcp",
