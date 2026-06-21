@@ -12,26 +12,35 @@ This guide puts `tvault` on a Linux server (a DigitalOcean droplet, but anything
 
 ## Install on the droplet
 
-Over SSH, one line:
+`tvault` is a single static binary, so installing on a droplet is quick. Pick whichever fits your base image:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/abdul-hamid-achik/tinyvault/main/scripts/install.sh | sh
+# Debian/Ubuntu — the .deb from the latest release
+ARCH=$(dpkg --print-architecture)   # amd64 or arm64
+curl -fsSLO "https://github.com/abdul-hamid-achik/tinyvault/releases/latest/download/tvault_$(curl -fsSL https://api.github.com/repos/abdul-hamid-achik/tinyvault/releases/latest | grep -oE '"tag_name": *"v[^"]+"' | grep -oE '[0-9.]+')_linux_${ARCH}.deb"
+sudo dpkg -i tvault_*_linux_${ARCH}.deb
+
+# Fedora/RHEL: the .rpm  ·  Alpine: the .apk  (same release page)
+
+# Homebrew (also works on Linux via Linuxbrew)
+brew install abdul-hamid-achik/tap/tvault
+
+# Have a Go toolchain on the box?
+go install github.com/abdul-hamid-achik/tinyvault/cmd/tvault@latest
 ```
 
-It detects the OS/arch, downloads the matching release, **verifies the SHA-256 checksum**, and installs `tvault` to `/usr/local/bin` (falls back to `~/.local/bin`). Pin a version or target dir with env vars:
+Don't want to hand-build a URL? Grab the `tvault_<ver>_linux_<arch>.tar.gz` (or `.deb`/`.rpm`/`.apk`) for your droplet straight from the [Releases page](https://github.com/abdul-hamid-achik/tinyvault/releases/latest) — each release ships `linux/amd64` and `linux/arm64`.
+
+### Staying current
+
+Once `tvault` is on the box, it can update itself — checksum-verified, straight from the official releases:
 
 ```bash
-TVAULT_VERSION=v0.11.1 TVAULT_INSTALL_DIR=/usr/local/bin \
-  curl -fsSL https://raw.githubusercontent.com/abdul-hamid-achik/tinyvault/main/scripts/install.sh | sh
+tvault self-update --check     # is a newer release available?
+tvault self-update             # download + verify + replace in place
 ```
 
-Prefer a package? Releases also ship `.deb`/`.rpm`/`.apk`:
-
-```bash
-# Debian/Ubuntu droplet
-curl -fsSLO https://github.com/abdul-hamid-achik/tinyvault/releases/latest/download/tvault_<ver>_linux_amd64.deb
-sudo dpkg -i tvault_<ver>_linux_amd64.deb
-```
+If you installed via Homebrew or a system package, update through that package manager instead so its bookkeeping stays correct.
 
 ## Model A — sealed secrets, passphrase-free
 
@@ -139,8 +148,13 @@ Have the droplet install `tvault` and drop its identity key on first boot via cl
 
 ```yaml
 #cloud-config
+packages: [curl]
 runcmd:
-  - curl -fsSL https://raw.githubusercontent.com/abdul-hamid-achik/tinyvault/main/scripts/install.sh | sh
+  # install the .deb for this droplet's arch from the latest release
+  - ARCH=$(dpkg --print-architecture)
+  - VER=$(curl -fsSL https://api.github.com/repos/abdul-hamid-achik/tinyvault/releases/latest | grep -oE '"tag_name": *"v[^"]+"' | grep -oE '[0-9.]+')
+  - curl -fsSLO "https://github.com/abdul-hamid-achik/tinyvault/releases/latest/download/tvault_${VER}_linux_${ARCH}.deb"
+  - dpkg -i "tvault_${VER}_linux_${ARCH}.deb"
 write_files:
   - path: /etc/tvault/identity
     permissions: '0600'

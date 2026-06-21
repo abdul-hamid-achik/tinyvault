@@ -391,6 +391,12 @@ func fullCatalog() docsCatalog {
 				Description: "Starts a Model Context Protocol server on stdio. Add to your MCP host config with command=tvault args=[mcp] env={TVAULT_PASSPHRASE:...}. The server exposes 36 tools, 2 prompts, and 3 resources. The model never needs to see secret values: prefer vault_run_with_secrets and vault_export_env over vault_get_secret. vault_secret_history and vault_rollback_secret manage version history without ever returning a value.",
 			},
 			{
+				Slug:        "self-update",
+				Title:       "tvault self-update",
+				Description: "Updates tvault in place: downloads the latest release for this OS/arch from the official GitHub releases, verifies its SHA-256 checksum, and atomically replaces the running binary. --check reports whether an update is available without installing; --version vX.Y.Z installs a specific release (e.g. to pin or downgrade). The download source is fixed and cannot be overridden. If you installed via Homebrew or a system package, update through that package manager instead.",
+				Example:     "  tvault self-update\n  tvault self-update --check\n  tvault self-update --version v0.11.1",
+			},
+			{
 				Slug:        "interpolate",
 				Title:       "tvault:// references",
 				Description: "Inside a .env file value, write ${tvault://PROJECT/KEY} or ${tvault://KEY} (current project). At run time the dotenv parser keeps the reference verbatim; tvault run resolves it against the unlocked vault. tvault://current/KEY is also accepted as an explicit form.",
