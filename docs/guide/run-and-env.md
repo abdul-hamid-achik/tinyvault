@@ -104,13 +104,19 @@ Select a format with `-f`/`--format`. The default is `shell`.
 | `json` | A flat JSON object of key/value pairs. |
 | `yaml` | A flat YAML mapping. |
 | `k8s-secret` | A Kubernetes `Secret` manifest (base64 `data:`). Requires `--name`. |
+| `pulumi-config` | `pulumi config set --secret KEY VALUE` lines (shell-quoted). Optional `--stack`. |
 
 ```bash
 tvault env --format dotenv > .env
 tvault env --format json | jq .
 tvault env --format yaml > secrets.yaml
 tvault env --format k8s-secret --name app-secrets --namespace prod > secret.yaml
+tvault env --format pulumi-config --stack prod | sh   # push into Pulumi config
 ```
+
+::: tip Pulumi
+For Pulumi you usually want `tvault run -- pulumi up` (inject at deploy time, nothing lands in state). The `pulumi-config` format is for teams who instead store secrets in Pulumi's own encrypted config. See [Pulumi & IaC](/guide/pulumi).
+:::
 
 For the `shell` format, `-e`/`--export` (on by default) controls the `export ` prefix. Pass `--export=false` to emit bare `KEY=value` lines:
 

@@ -120,6 +120,13 @@ export default defineConfig({
           ],
         },
         {
+          text: 'Deploying',
+          collapsed: false,
+          items: [
+            { text: 'Pulumi & IaC', link: '/guide/pulumi' },
+          ],
+        },
+        {
           text: 'Interfaces',
           collapsed: false,
           items: [
