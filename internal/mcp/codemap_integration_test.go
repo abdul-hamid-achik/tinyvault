@@ -179,9 +179,9 @@ func TestCodemapB_ViaVaultRegistryCreds(t *testing.T) {
 	_, cs := codemapIntegrationServer(t)
 
 	// The child process prints only the env-var names for the keys we care
-	// about, one per line, sorted. We use a Go-based check rather than shell
-	// piping so the test is portable and deterministic.
-	const checkScript = `for k in GOPRIVATE NPM_TOKEN PIP_INDEX_TOKEN STRIPE_SECRET_KEY; do if [ -n "${!k}" ]; then echo "$k"; fi; done | sort`
+	// about, one per line, sorted. We use printenv per-key (POSIX, portable
+	// across macOS and Linux, no grep ANSI color issues).
+	const checkScript = `for k in GOPRIVATE NPM_TOKEN PIP_INDEX_TOKEN STRIPE_SECRET_KEY; do printenv "$k" >/dev/null 2>&1 && echo "$k"; done | sort`
 
 	res, err := cs.CallTool(ctx, &sdkmcp.CallToolParams{
 		Name: "vault_run_with_secrets",
