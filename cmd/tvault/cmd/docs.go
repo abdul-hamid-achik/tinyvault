@@ -59,6 +59,7 @@ Available subcommands:
   safety           Threat model and safety properties
   quickstart       Five-line getting-started
   studio           The interactive terminal UI (aliases: browse, ui)
+  codemap          Codemap integration surface (rotation impact, seals, audit)
 
 Any topic or feature can also be named directly, e.g.
 ` + "`tvault docs committable-secrets`" + `. If nothing is named, the full
@@ -73,7 +74,7 @@ var (
 func init() {
 	rootCmd.AddCommand(docsCmd)
 	docsCmd.Flags().StringVarP(&docsTopicFlag, "topic", "t", "", "Topic to print (alias for the first positional argument)")
-	docsCmd.AddCommand(docsFeaturesCmd, docsTopicsCmd, docsRunCmd, docsMCPCmd, docsInterpolateCmd, docsSyncCmd, docsEncryptedEnvCmd, docsSafetyCmd, docsQuickstartCmd, docsStudioCmd)
+	docsCmd.AddCommand(docsFeaturesCmd, docsTopicsCmd, docsRunCmd, docsMCPCmd, docsInterpolateCmd, docsSyncCmd, docsEncryptedEnvCmd, docsSafetyCmd, docsQuickstartCmd, docsStudioCmd, docsCodemapCmd)
 }
 
 func runDocs(_ *cobra.Command, args []string) error {
@@ -224,6 +225,14 @@ var docsStudioCmd = &cobra.Command{
 	},
 }
 
+var docsCodemapCmd = &cobra.Command{
+	Use:   "codemap",
+	Short: "Codemap integration surface",
+	RunE: func(_ *cobra.Command, _ []string) error {
+		return printTopic(fullCatalog(), "codemap")
+	},
+}
+
 func printTopic(cat docsCatalog, slug string) error {
 	for _, t := range cat.Topics {
 		if t.Slug == slug {
@@ -358,12 +367,20 @@ func fullCatalog() docsCatalog {
 				SeeAlso:     []string{"tvault docs agent"},
 				Description: "`tvault agent start` (foreground; background it with & / nohup / systemd) unlocks the vault once and serves secret reads over a private 0600 unix socket in the 0700 vault dir, accepting only same-uid peers. get/env/run route through it automatically — no passphrase prompt, no ~200ms Argon2id — and fall back to a direct unlock when no agent is running (or with --no-agent / TVAULT_NO_AGENT). The agent caches only the KEK (not an open database), so direct access keeps working between requests; it auto-locks after an idle period and zeros the KEK on stop/idle/signal. `tvault hook <bash|zsh|fish|direnv>` prints a shell snippet (tvault_load) for loading a project's secrets via the agent. Unix only; on Windows the command reports it is unsupported.",
 			},
+
 			{
 				Name:        "secret-versioning",
 				Summary:     "Every overwrite archives the prior value; inspect history and roll back.",
 				Commands:    []string{"tvault history <key>", "tvault get <key> --version N", "tvault rollback <key> --to N"},
 				SeeAlso:     []string{"tvault docs versioning"},
 				Description: "Each `set` archives the prior value as a version in the secret_versions bucket. `tvault history` lists every version (metadata only — no values, no unlock); `tvault get --version N` prints a past value; `tvault rollback --to N` restores an earlier version as a NEW version (non-destructive — the replaced value is itself archived, and version numbers are never reused). History is encrypted with the project DEK, so it survives passphrase rotation and recipient revocation (the DEK rotates and every version is re-encrypted). `tvault delete` purges a key's history. Over MCP, vault_secret_history and vault_rollback_secret expose the same — neither ever returns a value.",
+			},
+			{
+				Name:        "codemap-integration",
+				Summary:     "Strictly value-free MCP surface for codemap: rotation blast radius, least-privilege seals, private-registry LSP creds, env-var audit, credential freshness.",
+				Commands:    []string{"tvault mcp"},
+				SeeAlso:     []string{"tvault docs codemap", "tvault docs mcp"},
+				Description: "Five integrations with codemap (a local code-graph indexer), all backed by existing MCP tools — no functional code changes were needed. Only key names, metadata, audit rows, and recipients cross the seam; codemap NEVER ingests secret values. (A) rotation blast radius via vault_list_secrets_by_prefix + vault_search_secrets; (B) private-registry LSP creds via vault_run_with_secrets with secrets[] allowlist; (C) env-var audit via vault_list_secrets_global; (D) credential freshness via vault_secret_history + vault_audit_log_since; (E) least-privilege seal scope via vault_seal_for_recipients/vault_export_env/vault_export_env_encrypted with keys[] filter. Integration tests: internal/mcp/codemap_integration_test.go.",
 			},
 		},
 		Topics: []docsTopic{
@@ -437,11 +454,18 @@ func fullCatalog() docsCatalog {
 				Description: "Five-line getting-started.",
 				Example:     "  tvault init\n  tvault set DATABASE_URL \"postgres://...\"\n  tvault run -- npm start\n  tvault encrypt-env --in .env       # commit .env.encrypted\n  tvault mcp                         # for AI agents",
 			},
+
 			{
 				Slug:        "studio",
 				Title:       "tvault studio",
 				Description: "Launches a full-screen terminal UI for browsing the vault, read-only by default (aliases: browse, ui). Four panes — status, projects, secrets, audit — with vim/arrow/mouse-wheel navigation and a live key filter. Press 'r' to reveal the selected value (warm-orange = a secret is showing), 'esc' to re-mask; revealed values live only in memory and are wiped on esc, pane change, and quit. The vault can be browsed (metadata only) while locked; press 'u' to unlock in-app. Pass --rw to enable audited in-app new/edit/delete (n/e/d), using the same encryption path as the CLI. Built on Bubble Tea v2 / Lip Gloss v2.",
 				Example:     "  tvault studio\n  tvault studio --rw                 # enable in-app new/edit/delete\n  tvault studio webapp               # open a specific project\n  tvault studio --single-pane        # small terminals\n  tvault studio --no-anim            # disable animations (SSH/screen-reader friendly)",
+			},
+			{
+				Slug:        "codemap",
+				Title:       "Codemap integration",
+				Description: "TinyVault exposes a strictly value-free MCP surface for codemap (a local code-graph indexer). Codemap knows where in the code a secret is used; TinyVault knows which secrets exist and their lineage. Only key names, metadata, audit rows, and recipient strings cross the seam — codemap NEVER ingests secret values. Five integrations: (A) rotation blast radius — vault_list_secrets_by_prefix + vault_search_secrets; (B) private-registry LSP creds — vault_run_with_secrets with secrets[] allowlist; (C) env-var audit — vault_list_secrets_global; (D) credential freshness — vault_secret_history + vault_audit_log_since; (E) least-privilege seal — vault_seal_for_recipients/vault_export_env/vault_export_env_encrypted with keys[] filter. All are backed by existing tools and covered by integration tests (internal/mcp/codemap_integration_test.go).",
+				Example:     "  # A: list STRIPE_ keys (value-free)\n  # B: codemap index --via-vault payments  (wraps vault_run_with_secrets)\n  # E: seal only required keys derived from call graph\n  tvault mcp   # expose all codemap-facing tools to the MCP host",
 			},
 		},
 	}

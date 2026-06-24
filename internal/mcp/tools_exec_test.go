@@ -34,7 +34,10 @@ func TestRunWithSecrets_PrefixAndOnly(t *testing.T) {
 	defer cs.Close()
 
 	// List which of our candidate keys are present in the child env, by name.
-	const listNames = `printenv | sed 's/=.*//' | grep -E '^(NUXT_A|NUXT_B|DB_URL|API_KEY)$' | sort | tr '\n' ' '`
+	// We use a for-loop + test -n rather than printenv | grep to avoid
+	// grep emitting ANSI color codes when GREP_COLORS is set in the
+	// environment (macOS default in some shells).
+	const listNames = `for k in NUXT_A NUXT_B DB_URL API_KEY; do if [ -n "${!k}" ]; then echo "$k"; fi; done | sort`
 
 	run := func(args map[string]any) []string {
 		t.Helper()

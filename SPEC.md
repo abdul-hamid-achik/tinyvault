@@ -462,6 +462,33 @@ Semantics: `deny_*` is checked first, then `allow_*`. Empty `allow_*` means
 "allow everything not denied." `access_mode: full` is the only mode that
 permits `vault_run_with_secrets`.
 
+### 4.5 Codemap integration surface
+
+TinyVault exposes a set of MCP tools that enable a **strictly value-free**
+integration with [codemap](https://github.com/abdul-hamid-achik/codemap) — a
+local code-graph indexer. Codemap knows *where in the code* a secret is used;
+TinyVault knows *which* secrets exist and their lineage. Only key names,
+metadata, audit rows, and recipient strings ever cross the seam. See
+the codemap integration design doc for the full design.
+
+Five integrations are supported, all backed by existing MCP tools:
+
+| Integration | Purpose | TinyVault MCP tools |
+|-------------|---------|---------------------|
+| A — rotation blast radius | "If I rotate `STRIPE_KEY`, what code and tests does it touch?" | `vault_list_secrets_by_prefix`, `vault_search_secrets` |
+| B — private-registry LSP creds | `codemap index --via-vault` injects registry tokens into gopls/pyright/ts-ls | `vault_run_with_secrets` (with `secrets[]` allowlist) |
+| C — env-var audit | Diff referenced env keys vs vault keys → missing / orphan / matched | `vault_list_secrets_global` |
+| D — credential freshness | Pin last-rotated timestamps + version numbers as codemap annotations | `vault_secret_history`, `vault_audit_log_since` |
+| E — least-privilege seal | Derive `required_keys` from call graph, seal only those keys | `vault_seal_for_recipients`, `vault_export_env`, `vault_export_env_encrypted` (all with `keys[]`) |
+
+The `keys[]` allow-list filter on seal/export tools (`selectSealKeys` in
+`internal/mcp/tools_seal.go:114-133`) enables integration E: codemap derives
+the required key subset from `codemap_callees`, then passes it as `keys[]` to
+produce a least-privilege credential bundle.
+
+Integration tests covering all five workflows live in
+`internal/mcp/codemap_integration_test.go`.
+
 ---
 
 ## 5. CLI surface
