@@ -65,7 +65,7 @@ frame the flagship as **"candidate usage + impact (precise requires the extracto
     treating as dead)"** — never "rotate-safe" (dynamic `os.Getenv(prefix+name)` is invisible to the scan).
   - **CUT `unmanaged_keys` from v1** — it needs the inverse (enumerate all env-reads), which doesn't exist
     until Slice 5; a false "unmanaged" is worse than none.
-- [ ] **EI.13 (least-priv seal), read-side** — `codemap callees <entrypoint> --keys` → `required_keys[]`
+- [x] **EI.13 (least-priv seal), read-side** — DONE (codemap) — `codemap callees <entrypoint> --keys` → `required_keys[]`
   for `vault_seal_for_recipients` / `vault_export_env{keys}` / `tvault seal --key` (all filter + error
   loudly on a typo'd key — tinyvault side verified done). **Rides Slice 2's scanner** (required_keys = keys
   read by the transitive callee set), so it is NOT in the zero-new-code first slice. CLI `tvault export` has
