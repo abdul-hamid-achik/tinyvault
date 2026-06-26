@@ -18,20 +18,25 @@ import (
 // (total secrets, last write) are derived in the model from the loaded
 // project snapshots, keeping a single source of truth.
 type statusData struct {
-	path           string
-	unlocked       bool
-	currentProject string
-	projectCount   int
-	vaultID        string
-	createdAt      string
+	path            string
+	unlocked        bool
+	currentProject  string
+	projectCount    int
+	vaultID         string
+	createdAt       string
+	envGroup        string // env group name if the current project is in one
+	envName         string // environment name within the group
+	envInheritsFrom string // base env if inheritance is configured
 }
 
 // loadStatus reads vault status + the current project name. It never
-// requires the vault to be unlocked.
+// requires the vault to be unlocked. If the current project is part of an
+// environment group, the group name, environment name, and inheritance
+// base are populated.
 func loadStatus(v *vault.Vault) statusData {
 	st := v.Status()
 	cur, _ := v.GetCurrentProject() //nolint:errcheck // empty string is a fine default
-	return statusData{
+	sd := statusData{
 		path:           st.Path,
 		unlocked:       st.IsUnlocked,
 		currentProject: cur,
@@ -39,6 +44,23 @@ func loadStatus(v *vault.Vault) statusData {
 		vaultID:        st.VaultID,
 		createdAt:      st.CreatedAt,
 	}
+	// Look up env group membership for the current project.
+	groups, _ := v.ListEnvGroups() //nolint:errcheck // best-effort; empty is fine
+	for _, g := range groups {
+		for _, e := range g.Environments {
+			if e.Project == cur {
+				sd.envGroup = g.Name
+				sd.envName = e.Name
+				if g.Inheritance != nil {
+					if inh, ok := g.Inheritance[e.Name]; ok {
+						sd.envInheritsFrom = inh.From
+					}
+				}
+				return sd
+			}
+		}
+	}
+	return sd
 }
 
 // loadProjects returns one snapshot per project (name + secret count +

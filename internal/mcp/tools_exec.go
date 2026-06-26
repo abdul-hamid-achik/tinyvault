@@ -19,6 +19,8 @@ type runWithSecretsInput struct {
 	Secrets        []string `json:"secrets,omitempty" jsonschema:"Specific secret keys to inject. If omitted all project secrets are injected."`
 	Prefix         string   `json:"prefix,omitempty" jsonschema:"Inject only secret keys with this prefix (least privilege). Combined with 'secrets' as a union."`
 	TimeoutSeconds int      `json:"timeout_seconds,omitempty" jsonschema:"Maximum execution time in seconds. Default: 300."`
+	Group          string   `json:"group,omitempty" jsonschema:"Environment group name. When set with env, resolves secrets through the inheritance chain."`
+	Env            string   `json:"env,omitempty" jsonschema:"Environment name within the group (requires group)."`
 }
 
 type runResult struct {
@@ -63,6 +65,7 @@ func (s *VaultMCPServer) registerExecTools() {
 	}, s.handleRunWithSecrets)
 }
 
+//nolint:gocognit,gocyclo // group/env resolution + exec + redaction branching
 func (s *VaultMCPServer) handleRunWithSecrets(ctx context.Context, _ *sdkmcp.CallToolRequest, input runWithSecretsInput) (*sdkmcp.CallToolResult, runResult, error) {
 	if !s.policy.CanExec() {
 		return nil, runResult{}, fmt.Errorf("command execution is not allowed by policy")
@@ -73,9 +76,31 @@ func (s *VaultMCPServer) handleRunWithSecrets(ctx context.Context, _ *sdkmcp.Cal
 		return nil, runResult{}, fmt.Errorf("project %q is not allowed by policy", project)
 	}
 
-	allSecrets, err := s.vault.GetAllSecrets(project)
-	if err != nil {
-		return nil, runResult{}, fmt.Errorf("get secrets: %w", err)
+	var allSecrets map[string]string
+	var err error
+	if input.Group != "" && input.Env != "" {
+		// Resolution through environment group inheritance.
+		group, gErr := s.vault.GetEnvGroup(input.Group)
+		if gErr != nil {
+			return nil, runResult{}, fmt.Errorf("group: %w", gErr)
+		}
+		childProject, pErr := resolveEnvProject(group, input.Env)
+		if pErr != nil {
+			return nil, runResult{}, pErr
+		}
+		if !s.policy.CanAccessProject(childProject) {
+			return nil, runResult{}, fmt.Errorf("project %q is not allowed by policy", childProject)
+		}
+		project = childProject
+		allSecrets, err = resolveAllWithInheritanceMCP(s.vault, group, input.Env, childProject)
+		if err != nil {
+			return nil, runResult{}, fmt.Errorf("resolve secrets: %w", err)
+		}
+	} else {
+		allSecrets, err = s.vault.GetAllSecrets(project)
+		if err != nil {
+			return nil, runResult{}, fmt.Errorf("get secrets: %w", err)
+		}
 	}
 
 	secrets, err := filterExecSecrets(allSecrets, input.Secrets, input.Prefix, project)

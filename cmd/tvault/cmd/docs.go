@@ -275,7 +275,7 @@ func fullCatalog() docsCatalog {
 			},
 			{
 				Name:        "mcp",
-				Summary:     "MCP server over stdio with 36 tools, 2 prompts, 3 resources.",
+				Summary:     "MCP server over stdio with 49 tools, 2 prompts, 3 resources.",
 				Commands:    []string{"tvault mcp", "tvault mcp-server"},
 				Description: "Agents can manage secrets without the values ever entering the model context: vault_run_with_secrets injects env vars, vault_export_env writes to disk and returns the path, vault_generate_secret returns only {stored: true}. (`mcp-server` remains a backward-compatible alias.)",
 			},
@@ -381,6 +381,13 @@ func fullCatalog() docsCatalog {
 				Commands:    []string{"tvault mcp"},
 				SeeAlso:     []string{"tvault docs codemap", "tvault docs mcp"},
 				Description: "Five integrations with codemap (a local code-graph indexer), all backed by existing MCP tools — no functional code changes were needed. Only key names, metadata, audit rows, and recipients cross the seam; codemap NEVER ingests secret values. (A) rotation blast radius via vault_list_secrets_by_prefix + vault_search_secrets; (B) private-registry LSP creds via vault_run_with_secrets with secrets[] allowlist; (C) env-var audit via vault_list_secrets_global; (D) credential freshness via vault_secret_history + vault_audit_log_since; (E) least-privilege seal scope via vault_seal_for_recipients/vault_export_env/vault_export_env_encrypted with keys[] filter. Integration tests: internal/mcp/codemap_integration_test.go.",
+			},
+			{
+				Name:        "environment-profiles",
+				Summary:     "Link projects as environments of the same application; detect key drift, promote values, and seal all envs in one blob.",
+				Commands:    []string{"tvault env group create", "tvault env diff <group>", "tvault env promote --group <g> --from <env> --to <env>", "tvault env seal --group <g> --recipient tvault1…", "tvault env inherit --group <g> --env <child> --from <base>", "tvault env pin <key> --group <g> --env <child>", "tvault env inherited --group <g> --env <child>"},
+				SeeAlso:     []string{"tvault docs encrypted-env", "tvault docs secret-sharing"},
+				Description: "Environment groups are pure metadata linking projects that represent environments of the same app (production, preview, staging). Groups do NOT introduce a new key tier or change isolation — each project keeps its own DEK. (1) Drift detection: `tvault env diff <group>` reports missing/extra keys across environments. (2) Promote: copy a value from one env to another (decrypt from source DEK, re-encrypt into target DEK, new version archived). (3) Sealed-profile bundles: `tvault env seal` packages all envs into one v2 .env.encrypted blob with section headers; `decrypt-env --section <env>` extracts one env. (4) Inheritance: a child env resolves missing keys from the base at read time (get/run/env with --group/--env); `pin` copies a resolved value into the child to break inheritance per-key. Over MCP: vault_env_group_create/list, vault_env_diff, vault_env_promote, vault_env_seal, vault_env_inherit, vault_env_inherited — none ever return secret values.",
 			},
 		},
 		Topics: []docsTopic{

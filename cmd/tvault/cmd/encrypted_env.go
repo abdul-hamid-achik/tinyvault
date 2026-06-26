@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -16,6 +17,7 @@ var (
 	envEncryptOut        string
 	envEncryptRecipients []string
 	envDecryptIdentity   string
+	envDecryptSection    string
 )
 
 var envEncryptCmd = &cobra.Command{
@@ -81,6 +83,8 @@ func init() {
 		"X25519 recipient (tvault1…); repeatable. Produces a commit-safe v2 file that does NOT need the passphrase")
 	envDecryptCmd.Flags().StringVar(&envDecryptIdentity, "identity", "",
 		"Decrypt a recipient-encrypted (v2) file with this identity instead of the passphrase")
+	envDecryptCmd.Flags().StringVar(&envDecryptSection, "section", "",
+		"Extract only one environment section from a multi-environment sealed blob (e.g. preview)")
 }
 
 func runEnvEncrypt(_ *cobra.Command, _ []string) error {
@@ -180,6 +184,11 @@ func runEnvDecrypt(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("decrypt: %w", err)
 	}
 
+	// If --section is specified, extract only that section from the plaintext.
+	if envDecryptSection != "" {
+		plaintext = extractEnvSection(plaintext, envDecryptSection)
+	}
+
 	if envEncryptOut == "" {
 		_, err := os.Stdout.Write(plaintext)
 		return err
@@ -196,6 +205,50 @@ func readInput(path string) ([]byte, error) {
 		return os.ReadFile("/dev/stdin")
 	}
 	return os.ReadFile(path)
+}
+
+// extractEnvSection extracts the lines between "--- tvault-env:<section> ---"
+// and the next "--- tvault-env:" (or "--- end ---") marker from decrypted
+// multi-section plaintext. If no section markers are found, the full plaintext
+// is returned unchanged (backward compatible with non-sectioned v2 files).
+func extractEnvSection(plaintext []byte, section string) []byte {
+	text := string(plaintext)
+	startMarker := fmt.Sprintf("--- tvault-env:%s ---", section)
+	prefix := "--- tvault-env:"
+	endMarker := "--- end ---"
+
+	startIdx := strings.Index(text, startMarker)
+	if startIdx < 0 {
+		// No section markers at all — return the full plaintext (backward compat).
+		return plaintext
+	}
+	// Move past the start marker + newline.
+	lineStart := startIdx + len(startMarker)
+	if lineStart < len(text) && text[lineStart] == '\n' {
+		lineStart++
+	}
+
+	// Find the next marker (either another --- tvault-env: or --- end ---).
+	rest := text[lineStart:]
+	nextSection := strings.Index(rest, prefix)
+	endSection := strings.Index(rest, endMarker)
+
+	var endIdx int
+	switch {
+	case nextSection >= 0 && endSection >= 0:
+		endIdx = min(nextSection, endSection)
+	case nextSection >= 0:
+		endIdx = nextSection
+	case endSection >= 0:
+		endIdx = endSection
+	default:
+		// No end marker found — take the rest.
+		return []byte(strings.TrimSpace(rest))
+	}
+
+	// Trim trailing newline before the marker.
+	result := rest[:endIdx]
+	return []byte(strings.TrimRight(result, "\n"))
 }
 
 func zeroBytes(b []byte) {

@@ -17,6 +17,8 @@ type exportEnvInput struct {
 	Format     string   `json:"format,omitempty" jsonschema:"Output format: dotenv json or shell. Default: dotenv."`
 	OutputPath string   `json:"output_path,omitempty" jsonschema:"File path to write to. Default: .env"`
 	Keys       []string `json:"keys,omitempty" jsonschema:"Specific secret keys to export. If omitted exports all."`
+	Group      string   `json:"group,omitempty" jsonschema:"Environment group name. When set with env, resolves secrets through the inheritance chain."`
+	Env        string   `json:"env,omitempty" jsonschema:"Environment name within the group (requires group)."`
 }
 
 type exportEnvOutput struct {
@@ -41,9 +43,31 @@ func (s *VaultMCPServer) handleExportEnv(_ context.Context, _ *sdkmcp.CallToolRe
 		return nil, exportEnvOutput{}, fmt.Errorf("project %q is not allowed by policy", project)
 	}
 
-	allSecrets, err := s.vault.GetAllSecrets(project)
-	if err != nil {
-		return nil, exportEnvOutput{}, fmt.Errorf("get secrets: %w", err)
+	var allSecrets map[string]string
+	var err error
+	if input.Group != "" && input.Env != "" {
+		// Resolution through environment group inheritance.
+		group, gErr := s.vault.GetEnvGroup(input.Group)
+		if gErr != nil {
+			return nil, exportEnvOutput{}, fmt.Errorf("group: %w", gErr)
+		}
+		childProject, pErr := resolveEnvProject(group, input.Env)
+		if pErr != nil {
+			return nil, exportEnvOutput{}, pErr
+		}
+		if !s.policy.CanAccessProject(childProject) {
+			return nil, exportEnvOutput{}, fmt.Errorf("project %q is not allowed by policy", childProject)
+		}
+		project = childProject
+		allSecrets, err = resolveAllWithInheritanceMCP(s.vault, group, input.Env, childProject)
+		if err != nil {
+			return nil, exportEnvOutput{}, fmt.Errorf("resolve secrets: %w", err)
+		}
+	} else {
+		allSecrets, err = s.vault.GetAllSecrets(project)
+		if err != nil {
+			return nil, exportEnvOutput{}, fmt.Errorf("get secrets: %w", err)
+		}
 	}
 
 	// Filter to requested keys if specified.

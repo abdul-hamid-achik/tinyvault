@@ -1,0 +1,91 @@
+version: 1
+name: tvault_studio_env_group
+
+intent: |
+  A user opens `tvault studio` against a vault where the current project
+  is part of an environment group. The status pane should show the env
+  group name and environment name alongside the usual lock/project info.
+  This verifies the studio TUI displays env profile metadata.
+
+target:
+  cmd: ["./bin/tvault", "studio", "--no-anim"]
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/vault"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 15000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/vault"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/vault TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/vault TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create liftclub"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/vault TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create liftclub-preview"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/vault TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DATABASE_URL postgres://prod -p liftclub"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/vault TVAULT_PASSPHRASE=glyphpass ./bin/tvault set STRIPE_KEY sk_prod -p liftclub"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/vault TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DATABASE_URL postgres://preview -p liftclub-preview"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/vault TVAULT_PASSPHRASE=glyphpass ./bin/tvault use liftclub-preview"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/vault TVAULT_PASSPHRASE=glyphpass ./bin/tvault env group create liftclub --env production=liftclub --env preview=liftclub-preview"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/vault TVAULT_PASSPHRASE=glyphpass ./bin/tvault env inherit --group liftclub --env preview --from production"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "unlocked"
+      timeoutMs: 6000
+  - wait:
+      screen:
+        contains: "env-group"
+      timeoutMs: 5000
+  - snapshot: status_with_env_group
+  - wait:
+      screen:
+        contains: "preview"
+      timeoutMs: 3000
+  - snapshot: shows_env_name
+  # The inheritance arrow should be visible
+  - wait:
+      screen:
+        contains: "production"
+      timeoutMs: 3000
+  - snapshot: shows_inheritance
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  - id: clean_exit
+    description: studio exits cleanly with status 0
+    verify:
+      process:
+        exitCode: 0
+  - id: shows_env_group
+    description: status pane shows the env group name
+    verify:
+      screen:
+        contains: "env-group"
+  - id: shows_inheritance
+    description: status pane shows the inheritance relationship
+    verify:
+      screen:
+        contains: "preview"

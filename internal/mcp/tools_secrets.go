@@ -27,12 +27,15 @@ type listSecretsOutput struct {
 type getSecretInput struct {
 	Project string `json:"project,omitempty" jsonschema:"Project name. If omitted uses the current project."`
 	Key     string `json:"key" jsonschema:"The secret key to retrieve."`
+	Group   string `json:"group,omitempty" jsonschema:"Environment group name. When set with env, resolves through the inheritance chain."`
+	Env     string `json:"env,omitempty" jsonschema:"Environment name within the group (requires group)."`
 }
 
 type getSecretOutput struct {
 	Key     string `json:"key"`
 	Value   string `json:"value"`
 	Warning string `json:"warning"`
+	Source  string `json:"source,omitempty"`
 }
 
 // --- vault_set_secret ---
@@ -110,6 +113,39 @@ func (s *VaultMCPServer) handleListSecrets(_ context.Context, _ *sdkmcp.CallTool
 }
 
 func (s *VaultMCPServer) handleGetSecret(_ context.Context, _ *sdkmcp.CallToolRequest, input getSecretInput) (*sdkmcp.CallToolResult, getSecretOutput, error) {
+	// Resolution through environment group inheritance.
+	if input.Group != "" && input.Env != "" {
+		group, err := s.vault.GetEnvGroup(input.Group)
+		if err != nil {
+			return nil, getSecretOutput{}, fmt.Errorf("group: %w", err)
+		}
+		// Policy: check the child project.
+		childProject, err := resolveEnvProject(group, input.Env)
+		if err != nil {
+			return nil, getSecretOutput{}, err
+		}
+		if !s.policy.CanAccessProject(childProject) {
+			return nil, getSecretOutput{}, fmt.Errorf("project %q is not allowed by policy", childProject)
+		}
+		if !s.policy.CanAccessSecret(input.Key) {
+			return nil, getSecretOutput{}, fmt.Errorf("secret %q is not allowed by policy", input.Key)
+		}
+
+		value, source, err := s.vault.ResolveKey(input.Group, input.Env, input.Key)
+		if err != nil {
+			return nil, getSecretOutput{}, fmt.Errorf("resolve secret: %w", err)
+		}
+
+		s.audit("secret.read", "secret", input.Key, map[string]any{"group": input.Group, "env": input.Env, "source": source})
+
+		return nil, getSecretOutput{
+			Key:     input.Key,
+			Value:   value,
+			Warning: "This value is now part of the AI conversation context.",
+			Source:  source,
+		}, nil
+	}
+
 	project := s.resolveProject(input.Project)
 	if !s.policy.CanAccessProject(project) {
 		return nil, getSecretOutput{}, fmt.Errorf("project %q is not allowed by policy", project)

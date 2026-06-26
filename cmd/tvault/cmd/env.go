@@ -21,6 +21,8 @@ var (
 	envK8sNs       string
 	envIdentity    string
 	envPulumiStack string
+	envGroupFlag   string
+	envEnvFlag     string
 )
 
 var envCmd = &cobra.Command{
@@ -49,6 +51,8 @@ func init() {
 	envCmd.Flags().StringVar(&envK8sNs, "namespace", "default", "Kubernetes namespace (k8s-secret format)")
 	envCmd.Flags().StringVar(&envIdentity, "identity", "", "Decrypt a shared project with this X25519 identity instead of the passphrase")
 	envCmd.Flags().StringVar(&envPulumiStack, "stack", "", "Pulumi stack to target (pulumi-config format; optional)")
+	envCmd.Flags().StringVar(&envGroupFlag, "group", "", "Resolve secrets through an environment group's inheritance chain")
+	envCmd.Flags().StringVar(&envEnvFlag, "env", "", "Environment name within the group (requires --group)")
 }
 
 // envSecrets returns the project's decrypted secrets, either via the
@@ -56,6 +60,20 @@ func init() {
 // or the TVAULT_IDENTITY_KEY environment variable), via a shared X25519
 // identity (recipient read — no passphrase, no unlock).
 func envSecrets() (map[string]string, error) {
+	// Resolution through environment group inheritance.
+	if envGroupFlag != "" && envEnvFlag != "" {
+		v, err := openAndUnlockVault()
+		if err != nil {
+			return nil, err
+		}
+		defer v.Close()
+		secrets, _, err := resolveAllWithInheritance(v, envGroupFlag, envEnvFlag)
+		if err != nil {
+			return nil, err
+		}
+		return secrets, nil
+	}
+
 	// The recipient path is opt-in only: a stray ~/.tvault/identities/default.key
 	// must not silently divert a plain `tvault env` away from the passphrase.
 	if envIdentity != "" || strings.TrimSpace(os.Getenv(envIdentityKey)) != "" {

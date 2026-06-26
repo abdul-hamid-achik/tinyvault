@@ -2,6 +2,8 @@ package studio
 
 import (
 	"testing"
+
+	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
 )
 
 func TestLoadStatus(t *testing.T) {
@@ -19,10 +21,51 @@ func TestLoadStatus(t *testing.T) {
 	if st.vaultID == "" {
 		t.Error("vaultID should be set")
 	}
+	// No env group configured → envGroup should be empty.
+	if st.envGroup != "" {
+		t.Errorf("envGroup = %q, want empty", st.envGroup)
+	}
 
 	v.Lock()
 	if loadStatus(v).unlocked {
 		t.Error("locked vault should report locked")
+	}
+}
+
+func TestLoadStatus_WithEnvGroup(t *testing.T) {
+	v := newScratchVault(t)
+
+	// Create a second project and link both into a group.
+	if _, err := v.CreateProject("webapp-preview", ""); err != nil {
+		t.Fatalf("create webapp-preview: %v", err)
+	}
+	_, err := v.CreateEnvGroup("webapp", "WebApp envs", []vault.EnvGroupEntry{
+		{Name: "production", Project: "webapp"},
+		{Name: "preview", Project: "webapp-preview"},
+	}, false)
+	if err != nil {
+		t.Fatalf("create env group: %v", err)
+	}
+
+	// Set up inheritance.
+	if _, err := v.SetInheritance("webapp", "preview", "production"); err != nil {
+		t.Fatalf("set inheritance: %v", err)
+	}
+
+	// Switch to the preview project.
+	if err := v.SetCurrentProject("webapp-preview"); err != nil {
+		t.Fatalf("set current: %v", err)
+	}
+
+	st := loadStatus(v)
+	if st.envGroup != "webapp" {
+		t.Errorf("envGroup = %q, want webapp", st.envGroup)
+	}
+	if st.envName != "preview" {
+		t.Errorf("envName = %q, want preview", st.envName)
+	}
+	if st.envInheritsFrom != "production" {
+		t.Errorf("envInheritsFrom = %q, want production", st.envInheritsFrom)
 	}
 }
 

@@ -327,6 +327,14 @@ func (m Model) statusBody(w, _ int) []string {
 		kv(m.styles, "updated", humanizeSince(m.lastWrite()), w),
 		kv(m.styles, "vault", vid, w),
 	}
+	if m.status.envGroup != "" {
+		rows = append(rows, kv(m.styles, "env-group", m.status.envGroup, w))
+		envDetail := m.status.envName
+		if m.status.envInheritsFrom != "" {
+			envDetail += " ← " + m.status.envInheritsFrom
+		}
+		rows = append(rows, kv(m.styles, "env", envDetail, w))
+	}
 	return rows
 }
 

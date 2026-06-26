@@ -20,6 +20,8 @@ var (
 	runEnvNoVault bool
 	runOnly       []string
 	runPrefix     string
+	runGroup      string
+	runEnvName    string
 )
 
 var runCmd = &cobra.Command{
@@ -61,6 +63,8 @@ func init() {
 	runCmd.Flags().BoolVar(&runEnvNoVault, "no-vault", false, "Do not load vault secrets; only use --env-file values")
 	runCmd.Flags().StringSliceVar(&runOnly, "only", nil, "Inject only these secret keys (comma-separated allowlist)")
 	runCmd.Flags().StringVar(&runPrefix, "prefix", "", "Inject only secret keys with this prefix")
+	runCmd.Flags().StringVar(&runGroup, "group", "", "Resolve secrets through an environment group's inheritance chain")
+	runCmd.Flags().StringVar(&runEnvName, "env", "", "Environment name within the group (requires --group)")
 }
 
 func runRun(cmd *cobra.Command, args []string) error {
@@ -83,8 +87,19 @@ func runRun(cmd *cobra.Command, args []string) error {
 	var vaultSecrets map[string]string
 	var project string
 	if !runEnvNoVault {
-		// Fast path: a running agent serves the project's secrets prompt-free.
-		if secrets, resolved, ok := agentAllSecrets(projectName); ok {
+		if runGroup != "" && runEnvName != "" {
+			// Resolution through environment group inheritance.
+			v, err := openAndUnlockVault()
+			if err != nil {
+				return err
+			}
+			defer v.Close()
+			vaultSecrets, project, err = resolveAllWithInheritance(v, runGroup, runEnvName)
+			if err != nil {
+				return fmt.Errorf("failed to resolve secrets: %w", err)
+			}
+		} else if secrets, resolved, ok := agentAllSecrets(projectName); ok {
+			// Fast path: a running agent serves the project's secrets prompt-free.
 			vaultSecrets, project = secrets, resolved
 		} else {
 			v, err := openAndUnlockVault()

@@ -72,6 +72,7 @@ cmd/tvault/
     project_share.go         # tvault projects share/unshare/recipients (Spine A)
     gitfilter.go             # tvault git-filter install/track/status/checkout + clean/smudge (Spine A)
     k8s.go                   # tvault seal --format k8s + tvault k8s render (commit-safe SealedSecret — Spine A)
+    env_group.go             # tvault env group/diff/promote/inherit/pin/unpin/inherited/seal (environment profiles)
     json_helper.go           # writeJSON(): shared --json encoder
     docs.go                  # tvault docs (machine-readable feature manifest)
     projects.go / use.go     # tvault projects list/create / tvault use PROJECT
@@ -131,10 +132,14 @@ internal/
                              # SearchProjects, ListAudit, SnapshotProjects)
     sharing.go               # ShareProject/UnshareProject (DEK re-key on revoke),
                              # GetAllSecretsWithIdentity (recipient read) — Spine A
+    envgroup.go              # Environment groups: EnvGroup CRUD, DiffEnvironments,
+                             # Promote, SetInheritance, ResolveKey, PinKey/UnpinKey,
+                             # ListInherited — environment profiles feature
     errors.go                # Sentinel errors (ErrLocked, ErrWrongPassphrase, etc.)
     vault_test.go            # Vault lifecycle tests
     query_test.go            # Relational query tests
     encrypted_env_test.go    # End-to-end encrypted .env round-trip via vault
+    envgroup_test.go         # Environment group + drift + promote + inheritance tests
   identity/
     identity.go              # X25519 identity key files: New/List/Load/File/Dir (single source of truth for CLI + MCP)
     identity_test.go         # New/List/Load round-trip + name validation
@@ -154,6 +159,8 @@ internal/
     tools_sharing.go         # vault_share/unshare_project, vault_project_recipients
     tools_dotenv.go          # vault_diff_env, vault_sync_env, vault_export_env_encrypted
     tools_identity.go        # vault_identity_new, vault_identity_list (public recipient only)
+    tools_env_groups.go      # vault_env_group_create/list, vault_env_diff, vault_env_promote,
+                             # vault_env_seal, vault_env_inherit, vault_env_inherited (environment profiles)
     config.go                # AccessPolicy, LoadPolicy, allow/deny pattern matching
     redact.go                # redactSecrets() replaces values with [REDACTED:KEY]
     prompts.go               # MCP prompts (setup-project, inject-secrets)

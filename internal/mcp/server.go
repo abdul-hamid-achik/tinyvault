@@ -106,6 +106,7 @@ func newVaultMCPServer(policy *AccessPolicy) *VaultMCPServer {
 	s.registerSharingTools()
 	s.registerDotenvTools()
 	s.registerIdentityTools()
+	s.registerEnvGroupTools()
 	s.registerResources()
 	s.registerPrompts()
 
