@@ -46,6 +46,10 @@ agent-facing workflow guide.
 | `studio_rw_edit.yml`       | `--rw`: create (`n`) then delete (`d`/`y`) a secret through the real vault |
 | `studio_edit_existing.yml` | `--rw`: `e` edits an existing value; the new value reveals |
 | `studio_delete_cancel.yml` | `--rw`: `d` then `esc` cancels — the secret survives |
+| `studio_env_group.yml`     | status pane shows env group name + inheritance arrow |
+| `studio_cycle_env.yml`     | `g` cycles envs; `←` inherited marker; project pane env annotations |
+| `studio_drift_overlay.yml` | `D` shows env drift table; `esc` closes |
+| `studio_groups_overlay.yml` | `G` lists all env groups with environments + inheritance; `esc` closes |
 | `studio_help.yml`          | `?` opens the help overlay, `esc` closes it |
 | `studio_too_small.yml`     | a sub-minimum terminal shows the "terminal too small" guard |
 | `studio_quit_ctrlc.yml`    | `ctrl+c` quits cleanly (exit 0), like `q` |

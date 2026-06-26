@@ -40,6 +40,14 @@ in-app edits (new / edit / delete).
 - ` + "`R`" + ` — reveal every value in the pane
 - ` + "`esc`" + ` — re-mask everything (also clears on pane change & quit)
 - ` + "`c`" + ` — copy the selected value to the clipboard
+- ` + "`←`" + ` — before a key = inherited from a base env (see groups)
+
+**Environment groups**
+
+- ` + "`g`" + ` — cycle to the next environment in the current project's group
+- ` + "`D`" + ` — show env drift (key-set diff across all environments)
+- ` + "`G`" + ` — list all env groups (environments, inheritance, projects)
+- ` + "`◈`" + ` — before a key = pinned (local value, inheritance broken for this key)
 
 **Edit** (only with ` + "`--rw`" + `)
 

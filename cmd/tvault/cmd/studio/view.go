@@ -52,6 +52,10 @@ func (m Model) View() tea.View {
 		middle = m.renderEditOverlay(bodyH)
 	case modeConfirmDel:
 		middle = m.renderConfirmOverlay(bodyH)
+	case modeDrift:
+		middle = m.renderDriftOverlay(bodyH)
+	case modeGroups:
+		middle = m.renderGroupsOverlay(bodyH)
 	default:
 		middle = m.renderBody(m.width, bodyH)
 	}
@@ -149,9 +153,9 @@ func (m Model) activeHint() string {
 			return "secrets — locked; press u to unlock, then r to reveal"
 		}
 		if m.rw {
-			return "secrets — r reveal · c copy · n new · e edit · d delete · / filter"
+			return "secrets — r reveal · c copy · n new · e edit · d delete · g cycle env · / filter"
 		}
-		return "secrets — r reveal · R reveal all · c copy · / filter"
+		return "secrets — r reveal · R reveal all · c copy · g cycle env · D drift · G groups · / filter"
 	case paneAudit:
 		return "audit — most recent activity (newest first)"
 	default:
@@ -348,9 +352,12 @@ func (m Model) projectsBody(w, h int, focused bool) []string {
 		return []string{m.styles.muted.Render("no projects")}
 	}
 	start, end := scrollWindow(len(m.projects), h, m.projCursor)
-	nameW := w - 2 - 4 // marker(2) + count budget(up to 4)
+	// marker(2) + count budget(up to 4) + env tag budget
+	envTagW := 10
+	nameW := w - 2 - 4 - envTagW
 	if nameW < 1 {
-		nameW = 1
+		nameW = maxInt(1, w-2-4)
+		envTagW = 0
 	}
 	out := make([]string, 0, end-start)
 	for i := start; i < end; i++ {
@@ -363,9 +370,20 @@ func (m Model) projectsBody(w, h int, focused bool) []string {
 		name := padRight(truncate(p.Name, nameW), nameW)
 		countTxt := fmt.Sprintf("%d", p.SecretCount)
 
+		// Env-group annotation: show env name if the project is in a group.
+		envTxt := ""
+		if em, ok := m.envMembershipFor(p.Name); ok && envTagW > 0 {
+			envTxt = m.styles.muted.Render(padRight("·"+em.env, envTagW))
+		} else if envTagW > 0 {
+			envTxt = strings.Repeat(" ", envTagW)
+		}
+
 		if i == m.projCursor {
 			// Selected row: one uniform highlight over plain text.
 			plain := markerTxt + name + " " + countTxt
+			if envTagW > 0 {
+				plain += " " + plainEnvTag(m, p.Name, envTagW)
+			}
 			out = append(out, truncate(selectStyle(m.styles, focused).Render(truncate(plain, w)), w))
 			continue
 		}
@@ -373,10 +391,18 @@ func (m Model) projectsBody(w, h int, focused bool) []string {
 		if isCurrent {
 			marker = m.styles.accent.Render(markerTxt)
 		}
-		line := marker + m.styles.row.Render(name) + " " + m.styles.muted.Render(countTxt)
+		line := marker + m.styles.row.Render(name) + " " + m.styles.muted.Render(countTxt) + " " + envTxt
 		out = append(out, truncate(line, w))
 	}
 	return out
+}
+
+// plainEnvTag returns the env tag as plain text for selected-row rendering.
+func plainEnvTag(m Model, project string, w int) string {
+	if em, ok := m.envMembershipFor(project); ok {
+		return padRight("·"+em.env, w)
+	}
+	return strings.Repeat(" ", w)
 }
 
 func (m Model) secretsBody(w, h int, focused bool) []string {
@@ -391,15 +417,35 @@ func (m Model) secretsBody(w, h int, focused bool) []string {
 	}
 	secs := m.secrets // already sorted by key in applyFilter
 	start, end := scrollWindow(len(secs), h, m.secCursor)
-	keyW := clampInt(w*45/100, 8, 40)
-	valW := w - keyW - 1
+	// Inherited indicator (2 chars) + key + gap + value
+	inhW := 0
+	if m.inherited != nil {
+		inhW = 2
+	}
+	keyW := clampInt(w*40/100, 8, 40)
+	valW := w - keyW - 1 - inhW
 	if valW < 4 {
 		valW = 4
+		keyW = maxInt(1, w-1-inhW-4)
 	}
 	out := make([]string, 0, end-start)
 	for i := start; i < end; i++ {
 		ref := secs[i]
 		key := truncate(ref.Key, keyW)
+
+		// Inherited indicator: ← for inherited, blank for local.
+		inhMarker := ""
+		if inhW > 0 {
+			if ik, ok := m.inherited[ref.Key]; ok {
+				if strings.HasPrefix(ik.Source, "inherited:") {
+					inhMarker = m.styles.accent.Render("←")
+				} else if ik.Pinned {
+					inhMarker = m.styles.muted.Render("◈")
+				}
+			}
+			inhMarker = padRight(inhMarker, inhW)
+		}
+
 		val, shown := m.revealed[ref.Project+"/"+ref.Key]
 		var valCell string
 		if shown {
@@ -412,14 +458,34 @@ func (m Model) secretsBody(w, h int, focused bool) []string {
 			valCell = m.styles.masked.Render(maskDots)
 		}
 		plain := padRight(key, keyW) + " " + plainValue(val, shown, valW)
+		if inhW > 0 {
+			plain = plainInhMarker(m, ref.Key, inhW) + " " + plain
+		}
 		if i == m.secCursor {
 			out = append(out, truncate(selectStyle(m.styles, focused).Render(truncate(plain, w)), w))
 			continue
 		}
 		ks := m.styles.row.Render(padRight(key, keyW))
-		out = append(out, truncate(ks+" "+valCell, w))
+		out = append(out, truncate(inhMarker+" "+ks+" "+valCell, w))
 	}
 	return out
+}
+
+// plainInhMarker returns the inherited marker as plain text for
+// selected-row rendering, where the whole row gets one style.
+func plainInhMarker(m Model, key string, w int) string {
+	if m.inherited == nil {
+		return strings.Repeat(" ", w)
+	}
+	if ik, ok := m.inherited[key]; ok {
+		if strings.HasPrefix(ik.Source, "inherited:") {
+			return padRight("←", w)
+		}
+		if ik.Pinned {
+			return padRight("◈", w)
+		}
+	}
+	return strings.Repeat(" ", w)
 }
 
 func (m Model) auditBody(w, h int) []string {
@@ -534,6 +600,107 @@ func (m Model) renderConfirmOverlay(h int) string {
 		m.styles.bad.Render("y")+m.styles.muted.Render(" delete  ·  n / esc cancel"),
 	)
 	box := m.styles.overlay.Width(clampInt(m.width/2, 30, 56)).Render(body)
+	return clampGrid(lipgloss.Place(m.width, h, lipgloss.Center, lipgloss.Center, box), m.width, h)
+}
+
+// renderDriftOverlay shows the env drift table for the current group.
+func (m Model) renderDriftOverlay(h int) string {
+	var body string
+	if m.envDiff == nil {
+		body = lipgloss.JoinVertical(lipgloss.Left,
+			m.styles.titleHot.Render("Env drift"), "",
+			m.styles.muted.Render("loading…"),
+		)
+	} else {
+		diff := m.envDiff
+		title := m.styles.titleHot.Render("Env drift — " + diff.Group)
+		statusTxt := m.styles.good.Render("✓ no drift")
+		if diff.Status == "drift" {
+			statusTxt = m.styles.warn.Render("⚠ drift detected")
+		}
+
+		// Build a compact table: rows = keys, columns = environments.
+		envNames := make([]string, len(diff.Keys))
+		if len(diff.Keys) > 0 {
+			for i, e := range diff.Keys[0].Environments {
+				envNames[i] = e.Env
+			}
+		}
+
+		var rows []string
+		// Header row.
+		hdrW := clampInt(m.width/4, 12, 30)
+		hdr := padRight("key", hdrW)
+		for _, en := range envNames {
+			hdr += " " + padRight(en, 3)
+		}
+		rows = append(rows, m.styles.muted.Render(truncate(hdr, m.width-8)))
+		// Data rows.
+		for _, dk := range diff.Keys {
+			row := padRight(truncate(dk.Key, hdrW), hdrW)
+			for _, de := range dk.Environments {
+				cell := "✗"
+				cellStyle := m.styles.bad
+				if de.Present {
+					cell = "✓"
+					cellStyle = m.styles.good
+				}
+				row += " " + cellStyle.Render(padRight(cell, 3))
+			}
+			rows = append(rows, truncate(row, m.width-8))
+		}
+		if len(rows) > h-6 {
+			rows = rows[:h-6]
+		}
+		table := strings.Join(rows, "\n")
+		hint := m.styles.muted.Render("esc to close")
+		body = lipgloss.JoinVertical(lipgloss.Left, title, statusTxt, "", table, "", hint)
+	}
+	boxW := clampInt(m.width-8, 30, m.width-4)
+	box := m.styles.overlay.Width(boxW).Render(body)
+	return clampGrid(lipgloss.Place(m.width, h, lipgloss.Center, lipgloss.Center, box), m.width, h)
+}
+
+// renderGroupsOverlay shows all env groups with their environments.
+func (m Model) renderGroupsOverlay(h int) string {
+	title := m.styles.titleHot.Render("Environment groups")
+	if len(m.envGroups) == 0 {
+		body := lipgloss.JoinVertical(lipgloss.Left,
+			title, "",
+			m.styles.muted.Render("no env groups — create one with: tvault env group create"),
+			"", m.styles.muted.Render("esc to close"),
+		)
+		box := m.styles.overlay.Width(clampInt(m.width/2, 40, m.width-4)).Render(body)
+		return clampGrid(lipgloss.Place(m.width, h, lipgloss.Center, lipgloss.Center, box), m.width, h)
+	}
+
+	var rows []string
+	for _, g := range m.envGroups {
+		hdr := m.styles.accent.Render(g.Name)
+		if g.Description != "" {
+			hdr += " " + m.styles.muted.Render("("+g.Description+")")
+		}
+		rows = append(rows, hdr)
+		for _, e := range g.Environments {
+			line := "  " + padRight(e.Name, 14) + " → " + e.Project
+			// Show inheritance if configured.
+			if g.Inheritance != nil {
+				if inh, ok := g.Inheritance[e.Name]; ok {
+					line += " " + m.styles.muted.Render("inherits "+inh.From)
+				}
+			}
+			rows = append(rows, m.styles.row.Render(truncate(line, m.width-8)))
+		}
+		rows = append(rows, "")
+	}
+	if len(rows) > h-6 {
+		rows = rows[:h-6]
+	}
+	content := strings.Join(rows, "\n")
+	hint := m.styles.muted.Render("esc to close")
+	body := lipgloss.JoinVertical(lipgloss.Left, title, "", content, hint)
+	boxW := clampInt(m.width-8, 40, m.width-4)
+	box := m.styles.overlay.Width(boxW).Render(body)
 	return clampGrid(lipgloss.Place(m.width, h, lipgloss.Center, lipgloss.Center, box), m.width, h)
 }
 

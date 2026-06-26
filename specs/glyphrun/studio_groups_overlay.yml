@@ -1,0 +1,117 @@
+version: 1
+name: tvault_studio_groups_overlay
+
+intent: |
+  A user opens `tvault studio` against a vault with one environment group
+  (liftclub) linking two projects (production, preview) with inheritance
+  configured. They press `G` to open the env groups overlay, which lists
+  all groups with their environments, project mappings, and inheritance
+  relationships. The overlay shows "Environment groups" as the title, the
+  group name, each environment with its project, and the inheritance
+  annotation. Pressing esc closes the overlay.
+
+  This verifies the env groups list overlay (G key) renders correctly over
+  a real PTY and closes cleanly with esc.
+
+target:
+  cmd: ["./bin/tvault", "studio", "--no-anim"]
+  cwd: "."
+  env:
+    TVAULT_DIR: ".glyphrun/tmp/groups"
+    TVAULT_PASSPHRASE: "glyphpass"
+  timeoutMs: 20000
+
+terminal:
+  cols: 120
+  rows: 40
+  profile: xterm-256color
+  alternateScreen: require
+
+preconditions:
+  commands:
+    - run: "go build -o ./bin/tvault ./cmd/tvault"
+      timeoutMs: 120000
+    - run: "rm -rf .glyphrun/tmp/groups"
+      timeoutMs: 5000
+    - run: "TVAULT_DIR=.glyphrun/tmp/groups TVAULT_PASSPHRASE=glyphpass ./bin/tvault init"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/groups TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create liftclub"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/groups TVAULT_PASSPHRASE=glyphpass ./bin/tvault projects create liftclub-preview"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/groups TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DATABASE_URL postgres://prod -p liftclub"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/groups TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DATABASE_URL postgres://preview -p liftclub-preview"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/groups TVAULT_PASSPHRASE=glyphpass ./bin/tvault use liftclub-preview"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/groups TVAULT_PASSPHRASE=glyphpass ./bin/tvault env group create liftclub --env production=liftclub --env preview=liftclub-preview"
+      timeoutMs: 10000
+    - run: "TVAULT_DIR=.glyphrun/tmp/groups TVAULT_PASSPHRASE=glyphpass ./bin/tvault env inherit --group liftclub --env preview --from production"
+      timeoutMs: 10000
+
+steps:
+  - wait:
+      screen:
+        contains: "unlocked"
+      timeoutMs: 6000
+  - snapshot: start
+  # Press G to open the env groups overlay.
+  - press: "G"
+  # The overlay should show the title.
+  - wait:
+      screen:
+        contains: "Environment groups"
+      timeoutMs: 5000
+  - snapshot: groups_overlay_title
+  # The overlay should show the group name.
+  - wait:
+      screen:
+        contains: "liftclub"
+      timeoutMs: 3000
+  - snapshot: groups_overlay_shows_group
+  # The overlay should show environment names and project mappings.
+  - wait:
+      screen:
+        contains: "production"
+      timeoutMs: 3000
+  - wait:
+      screen:
+        contains: "preview"
+      timeoutMs: 3000
+  - snapshot: groups_overlay_shows_envs
+  # The overlay should show the inheritance annotation.
+  - wait:
+      screen:
+        contains: "inherits"
+      timeoutMs: 3000
+  - snapshot: groups_overlay_shows_inheritance
+  # Press esc to close the overlay.
+  - press: "esc"
+  - wait:
+      screen:
+        contains: "Secrets"
+      timeoutMs: 3000
+  - snapshot: groups_closed
+  - press: "q"
+  - wait:
+      process:
+        exitCode: 0
+      timeoutMs: 5000
+
+outcomes:
+  - id: clean_exit
+    description: studio exits cleanly with status 0
+    verify:
+      process:
+        exitCode: 0
+  - id: groups_overlay_shows
+    description: groups overlay shows the Environment groups title
+    verify:
+      process:
+        exitCode: 0
+  - id: groups_overlay_shows_inheritance
+    description: groups overlay shows the inheritance annotation
+    verify:
+      process:
+        exitCode: 0

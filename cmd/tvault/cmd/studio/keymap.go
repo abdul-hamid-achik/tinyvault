@@ -8,28 +8,31 @@ import (
 // help.KeyMap so the footer and the help overlay can render the same
 // bindings without a second source of truth.
 type keyMap struct {
-	Up        key.Binding
-	Down      key.Binding
-	Left      key.Binding
-	Right     key.Binding
-	Pane1     key.Binding
-	Pane2     key.Binding
-	Pane3     key.Binding
-	Pane4     key.Binding
-	NextPane  key.Binding
-	PrevPane  key.Binding
-	Enter     key.Binding
-	Filter    key.Binding
-	Reveal    key.Binding
-	RevealAll key.Binding
-	Copy      key.Binding
-	Unlock    key.Binding
-	Lock      key.Binding
-	Reload    key.Binding
-	Redraw    key.Binding
-	Escape    key.Binding
-	Help      key.Binding
-	Quit      key.Binding
+	Up         key.Binding
+	Down       key.Binding
+	Left       key.Binding
+	Right      key.Binding
+	Pane1      key.Binding
+	Pane2      key.Binding
+	Pane3      key.Binding
+	Pane4      key.Binding
+	NextPane   key.Binding
+	PrevPane   key.Binding
+	Enter      key.Binding
+	Filter     key.Binding
+	Reveal     key.Binding
+	RevealAll  key.Binding
+	Copy       key.Binding
+	Unlock     key.Binding
+	Lock       key.Binding
+	Reload     key.Binding
+	Redraw     key.Binding
+	Escape     key.Binding
+	Help       key.Binding
+	Quit       key.Binding
+	CycleEnv   key.Binding // g: cycle to next env in group
+	Drift      key.Binding // D: show env drift overlay
+	ListGroups key.Binding // G: list all env groups
 }
 
 // newKeyMap returns the default bindings (vim + arrows + mnemonics).
@@ -111,13 +114,25 @@ func newKeyMap() keyMap {
 			key.WithKeys("q", "ctrl+c"),
 			key.WithHelp("q", "quit"),
 		),
+		CycleEnv: key.NewBinding(
+			key.WithKeys("g"),
+			key.WithHelp("g", "cycle env"),
+		),
+		Drift: key.NewBinding(
+			key.WithKeys("D"),
+			key.WithHelp("D", "env drift"),
+		),
+		ListGroups: key.NewBinding(
+			key.WithKeys("G"),
+			key.WithHelp("G", "env groups"),
+		),
 	}
 }
 
 // ShortHelp implements help.KeyMap — the compact footer hint line.
 func (k keyMap) ShortHelp() []key.Binding {
 	return []key.Binding{
-		k.Up, k.Down, k.Right, k.Filter, k.Reveal, k.Copy, k.Help, k.Quit,
+		k.Up, k.Down, k.Right, k.Filter, k.Reveal, k.Copy, k.CycleEnv, k.Help, k.Quit,
 	}
 }
 
@@ -128,6 +143,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 		{k.Pane1, k.Pane2, k.Pane3, k.Pane4, k.NextPane, k.PrevPane},
 		{k.Enter, k.Filter, k.Reveal, k.RevealAll, k.Copy},
 		{k.Unlock, k.Lock, k.Reload, k.Redraw},
+		{k.CycleEnv, k.Drift, k.ListGroups},
 		{k.Escape, k.Help, k.Quit},
 	}
 }

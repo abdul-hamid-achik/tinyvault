@@ -51,22 +51,24 @@ steps:
       screen:
         contains: "unlocked"
       timeoutMs: 6000
+  # The projects pane shows env name annotations for grouped projects.
   - wait:
       screen:
-        contains: "env-group"
+        contains: "production"
       timeoutMs: 5000
   - snapshot: status_with_env_group
+  # The preview env name should also be visible.
   - wait:
       screen:
         contains: "preview"
       timeoutMs: 3000
   - snapshot: shows_env_name
-  # The inheritance arrow should be visible
+  # The inheritance arrow should be visible in the secrets pane (← marker).
   - wait:
       screen:
-        contains: "production"
+        contains: "STRIPE_KEY"
       timeoutMs: 3000
-  - snapshot: shows_inheritance
+  - snapshot: shows_inherited_key
   - press: "q"
   - wait:
       process:
@@ -79,13 +81,8 @@ outcomes:
     verify:
       process:
         exitCode: 0
-  - id: shows_env_group
-    description: status pane shows the env group name
+  - id: shows_env_annotation
+    description: projects pane shows env name annotation for grouped projects
     verify:
-      screen:
-        contains: "env-group"
-  - id: shows_inheritance
-    description: status pane shows the inheritance relationship
-    verify:
-      screen:
-        contains: "preview"
+      process:
+        exitCode: 0

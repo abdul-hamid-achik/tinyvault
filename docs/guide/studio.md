@@ -32,8 +32,8 @@ The studio is divided into four panes. Move between them with the arrow keys, `h
 
 | # | Pane | What it shows |
 |---|----------|---------------|
-| 1 | **Status** | Vault state (locked/unlocked), the active project, counts, and the current studio mode. |
-| 2 | **Projects** | All projects. Press `enter` to open the selected project; its secrets load into the secrets pane. |
+| 1 | **Status** | Vault state (locked/unlocked), the active project, counts, env group membership, and the current studio mode. |
+| 2 | **Projects** | All projects with env-group annotations. Press `enter` to open the selected project; its secrets load into the secrets pane. |
 | 3 | **Secrets** | Keys in the active project, masked. This is where you filter, reveal, copy, and (with `--rw`) edit. |
 | 4 | **Audit** | The most recent audit entries (reveals, edits, unlocks). Size it with `--audit-limit`. |
 
@@ -62,12 +62,24 @@ Press `?` inside the studio for the in-app cheat sheet, or run `tvault help stud
 | `r` | Reveal the selected value (audited) |
 | `R` | Reveal all values in the current project (audited) |
 | `c` | Copy the selected value to the clipboard |
-| `esc` | Re-mask / go back / clear the filter |
+| `esc` | Re-mask / go back / clear the filter / close an overlay |
 | `u` | Unlock the vault in-app (prompts for your passphrase) |
 | `L` | Lock the vault |
 | `^r` | Reload data from disk |
 | `^l` | Force a redraw |
 | `q` / `^c` | Quit |
+
+### Environment groups
+
+When the current project is part of an [environment group](/guide/env-groups), three extra bindings are available:
+
+| Key | Action |
+|-----|--------|
+| `g` | Cycle to the next environment in the group (loads its secrets) |
+| `D` | Show an env drift overlay — key-set diff across all environments |
+| `G` | List all env groups with their environments and inheritance |
+
+The Secrets pane marks inherited keys with `←` (resolved from a base env at read time) and pinned keys with `◈` (local value, inheritance broken for that key). The Projects pane annotates grouped projects with their env name (e.g. `·production`, `·preview`).
 
 When a secret is showing, the studio paints it in a warm amber accent, so the revealed state is never silent or ambiguous.
 

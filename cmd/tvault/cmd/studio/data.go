@@ -29,6 +29,13 @@ type statusData struct {
 	envInheritsFrom string // base env if inheritance is configured
 }
 
+// envMembership is the per-project env-group info, used to annotate the
+// projects pane and to cycle environments.
+type envMembership struct {
+	group string // group name
+	env   string // environment name within the group
+}
+
 // loadStatus reads vault status + the current project name. It never
 // requires the vault to be unlocked. If the current project is part of an
 // environment group, the group name, environment name, and inheritance
@@ -210,6 +217,83 @@ func deleteSecretCmd(v *vault.Vault, project, key string) tea.Cmd {
 	}
 }
 
+// ---- env-group loaders ----
+
+// loadEnvGroups returns all environment groups. Metadata only; never
+// requires the vault to be unlocked.
+func loadEnvGroups(v *vault.Vault) ([]vault.EnvGroup, error) {
+	return v.ListEnvGroups()
+}
+
+// loadInherited returns the inherited-vs-local status of keys in a
+// project that is part of an env group with inheritance configured.
+// Metadata only; never decrypts.
+func loadInherited(v *vault.Vault, groupName, envName string) ([]vault.InheritedKey, error) {
+	return v.ListInherited(groupName, envName)
+}
+
+// loadDiff returns the key-set diff across environments in a group.
+// It compares key sets only (no decryption), so it works when the vault
+// is locked.
+func loadDiff(v *vault.Vault, groupName string) (*vault.EnvDiff, error) {
+	return v.DiffEnvironments(groupName, false)
+}
+
+// ---- env-group messages ----
+
+type envGroupsLoadedMsg struct {
+	groups []vault.EnvGroup
+}
+
+type inheritedLoadedMsg struct {
+	group     string
+	env       string
+	inherited []vault.InheritedKey
+}
+
+type diffLoadedMsg struct {
+	diff *vault.EnvDiff
+}
+
+type diffErrMsg struct {
+	context string
+	err     error
+}
+
+func (e diffErrMsg) Error() string { return e.context + ": " + e.err.Error() }
+
+// ---- env-group command wrappers ----
+
+func envGroupsCmd(v *vault.Vault) tea.Cmd {
+	return func() tea.Msg {
+		groups, err := loadEnvGroups(v)
+		if err != nil {
+			return errMsg{context: "load env groups", err: err}
+		}
+		return envGroupsLoadedMsg{groups: groups}
+	}
+}
+
+func inheritedCmd(v *vault.Vault, groupName, envName string) tea.Cmd {
+	return func() tea.Msg {
+		inherited, err := loadInherited(v, groupName, envName)
+		if err != nil {
+			return errMsg{context: "load inherited", err: err}
+		}
+		return inheritedLoadedMsg{group: groupName, env: envName, inherited: inherited}
+	}
+}
+
+func diffCmd(v *vault.Vault, groupName string) tea.Cmd {
+	return func() tea.Msg {
+		diff, err := loadDiff(v, groupName)
+		if err != nil {
+			return diffErrMsg{context: "env diff", err: err}
+		}
+		return diffLoadedMsg{diff: diff}
+	}
+}
+
 func revealCmd(v *vault.Vault, project, key string, epoch int) tea.Cmd {
 	return func() tea.Msg {
 		val, err := revealSecret(v, project, key)
@@ -217,5 +301,27 @@ func revealCmd(v *vault.Vault, project, key string, epoch int) tea.Cmd {
 			return errMsg{context: "reveal " + key, err: err}
 		}
 		return revealedMsg{project: project, key: key, value: val, epoch: epoch}
+	}
+}
+
+// revealInheritedCmd resolves a key through the env-group inheritance chain
+// and reveals the value. The project field in the result is the child project
+// (so the reveal map key matches the secrets pane entry).
+func revealInheritedCmd(v *vault.Vault, groupName, envName, key, childProject string, epoch int) tea.Cmd {
+	return func() tea.Msg {
+		val, _, err := v.ResolveKey(groupName, envName, key)
+		if err != nil {
+			return errMsg{context: "reveal " + key, err: err}
+		}
+		// Audit the reveal of an inherited key.
+		//nolint:errcheck // audit is best-effort
+		v.AppendAudit(&store.AuditEntry{
+			Action:       "secret.read",
+			ResourceType: "secret",
+			ResourceName: key,
+			Timestamp:    time.Now().UTC(),
+			Metadata:     map[string]any{"project": childProject, "source": "tui", "resolved_via": groupName + "/" + envName},
+		})
+		return revealedMsg{project: childProject, key: key, value: val, epoch: epoch}
 	}
 }

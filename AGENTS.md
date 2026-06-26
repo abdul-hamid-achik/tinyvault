@@ -191,6 +191,10 @@ specs/
     studio_reveal_all.yml    # reveal every value (R) + re-mask
     studio_unlock.yml        # locked start → in-app unlock (u) → reveal
     studio_rw_edit.yml       # --rw: create (n) + delete (d) a secret end-to-end
+    studio_env_group.yml     # status pane shows env group + inheritance
+    studio_cycle_env.yml     # g cycles envs; ← inherited marker; project annotations
+    studio_drift_overlay.yml # D shows env drift table; esc closes
+    studio_groups_overlay.yml # G lists all env groups; esc closes
 glyphrun.config.yml          # glyphrun runtime: env, terminal, passphrase redaction
 ```
 

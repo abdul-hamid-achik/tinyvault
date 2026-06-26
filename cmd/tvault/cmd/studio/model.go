@@ -55,6 +55,8 @@ const (
 	modeNewKey          // entering a new secret's key name (--rw)
 	modeSetValue        // entering a secret's value, new or edited (--rw)
 	modeConfirmDel      // confirming a secret delete (--rw)
+	modeDrift           // env drift overlay is up
+	modeGroups          // env groups list overlay is up
 )
 
 const (
@@ -112,6 +114,12 @@ type Model struct {
 	pendingKey string          // key being created or edited
 	editing    bool            // true = editing an existing key, false = new
 	confirmKey string          // key pending delete confirmation
+
+	// env-group state
+	envGroups      []vault.EnvGroup              // all groups, loaded once
+	projGroupIndex map[string]envMembership      // project name → group/env info
+	inherited      map[string]vault.InheritedKey // key → inherited status for viewProject
+	envDiff        *vault.EnvDiff                // diff for the drift overlay
 
 	// components
 	filter textinput.Model
@@ -186,6 +194,7 @@ func (m Model) Init() tea.Cmd {
 		statusCmd(m.vault),
 		projectsCmd(m.vault),
 		auditCmd(m.vault, m.opts.AuditLimit),
+		envGroupsCmd(m.vault),
 	}
 	if m.viewProject != "" {
 		cmds = append(cmds, secretsCmd(m.vault, m.viewProject))
@@ -253,14 +262,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case statusLoadedMsg:
 		m.status = statusData(msg)
-		if m.viewProject == "" {
+		switch m.viewProject {
+		case "":
 			m.viewProject = m.status.currentProject
 			if m.viewProject != "" {
-				return m, secretsCmd(m.vault, m.viewProject)
+				cmds := []tea.Cmd{secretsCmd(m.vault, m.viewProject)}
+				if inhCmd := m.loadInheritedForCurrent(); inhCmd != nil {
+					cmds = append(cmds, inhCmd)
+				}
+				return m, tea.Batch(cmds...)
 			}
 			// No current project: there are no secrets to load, so the
 			// initial load is done — stop the loading spinner.
 			m.loading = false
+		case m.status.currentProject:
+			if inhCmd := m.loadInheritedForCurrent(); inhCmd != nil {
+				return m, inhCmd
+			}
 		}
 		// ensureAnim mutates m (sets animating); evaluate it before the
 		// return so the mutation is captured in the returned model.
@@ -282,6 +300,50 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case auditLoadedMsg:
 		m.audit = msg.entries
+		return m, nil
+
+	case envGroupsLoadedMsg:
+		m.envGroups = msg.groups
+		m.buildProjGroupIndex()
+		// Now that the index is built, load inherited status for the
+		// current view project if it's in a group with inheritance.
+		if inhCmd := m.loadInheritedForCurrent(); inhCmd != nil {
+			return m, inhCmd
+		}
+		return m, nil
+
+	case inheritedLoadedMsg:
+		if msg.group == m.status.envGroup && msg.env == m.status.envName {
+			m.inherited = make(map[string]vault.InheritedKey, len(msg.inherited))
+			for _, ik := range msg.inherited {
+				m.inherited[ik.Key] = ik
+			}
+			// Merge inherited keys that aren't in the child project into
+			// allSecrets so they appear in the Secrets pane with the ← marker.
+			existing := make(map[string]bool, len(m.allSecrets))
+			for _, r := range m.allSecrets {
+				existing[r.Key] = true
+			}
+			for _, ik := range msg.inherited {
+				if !existing[ik.Key] && ik.Source != "missing" {
+					m.allSecrets = append(m.allSecrets, vault.SecretRef{
+						Project: m.viewProject,
+						Key:     ik.Key,
+					})
+				}
+			}
+			m.applyFilter()
+		}
+		return m, nil
+
+	case diffLoadedMsg:
+		m.envDiff = msg.diff
+		m.mode = modeDrift
+		return m, nil
+
+	case diffErrMsg:
+		m.lastErr = msg.err
+		m.statusLine = msg.context + ": " + msg.err.Error()
 		return m, nil
 
 	case revealedMsg:
@@ -366,6 +428,26 @@ func copyCmd(v *vault.Vault, project, key string) tea.Cmd {
 		if err != nil {
 			return errMsg{context: "copy " + key, err: err}
 		}
+		return copiedMsg{key: key, value: val}
+	}
+}
+
+// copyInheritedCmd resolves a key through the inheritance chain and copies
+// the value to the clipboard.
+func copyInheritedCmd(v *vault.Vault, groupName, envName, key, childProject string) tea.Cmd {
+	return func() tea.Msg {
+		val, _, err := v.ResolveKey(groupName, envName, key)
+		if err != nil {
+			return errMsg{context: "copy " + key, err: err}
+		}
+		//nolint:errcheck // audit is best-effort
+		v.AppendAudit(&store.AuditEntry{
+			Action:       "secret.read",
+			ResourceType: "secret",
+			ResourceName: key,
+			Timestamp:    time.Now().UTC(),
+			Metadata:     map[string]any{"project": childProject, "source": "tui", "resolved_via": groupName + "/" + envName},
+		})
 		return copiedMsg{key: key, value: val}
 	}
 }
@@ -474,6 +556,13 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case modeDrift, modeGroups:
+		switch msg.String() {
+		case "esc", "q", "?":
+			m.mode = modeNormal
+		}
+		return m, nil
+
 	default:
 		// modeNormal — handled below.
 	}
@@ -555,6 +644,29 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.statusLine = ""
 		return m, nil
 
+	case key.Matches(msg, m.keys.CycleEnv):
+		cmd, ok := m.cycleEnv()
+		if !ok {
+			m.statusLine = "current project is not in an env group"
+			return m, nil
+		}
+		em, _ := m.envMembershipFor(m.viewProject)
+		m.statusLine = "env: " + em.env + " (" + m.viewProject + ")"
+		return m, cmd
+
+	case key.Matches(msg, m.keys.Drift):
+		em, ok := m.envMembershipFor(m.viewProject)
+		if !ok {
+			m.statusLine = "current project is not in an env group"
+			return m, nil
+		}
+		m.statusLine = "loading drift…"
+		return m, diffCmd(m.vault, em.group)
+
+	case key.Matches(msg, m.keys.ListGroups):
+		m.mode = modeGroups
+		return m, nil
+
 	case key.Matches(msg, m.keys.Unlock):
 		if m.status.unlocked {
 			m.statusLine = "vault already unlocked"
@@ -604,6 +716,7 @@ func (m Model) reloadCmds() []tea.Cmd {
 		statusCmd(m.vault),
 		projectsCmd(m.vault),
 		auditCmd(m.vault, m.opts.AuditLimit),
+		envGroupsCmd(m.vault),
 	}
 	if m.viewProject != "" {
 		cmds = append(cmds, secretsCmd(m.vault, m.viewProject))
@@ -714,6 +827,11 @@ func (m Model) revealCurrent() (tea.Model, tea.Cmd) {
 		m.statusLine = "vault is locked — press u to unlock"
 		return m, nil
 	}
+	// For inherited keys (not stored in the child project), use ResolveKey
+	// to resolve through the inheritance chain.
+	if ik, isInherited := m.inherited[ref.Key]; isInherited && strings.HasPrefix(ik.Source, "inherited:") {
+		return m, revealInheritedCmd(m.vault, m.status.envGroup, m.status.envName, ref.Key, ref.Project, m.revealEpoch)
+	}
 	return m, revealCmd(m.vault, ref.Project, ref.Key, m.revealEpoch)
 }
 
@@ -748,6 +866,10 @@ func (m Model) copyCurrent() (tea.Model, tea.Cmd) {
 	if val, done := m.revealed[ref.Project+"/"+ref.Key]; done {
 		m.statusLine = "copied " + ref.Key + " to clipboard"
 		return m, tea.SetClipboard(val)
+	}
+	// For inherited keys, resolve through the inheritance chain.
+	if ik, isInherited := m.inherited[ref.Key]; isInherited && strings.HasPrefix(ik.Source, "inherited:") {
+		return m, copyInheritedCmd(m.vault, m.status.envGroup, m.status.envName, ref.Key, ref.Project)
 	}
 	return m, copyCmd(m.vault, ref.Project, ref.Key)
 }
@@ -810,6 +932,79 @@ func (m Model) secretCount() int {
 		n += p.SecretCount
 	}
 	return n
+}
+
+// buildProjGroupIndex builds a project → (group, env) lookup from the
+// loaded env groups. Called once after env groups are loaded.
+func (m *Model) buildProjGroupIndex() {
+	m.projGroupIndex = make(map[string]envMembership)
+	for _, g := range m.envGroups {
+		for _, e := range g.Environments {
+			m.projGroupIndex[e.Project] = envMembership{group: g.Name, env: e.Name}
+		}
+	}
+}
+
+// envMembershipFor returns the group/env info for a project, if any.
+func (m Model) envMembershipFor(project string) (envMembership, bool) {
+	em, ok := m.projGroupIndex[project]
+	return em, ok
+}
+
+// cycleEnv switches to the next environment's project within the same
+// group as the current view project. Returns a command to load the new
+// project's secrets, or nil if the project is not in a group.
+func (m *Model) cycleEnv() (tea.Cmd, bool) {
+	em, ok := m.envMembershipFor(m.viewProject)
+	if !ok {
+		return nil, false
+	}
+	// Find the group and cycle to the next environment.
+	for _, g := range m.envGroups {
+		if g.Name != em.group {
+			continue
+		}
+		for i, e := range g.Environments {
+			if e.Name != em.env {
+				continue
+			}
+			next := g.Environments[(i+1)%len(g.Environments)]
+			m.viewProject = next.Project
+			m.secCursor = 0
+			m.wipeRevealed()
+			m.loading = true
+			m.inherited = nil
+			cmds := []tea.Cmd{secretsCmd(m.vault, next.Project)}
+			// Load inherited status if the new env has inheritance.
+			if g.Inheritance != nil {
+				if _, hasInh := g.Inheritance[next.Name]; hasInh {
+					cmds = append(cmds, inheritedCmd(m.vault, g.Name, next.Name))
+				}
+			}
+			return tea.Batch(cmds...), true
+		}
+	}
+	return nil, false
+}
+
+// loadInheritedForCurrent issues a command to load the inherited status
+// for the current view project, if it is in a group with inheritance.
+func (m Model) loadInheritedForCurrent() tea.Cmd {
+	em, ok := m.envMembershipFor(m.viewProject)
+	if !ok {
+		return nil
+	}
+	for _, g := range m.envGroups {
+		if g.Name != em.group {
+			continue
+		}
+		if g.Inheritance != nil {
+			if _, hasInh := g.Inheritance[em.env]; hasInh {
+				return inheritedCmd(m.vault, em.group, em.env)
+			}
+		}
+	}
+	return nil
 }
 
 // lastWrite returns the most recent project UpdatedAt, or zero time.
