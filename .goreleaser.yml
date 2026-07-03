@@ -39,6 +39,16 @@ archives:
     files:
       - README.md
 
+  # Publish raw, versionless binaries alongside the archives so downstream
+  # consumers (CI runners, install scripts) can grab a stable URL:
+  #   https://github.com/abdul-hamid-achik/tinyvault/releases/latest/download/tvault-linux-amd64
+  - id: tvault-binary
+    builds:
+      - tvault
+    formats:
+      - binary
+    name_template: "tvault-{{ .Os }}-{{ .Arch }}"
+
 checksum:
   name_template: 'checksums.txt'
 
