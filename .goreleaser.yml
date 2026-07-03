@@ -27,7 +27,7 @@ builds:
 
 archives:
   - id: tvault
-    builds:
+    ids:
       - tvault
     name_template: "tvault_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats:
@@ -43,7 +43,7 @@ archives:
   # consumers (CI runners, install scripts) can grab a stable URL:
   #   https://github.com/abdul-hamid-achik/tinyvault/releases/latest/download/tvault-linux-amd64
   - id: tvault-binary
-    builds:
+    ids:
       - tvault
     formats:
       - binary
@@ -86,6 +86,8 @@ brews:
 
 nfpms:
   - id: packages
+    ids:
+      - tvault
     package_name: tvault
     vendor: TinyVault
     homepage: https://github.com/abdul-hamid-achik/tinyvault
