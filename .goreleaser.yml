@@ -66,22 +66,29 @@ changelog:
       - Merge pull request
       - Merge branch
 
-brews:
+homebrew_casks:
   - name: tvault
     ids:
+      - tvault
+    binaries:
       - tvault
     repository:
       owner: abdul-hamid-achik
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    directory: Formula
+    directory: Casks
     homepage: "https://github.com/abdul-hamid-achik/tinyvault"
     description: "Dead simple secrets management CLI and MCP server"
     license: "MIT"
-    install: |
-      bin.install "tvault"
-    test: |
-      system "#{bin}/tvault", "--version"
+    # Released binaries are unsigned (pure-Go, CGO_ENABLED=0, not notarized),
+    # so strip the Gatekeeper quarantine attribute on install — otherwise macOS
+    # refuses to run a cask-installed unsigned binary ("damaged and can't be opened").
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/tvault"]
+          end
     skip_upload: "{{ if .Env.HOMEBREW_TAP_TOKEN }}false{{ else }}true{{ end }}"
 
 nfpms:
