@@ -1,11 +1,11 @@
 ---
 title: MCP Tools Reference
-description: Complete reference for all 36 TinyVault MCP tools, 3 resources, and 2 prompts — their inputs, what they return, and the policy gate each sits behind.
+description: Complete reference for all 49 TinyVault MCP tools, 3 resources, and 2 prompts — their inputs, what they return, and the policy gate each sits behind.
 ---
 
 # MCP Tools Reference
 
-This is the full reference for the TinyVault MCP surface: **36 tools, 3 resources, and 2 prompts**, served over stdio by the `tvault mcp` subcommand (the older `mcp-server` name still works as an alias) and built on the [modelcontextprotocol go-sdk](https://github.com/modelcontextprotocol/go-sdk). For setup — wiring `tvault` into Claude Code and other clients — see the [MCP overview](/mcp/). For the policy file that gates these tools, see [Access Policy](/mcp/access-policy).
+This is the full reference for the TinyVault MCP surface: **49 tools, 3 resources, and 2 prompts**, served over stdio by the `tvault mcp` subcommand (the older `mcp-server` name still works as an alias) and built on the [modelcontextprotocol go-sdk](https://github.com/modelcontextprotocol/go-sdk). For setup — wiring `tvault` into Claude Code and other clients — see the [MCP overview](/mcp/). For the policy file that gates these tools, see [Access Policy](/mcp/access-policy).
 
 The single most important fact: **only `vault_get_secret` returns a raw plaintext value.** Every other tool returns metadata, a path, a count, or ciphertext. That is the whole design — agents should *use* secrets without ever pulling them into the model's context.
 
@@ -49,6 +49,19 @@ The single most important fact: **only `vault_get_secret` returns a raw plaintex
 | `vault_export_env_encrypted` | No | Write a commit-safe `.env.encrypted` (v2) for current recipients. |
 | `vault_identity_new` | No | Create an X25519 identity; returns the public recipient only. |
 | `vault_identity_list` | No | List local identities and their public recipients. |
+| `vault_env_group_create` | No | Create an environment group linking projects. |
+| `vault_env_group_list` | No | List environment groups and their linked projects. |
+| `vault_env_group_show` | No | Group details: environments, drift status, inheritance. |
+| `vault_env_group_add` | No | Add an environment to an existing group. |
+| `vault_env_group_remove` | No | Remove an environment from a group (project untouched). |
+| `vault_env_group_delete` | No | Delete a group entirely (projects untouched). |
+| `vault_env_diff` | No | Drift across environments in a group (key sets; values never printed). |
+| `vault_env_promote` | No | Copy a value between environments; returns version numbers only. |
+| `vault_env_inherit` | No | Point a child env at a base for read-time key inheritance. |
+| `vault_env_inherited` | No | Show which keys are inherited vs. local (pinned). |
+| `vault_env_pin` | No | Pin a key: write the resolved value into the child (breaks inheritance). |
+| `vault_env_unpin` | No | Unpin a key: delete the pinned value, restoring inheritance. |
+| `vault_env_seal` | No | Seal every environment into one recipient-sealed v2 blob. |
 
 ::: tip The recommended agent pattern
 Discover the surface once with `tvault docs features`. Then use the relational tools — `vault_search_secrets` and `vault_list_secrets_by_prefix` — to find keys *without* enumerating values, and use `vault_run_with_secrets` when you actually need to *use* a value. That keeps secrets out of the model context, which is exactly what `vault_get_secret` cannot guarantee.
@@ -466,6 +479,114 @@ Lists local identities and their public recipient strings, so you can pick a rec
 - **Inputs:** none.
 - **Returns:** `{ identities: [{ name, recipient }] }` — public halves only.
 - **Policy gate:** read-only.
+
+## Environment groups
+
+These tools manage environment groups — projects linked as named environments of the same application — and the workflows on top of them: drift detection, value promotion, read-time inheritance, and recipient-sealed multi-environment blobs. See the [Environment groups guide](/guide/env-groups) for the model. None of these tools returns a raw secret value.
+
+### `vault_env_group_create`
+
+Creates an environment group linking several existing projects as named environments. Pure metadata — each project keeps its own DEK.
+
+- **Inputs:** `name` (required), `description` (optional), `environments` (required list of `{ name, project }`), `force` (optional; overwrite an existing group or re-link a project in another group).
+- **Returns:** the group name and its linked environments. No values.
+- **Policy gate:** `CanWrite`; every linked project must pass the project globs.
+
+### `vault_env_group_list`
+
+Lists all environment groups with their linked projects.
+
+- **Inputs:** none.
+- **Returns:** for each group, the name, description, and `name → project` environments. No values.
+- **Policy gate:** any `access_mode`.
+
+### `vault_env_group_show`
+
+Shows one group's linked projects, drift status, and inheritance configuration.
+
+- **Inputs:** `name` (required).
+- **Returns:** environments, drift status (`ok` / `drift`) and the diff keys, and inheritance pointers. No values.
+- **Policy gate:** any `access_mode`.
+
+### `vault_env_group_add`
+
+Adds an environment to an existing group. The project must already exist and must not be in another group.
+
+- **Inputs:** `group` (required), `env` (required, the environment name), `project` (required).
+- **Returns:** the updated group. No values.
+- **Policy gate:** `CanWrite`; the project must pass the project globs.
+
+### `vault_env_group_remove`
+
+Removes an environment from a group. The underlying project and its secrets are **not** deleted.
+
+- **Inputs:** `group` (required), `env` (required).
+- **Returns:** the updated group. No values.
+- **Policy gate:** `CanWrite`.
+
+### `vault_env_group_delete`
+
+Deletes a group entirely. Projects and secrets are untouched — only the group metadata is removed.
+
+- **Inputs:** `name` (required).
+- **Returns:** confirmation metadata. No values.
+- **Policy gate:** `CanWrite`.
+
+### `vault_env_diff`
+
+Compares key sets across all environments in a group. Reports missing/extra keys and, with `values`, `same`/`different` verdicts. Values are **never** returned.
+
+- **Inputs:** `group` (required), `values` (optional; compare values, default `false`).
+- **Returns:** `{ group, status: "ok"|"drift", keys: [{ key, environments: [{ env, present, status }] }] }`. The `status` mirrors the CLI exit verdict.
+- **Policy gate:** any `access_mode` (value comparison audits each read); project globs.
+
+### `vault_env_promote`
+
+Copies a secret *value* from one environment to another. The source value is decrypted and re-encrypted into the target, creating a new version (prior value archived, non-destructive). Audit entry: `secret.promote`.
+
+- **Inputs:** `group` (required), `from_env` (required), `to_env` (required), `keys` (optional list; omit when `all` is true), `all` (optional; promote every differing key), `dry_run` (optional; report without writing).
+- **Returns:** `{ promoted: [{ key, from_version, to_version }], skipped: [{ key, reason }] }`. Never a value — only version numbers.
+- **Policy gate:** `CanWrite`; both the source and target projects must pass the project globs.
+
+### `vault_env_inherit`
+
+Configures read-time key inheritance: the child environment resolves missing keys from a base. Metadata-only — no values are copied.
+
+- **Inputs:** `group` (required), `env` (required, the child), `from` (required, the base environment).
+- **Returns:** `{ group, env, inherits_from }`. No values.
+- **Policy gate:** `CanWrite`.
+
+### `vault_env_inherited`
+
+Lists which keys in an environment are inherited vs. local (pinned).
+
+- **Inputs:** `group` (required), `env` (required).
+- **Returns:** `{ keys: [{ key, source, pinned }] }` where `source` is `local`, `inherited:<env>`, or `missing`. No values.
+- **Policy gate:** any `access_mode`.
+
+### `vault_env_pin`
+
+Pins a key: writes the currently resolved value (through inheritance) into the child project, breaking inheritance for that key only. Audit entry: `secret.pin`.
+
+- **Inputs:** `group` (required), `env` (required, the child), `key` (required).
+- **Returns:** confirmation metadata — version numbers only, never the value.
+- **Policy gate:** `CanWrite`; project and per-key secret globs.
+
+### `vault_env_unpin`
+
+Unpins a key: deletes the pinned value from the child project, restoring inheritance for that key. Audit entry: `secret.unpin`.
+
+- **Inputs:** `group` (required), `env` (required, the child), `key` (required).
+- **Returns:** confirmation metadata. No values.
+- **Policy gate:** `CanWrite`.
+
+### `vault_env_seal`
+
+Seals all (or a subset of) environments into a single recipient-sealed v2 blob, one labeled section per environment. Output is ciphertext — safe to commit. In CI, decrypt with `tvault decrypt-env --identity <id> --section <env>`.
+
+- **Inputs:** `group` (required), `recipients` (required list of `tvault1…` keys), `keys` (optional list; subset of keys), `envs` (optional list; subset of environments), `output_path` (optional; when set, the path is returned instead of inline ciphertext).
+- **Returns:** `{ sealed_base64?, path?, bytes, environments, keys, recipient_count }`. Ciphertext only — never plaintext.
+- **Policy gate:** `CanWrite`; project and per-key secret globs filter which keys land in the blob.
 
 ---
 

@@ -6,6 +6,51 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-07-07
+
+### Added
+
+- **Environment groups / profiles** — link projects as named environments
+  (production, preview, staging) of the same application. Pure metadata; each
+  environment keeps its own DEK. Adds:
+  - `tvault env group create/list/show/add/remove/delete` for group membership.
+  - `tvault env diff` — key-set (and optional value) drift across environments.
+  - `tvault env promote` — copy a value between environments, versioned and
+    audited (`secret.promote`).
+  - `tvault env inherit` / `pin` / `unpin` / `inherited` — metadata-only
+    read-time key inheritance from a base environment, with per-key pinning.
+  - `tvault env seal` — pack all environments into one recipient-sealed v2
+    blob (decrypt in CI with `decrypt-env --section <env>`).
+  - Studio bindings for grouped projects (`g`, `D`, `G`) with inherited (`←`)
+    and pinned (`◈`) markers.
+  - 13 new MCP tools (`vault_env_group_*`, `vault_env_diff`,
+    `vault_env_promote`, `vault_env_inherit`, `vault_env_inherited`,
+    `vault_env_pin`, `vault_env_unpin`, `vault_env_seal`) — all metadata- or
+    ciphertext-only. Tool count: 36 → 49.
+- **`tvault self-update`** (alias `upgrade`) — checksum-verified in-place
+  binary update from the official GitHub releases. `--check` reports
+  availability without installing; `--version vX.Y.Z` pins/downgrades.
+  Replaces the removed `install.sh`.
+- **Codemap integration** — a documented, strictly value-free MCP surface for
+  codemap (a local code-graph indexer): rotation blast radius, private-registry
+  LSP creds, env-var audit, credential freshness, and least-privilege seal
+  scope. Only key names, metadata, audit rows, and recipients cross the seam;
+  codemap never ingests a secret value.
+- **Lock-free, value-free enumeration + deterministic "vault locked" signal**
+  — lets a non-interactive agent (e.g. Cortex) enumerate and probe the vault
+  without a passphrase and without ever seeing sensitive free text:
+  - `tvault projects list --json --names-only` → `[{"name":"app"}]` (no
+    descriptions, no unlock; exit 0 on a locked vault).
+  - `tvault list -p PROJECT --json --names-only` → `["DB_URL","API_KEY"]`
+    (no unlock).
+  - `tvault status --json` adds `locked` and `agent_running` (so a caller
+    can distinguish "reachable but locked" from "broken/unreachable").
+  - When an unlock-requiring command runs non-interactively (stdin not a
+    TTY) with no `TVAULT_PASSPHRASE` and no agent, it fails fast **without
+    prompting**: exit code `3`, and under `--json`,
+    `{"error":"vault_locked","locked":true}` on stdout with nothing on
+    stderr — replacing the opaque "failed to read passphrase" error.
+
 ## [0.11.0] - 2026-06-20
 
 ### Added
@@ -71,11 +116,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Project sharing** to X25519 recipients with key-rotating revocation
   (`projects share`/`unshare`/`recipients`).
 - **`.env.encrypted` v2** — commit-safe, recipient-based, KEK-independent.
-- **`tvault git-filter`** — transparent encrypt-on-commit / decrypt-on-checkout.
-- **`tvault seal`/`open`** with round-trip-safe dotenv rendering.
-- **Per-context identity transport** (`TVAULT_IDENTITY_KEY`) for CI/ssh/agents.
-- **Kubernetes commit-safe Secrets** (SealedSecret pattern, no controller).
-- **Versioned secrets + rollback** (history-preserving store + CLI/MCP).
 - **Local `tvault agent`** + shell hooks — unlock once for prompt-free daily
   use (unix), with a `--require-token` privilege-separation gate.
 - `vault_seal_for_recipients` (MCP), `tvault diff`, `tvault doctor`, a typed
@@ -87,7 +127,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 See the [GitHub releases](https://github.com/abdul-hamid-achik/tinyvault/releases)
 for v0.8.0 and earlier.
 
-[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.15.0...v0.16.0
+[0.15.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.14.0...v0.15.0
+[0.14.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.13.1...v0.14.0
+[0.13.1]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.13.0...v0.13.1
+[0.13.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.12.0...v0.13.0
+[0.12.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.11.1...v0.12.0
+[0.11.1]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.9.0...v0.10.0

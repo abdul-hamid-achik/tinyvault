@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -29,6 +30,14 @@ func getVaultDir() string {
 
 // openAndUnlockVault opens the vault at the configured directory and unlocks it.
 // It tries TVAULT_PASSPHRASE env var first (for CI), then prompts interactively.
+//
+// When stdin is not a TTY and no TVAULT_PASSPHRASE is set, it cannot unlock and
+// must NOT prompt (a non-interactive process would hang or emit an
+// indistinguishable "failed to read passphrase" error). Instead it fails fast
+// with a vault.ErrLocked-wrapped error so the exit-code mapper produces exit 3.
+// Under --json it prints {"error":"vault_locked","locked":true} on stdout and
+// silences cobra's stderr error print, so a non-interactive agent (e.g. Cortex)
+// gets a clean, deterministic "vault locked" signal.
 func openAndUnlockVault() (*vault.Vault, error) {
 	dir := getVaultDir()
 	v, err := vault.Open(dir)
@@ -40,6 +49,12 @@ func openAndUnlockVault() (*vault.Vault, error) {
 
 	passphrase := os.Getenv("TVAULT_PASSPHRASE")
 	if passphrase == "" {
+		if !term.IsTerminal(int(os.Stdin.Fd())) {
+			// Non-interactive and no passphrase env: fail fast with the
+			// locked signal instead of prompting (which would error out
+			// with an opaque "operation not supported by device").
+			return nil, nonInteractiveLockedError(v)
+		}
 		passphrase, err = promptPassphrase("Enter passphrase: ")
 		if err != nil {
 			v.Close()
@@ -53,6 +68,31 @@ func openAndUnlockVault() (*vault.Vault, error) {
 	}
 
 	return v, nil
+}
+
+// nonInteractiveLockedError emits the deterministic "vault locked" signal for
+// a non-interactive caller and returns a vault.ErrLocked-wrapped error so the
+// exit-code mapper produces exit 3. Under --json it writes
+// {"error":"vault_locked","locked":true} to stdout and silences cobra's stderr
+// error print (so nothing reaches stderr, per the contract); otherwise it
+// returns a human-readable error that cobra prints to stderr. The vault handle
+// is closed.
+func nonInteractiveLockedError(v *vault.Vault) error {
+	v.Close()
+	if jsonOutput {
+		enc := json.NewEncoder(os.Stdout)
+		if err := enc.Encode(map[string]any{
+			"error":  "vault_locked",
+			"locked": true,
+		}); err != nil {
+			// Best-effort: we are already returning a locked error below.
+			_ = err
+		}
+		// Silence cobra's "Error: ..." stderr print for this invocation;
+		// we already produced the contract JSON on stdout.
+		rootCmd.SilenceErrors = true
+	}
+	return fmt.Errorf("vault is locked: set TVAULT_PASSPHRASE, start 'tvault agent', or run in a TTY: %w", vault.ErrLocked)
 }
 
 // resolveProject determines which project to use.

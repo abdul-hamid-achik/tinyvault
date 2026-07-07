@@ -1,6 +1,6 @@
 ---
 title: MCP Server
-description: Connect AI agents to TinyVault over the Model Context Protocol — one Go binary that serves 36 tools over stdio while keeping secret values out of the model context.
+description: Connect AI agents to TinyVault over the Model Context Protocol — one Go binary that serves 49 tools over stdio while keeping secret values out of the model context.
 ---
 
 # MCP Server
@@ -19,7 +19,7 @@ tvault mcp
 
 You rarely run this by hand — your MCP host (Claude Code, Claude Desktop, or any MCP client) launches it for you. The server is a thin **policy-and-redaction layer** over the same vault API the CLI uses: every call is checked against an [access policy](/mcp/access-policy), privileged actions are audited, and outputs are filtered so plaintext stays out of the conversation.
 
-It exposes **36 tools, 3 resources, and 2 prompts**, built on the official [modelcontextprotocol go-sdk](https://github.com/modelcontextprotocol/go-sdk).
+It exposes **49 tools, 3 resources, and 2 prompts**, built on the official [modelcontextprotocol go-sdk](https://github.com/modelcontextprotocol/go-sdk).
 
 ::: info Same vault, same crypto
 The MCP server is not a separate datastore. It unlocks the one encrypted bbolt vault at `~/.tvault/vault.db` and reads and writes through the identical AES-256-GCM path as the CLI and [studio](/guide/studio). See [Architecture](/reference/architecture).
@@ -175,7 +175,7 @@ If the server fails to start, the exit code tells you why: `3` vault locked at r
 
 ## See also
 
-- [Tools Reference](/mcp/tools) — all 36 tools, their inputs, and exactly what each returns
+- [Tools Reference](/mcp/tools) — all 49 tools, their inputs, and exactly what each returns
 - [Access Policy](/mcp/access-policy) — scope an agent with `mcp-policy.yaml` (modes, globs, exec gate)
 - [Local Agent](/guide/agent) — unlock once, skip the passphrase prompt
 - [Security & Threat Model](/reference/security) — what redaction and tokens do and do not protect

@@ -24,7 +24,7 @@ TinyVault is built to be driven by agents without secret values ever entering th
 - **AES-256-GCM Encryption** -- Two-tier key hierarchy with per-project data encryption keys
 - **Argon2id Key Derivation** -- Memory-hard passphrase hashing resistant to GPU/ASIC attacks
 - **Single Binary** -- One `tvault` binary for CLI use and MCP server mode
-- **MCP Server** -- 36 tools: AI agents can manage secrets via the Model Context Protocol (stdio) without the values ever entering the model context
+- **MCP Server** -- 49 tools: AI agents can manage secrets via the Model Context Protocol (stdio) without the values ever entering the model context
 - **Multi-Project** -- Organize secrets into projects with independent encryption keys
 - **.env Ecosystem** -- Safe dotenv parser (no shell expansion), `tvault://` placeholder interpolation, two-way sync (pull/push/mirror), and `.env.encrypted` files (Rails credentials pattern, safe to commit)
 - **Share & commit secrets** -- X25519 recipients (age-style): share a project without the passphrase, commit self-decrypting secrets via `git-filter` (transparent clean/smudge) or v2 `.env.encrypted`, and seal for recipients over MCP. Revocation rotates the key and re-encrypts.
@@ -488,7 +488,7 @@ tvault (single binary)
     crypto/         # AES-256-GCM, Argon2id, key generation
     store/          # bbolt storage layer
     vault/          # High-level vault operations
-    mcp/            # MCP server (36 tools, access policy, redaction)
+    mcp/            # MCP server (49 tools, access policy, redaction)
     validation/     # Input validation
 ```
 

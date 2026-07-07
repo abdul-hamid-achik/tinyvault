@@ -12,6 +12,7 @@ import (
 )
 
 var listPrefix string
+var listNamesOnly bool
 
 var listCmd = &cobra.Command{
 	Use:   "list",
@@ -22,10 +23,16 @@ If --prefix is supplied, only keys starting with that prefix are shown.
 Use 'tvault get <key>' to retrieve a specific value, or 'tvault search'
 for cross-project or relational queries.
 
+--names-only lists key names without unlocking the vault (key names are
+stored in the clear alongside the ciphertext), so it works on a locked
+vault and never decrypts a value. The JSON shape is unchanged:
+["DB_URL","API_KEY"].
+
 Examples:
   tvault list
   tvault list --prefix STRIPE_
-  tvault list -p staging --prefix DB_`,
+  tvault list -p staging --prefix DB_
+  tvault list -p staging --json --names-only`,
 	Aliases: []string{"ls"},
 	RunE:    runList,
 }
@@ -33,12 +40,29 @@ Examples:
 func init() {
 	rootCmd.AddCommand(listCmd)
 	listCmd.Flags().StringVar(&listPrefix, "prefix", "", "Only show keys starting with this prefix")
+	listCmd.Flags().BoolVar(&listNamesOnly, "names-only", false,
+		"List key names only; lock-free — works on a locked vault (never decrypts)")
 }
 
 func runList(_ *cobra.Command, _ []string) error {
-	v, err := openAndUnlockVault()
-	if err != nil {
-		return err
+	dir := getVaultDir()
+
+	// --names-only is lock-free: key names are stored in the clear, so we
+	// open without unlocking. This lets an agent (e.g. Cortex) enumerate a
+	// project's key names without a passphrase and without decrypting.
+	var v *vault.Vault
+	if listNamesOnly {
+		vv, err := vault.Open(dir)
+		if err != nil {
+			return fmt.Errorf("vault not found at %s, run 'tvault init' first: %w", dir, err)
+		}
+		v = vv
+	} else {
+		vv, err := openAndUnlockVault()
+		if err != nil {
+			return err
+		}
+		v = vv
 	}
 	defer v.Close()
 
@@ -60,6 +84,7 @@ func runList(_ *cobra.Command, _ []string) error {
 			keys = append(keys, r.Key)
 		}
 	} else {
+		var err error
 		keys, err = v.ListSecrets(project)
 		if err != nil {
 			return fmt.Errorf("failed to list secrets: %w", err)

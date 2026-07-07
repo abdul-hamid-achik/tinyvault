@@ -103,6 +103,7 @@ export default defineConfig({
           items: [
             { text: 'Secrets & Search', link: '/guide/secrets' },
             { text: 'Projects', link: '/guide/projects' },
+            { text: 'Environment Groups', link: '/guide/env-groups' },
             { text: 'Run & Environment', link: '/guide/run-and-env' },
             { text: '.env Files', link: '/guide/dotenv' },
             { text: 'Versioning & Rollback', link: '/guide/versioning' },
@@ -133,6 +134,7 @@ export default defineConfig({
           items: [
             { text: 'Interactive Studio', link: '/guide/studio' },
             { text: 'Local Agent', link: '/guide/agent' },
+            { text: 'Codemap integration', link: '/guide/codemap' },
           ],
         },
       ],

@@ -359,7 +359,7 @@ The MCP server is the most security-sensitive surface. The design rules:
 
 ## 4. The MCP surface
 
-36 tools, 2 prompts, 3 resources. All registered through
+49 tools, 2 prompts, 3 resources. All registered through
 `github.com/modelcontextprotocol/go-sdk` v1.6.1.
 
 **Open model — KEK-only, reopen-per-request.** Like the [agent](#_5-5-the-local-agent-tvault-agent-hooks), `tvault mcp` does **not** hold the bbolt database open for its lifetime — doing so would take bbolt's exclusive file lock and block every other `tvault` process (`set`/`get`/`run`/`import`) with an opaque timeout. Instead the server validates the passphrase once at startup, caches **only the KEK**, closes the vault, and then reopens + `UnlockWithKEK`s it for the duration of each request via SDK receiving middleware (`methodNeedsVault` gates `tools/call` and `resources/read`), serialized by a mutex. The lock is free between requests, so the CLI keeps working alongside a running server. The cached KEK is zeroed on shutdown. A contended open surfaces as `vault.ErrVaultBusy` (exit code `7`), not the old `open bolt db: timeout`.
@@ -500,7 +500,7 @@ Cobra-based. Global flags: `--vault` (override `TVAULT_DIR`), `--project`
 tvault init                       # create a new vault
 tvault unlock                     # unlock with passphrase (or use TVAULT_PASSPHRASE)
 tvault lock                       # zero in-memory KEK
-tvault status                     # vault metadata + lock state
+tvault status                     # vault metadata + lock/agent state (lock-free; --json adds locked, agent_running)
 
 tvault set KEY VALUE              # store a secret in the current project
 tvault set KEY --from-env .env    # set KEY from a dotenv file (use --key for source)
@@ -509,7 +509,7 @@ tvault get KEY --from .env        # read a value from a dotenv file (no unlock)
 tvault get KEY --version 2        # print a specific historical version
 tvault history KEY                # list every version (metadata only, no unlock)
 tvault rollback KEY --to 2        # restore an earlier version as a new version
-tvault list                       # list all secret keys in the current project
+tvault list                       # list all secret keys in the current project (--names-only: lock-free, no unlock)
 tvault delete KEY                 # remove a secret (purges its version history)
 
 tvault run -- <cmd> [args...]     # run cmd with project secrets as env vars
@@ -548,7 +548,7 @@ tvault use <project>              # switch the current project
 tvault projects delete <name>     # soft-delete a project
 tvault import --interactive       # TUI picker with key counts and diagnostics
 
-tvault projects list              # list projects
+tvault projects list --names-only  # value-free, lock-free project names (no descriptions, no unlock)
 tvault projects create <name>     # create a project (gets its own DEK)
 tvault use <project>              # switch the current project
 tvault projects delete <name>     # soft-delete a project
@@ -584,6 +584,34 @@ tvault hook zsh                   # print a shell/direnv snippet (tvault_load) u
 tvault mcp                        # start the MCP server on stdio (alias: mcp-server)
 tvault completion bash|zsh|...    # shell completion
 ```
+
+
+### 5.0 Exit codes & non-interactive signals
+
+tvault maps failures to deterministic exit codes so scripts and agents can
+branch on the *why* without parsing stderr: `0` success, `1` generic, `3`
+locked, `4` not found, `5` not initialized, `6` wrong passphrase, `7` busy
+(see `cmd/tvault/cmd/exit.go`).
+
+**Lock-free, value-free enumeration.** `tvault status --json`,
+`tvault projects list --json --names-only`, and `tvault list -p PROJECT
+--json --names-only` never unlock the vault — project and key names are
+stored in the clear alongside the ciphertext, so they are readable on a
+locked vault (exit 0). `projects list --names-only` omits descriptions
+(which can hold sensitive free text), returning `[{"name":"app"}]`;
+`list --names-only` returns `["DB_URL","API_KEY"]`. `tvault status --json`
+adds `locked` and `agent_running`: `locked` is false when an agent is
+holding the vault unlocked, so a caller can distinguish "reachable but
+locked" from "broken/unreachable".
+
+**Deterministic non-interactive "vault locked" signal.** When an
+unlock-requiring command runs with stdin not a TTY and no
+`TVAULT_PASSPHRASE` (and no agent is serving it), it fails fast *without
+prompting*: exit code `3`, and under `--json`,
+`{"error":"vault_locked","locked":true}` on stdout with nothing on stderr
+— instead of the historical opaque "failed to read passphrase" error. This
+lets a non-interactive agent (e.g. Cortex) map the condition to a clean
+unavailable/inconclusive verdict.
 
 ### 5.1 The dotenv safety story
 

@@ -16,6 +16,21 @@ brew upgrade tvault          # Homebrew
 go install github.com/abdul-hamid-achik/tinyvault/cmd/tvault@latest
 ```
 
+## Unreleased
+
+**Added**
+
+- **Environment groups / profiles** — link projects as named environments (production, preview, staging) of the same application. Pure metadata; each environment keeps its own DEK. See [Environment groups](/guide/env-groups).
+  - `tvault env group create/list/show/add/remove/delete` for group membership.
+  - `tvault env diff` — key-set (and optional value) drift across environments.
+  - `tvault env promote` — copy a value between environments, versioned and audited (`secret.promote`).
+  - `tvault env inherit` / `pin` / `unpin` / `inherited` — metadata-only read-time key inheritance from a base, with per-key pinning.
+  - `tvault env seal` — pack every environment into one recipient-sealed v2 blob (decrypt in CI with `decrypt-env --section <env>`).
+  - Studio bindings for grouped projects (`g`, `D`, `G`) with inherited (`←`) and pinned (`◈`) markers.
+  - 13 new MCP tools (`vault_env_group_*`, `vault_env_diff`, `vault_env_promote`, `vault_env_inherit`, `vault_env_inherited`, `vault_env_pin`, `vault_env_unpin`, `vault_env_seal`) — all metadata- or ciphertext-only. Tool count: 36 → 49. See [MCP tools reference](/mcp/tools).
+- **`tvault self-update`** (alias `upgrade`) — checksum-verified in-place binary update from the official GitHub releases. `--check` reports availability without installing; `--version vX.Y.Z` pins/downgrades. Replaces the removed `install.sh`. See [CLI reference](/cli/).
+- **Codemap integration** — a documented, strictly value-free MCP surface for codemap (a local code-graph indexer): rotation blast radius, private-registry LSP creds, env-var audit, credential freshness, and least-privilege seal scope. Only key names, metadata, audit rows, and recipients cross the seam — codemap never ingests a secret value. See [Codemap integration](/guide/codemap).
+
 ## 0.11.0 — 2026-06-20
 
 **Added**

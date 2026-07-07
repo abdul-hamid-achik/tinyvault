@@ -39,7 +39,7 @@ Every tool returns metadata, a file path, or ciphertext — **except** `vault_ge
 
 ## Two ways to connect
 
-- **MCP** (recommended): point your client at `tvault mcp`. See [MCP Overview](/mcp/) for setup, the [Tools Reference](/mcp/tools) (36 tools), and the [Recipes](/mcp/recipes) cookbook.
+- **MCP** (recommended): point your client at `tvault mcp`. See [MCP Overview](/mcp/) for setup, the [Tools Reference](/mcp/tools) (49 tools), and the [Recipes](/mcp/recipes) cookbook.
 - **CLI subprocess**: call `tvault` directly; `tvault docs`/`tvault help --json` are the structured surfaces.
 
 ## Anti-patterns
@@ -51,6 +51,6 @@ Every tool returns metadata, a file path, or ciphertext — **except** `vault_ge
 ## See also
 
 - [MCP Recipes](/mcp/recipes) — end-to-end workflows
-- [MCP Tools Reference](/mcp/tools) — all 36 tools, inputs, and returns
+- [MCP Tools Reference](/mcp/tools) — all 49 tools, inputs, and returns
 - [Access Policy](/mcp/access-policy) — scope what an agent may do
 - [Security & Threat Model](/reference/security) — what redaction does and doesn't protect

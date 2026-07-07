@@ -66,6 +66,16 @@ tvault run --prefix NUXT_ -- bun run dev
 
 `--only`/`--prefix` cannot be combined with `--no-vault` (there are no vault secrets to select).
 
+### Resolving through an environment group
+
+When the active project is part of an [environment group](/guide/env-groups), `--group <name> --env <child>` makes `run` resolve the child's secrets **through the inheritance chain**: the child's own keys are loaded, then any missing keys are filled in from the base environment at run time. No values are copied — inheritance is metadata-only, so the child always sees the base's latest value.
+
+```bash
+tvault run --group liftclub --env preview -- ./deploy.sh
+```
+
+This composes with `--only`/`--prefix`: the allowlist filters the merged (child + inherited) key set. Pin a key (`tvault env pin`) to give the child its own local copy and break inheritance for that key only.
+
 ### Signal forwarding and exit codes
 
 `tvault run` forwards `SIGINT` and `SIGTERM` to the child process, so `Ctrl-C` and orderly shutdowns reach your application. When the child exits, `tvault` propagates the child's exit code as its own. This makes `tvault run` safe to use as a process wrapper in supervisors, Procfiles, and CI steps.
@@ -78,6 +88,8 @@ tvault run --prefix NUXT_ -- bun run dev
 | `--no-vault` | Skip vault secrets; use only `--env-file` values. |
 | `--only <k1,k2>` | Inject only these secret keys (comma-separated allowlist). |
 | `--prefix <p>` | Inject only secret keys with this prefix. |
+| `--group <name>` | Resolve secrets through an [environment group](/guide/env-groups)'s inheritance chain. |
+| `--env <name>` | Environment within the group (requires `--group`). |
 
 ## tvault env — emit secrets for your shell
 

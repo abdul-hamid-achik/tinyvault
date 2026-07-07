@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
+
+	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
 )
 
 var projectsCmd = &cobra.Command{
@@ -52,6 +55,7 @@ var projectsUseCmd = &cobra.Command{
 var (
 	projectDescription string
 	projectDeleteForce bool
+	projectsNamesOnly  bool
 )
 
 func init() {
@@ -63,9 +67,47 @@ func init() {
 
 	projectsCreateCmd.Flags().StringVarP(&projectDescription, "description", "d", "", "Project description")
 	projectsDeleteCmd.Flags().BoolVarP(&projectDeleteForce, "yes", "y", false, "Skip confirmation prompt")
+	projectsListCmd.Flags().BoolVar(&projectsNamesOnly, "names-only", false,
+		"List project names only (no descriptions); lock-free — works on a locked vault")
 }
 
 func runProjectsList(_ *cobra.Command, _ []string) error {
+	dir := getVaultDir()
+
+	// --names-only is value-free and lock-free: project names live in the
+	// clear project_names index, so we open without unlocking. This lets an
+	// agent (e.g. Cortex) enumerate project names without a passphrase and
+	// without ever seeing descriptions (which can hold sensitive free text).
+	if projectsNamesOnly {
+		v, err := vault.Open(dir)
+		if err != nil {
+			return fmt.Errorf("vault not found at %s, run 'tvault init' first: %w", dir, err)
+		}
+		defer v.Close()
+		projects, err := v.ListProjects()
+		if err != nil {
+			return fmt.Errorf("failed to list projects: %w", err)
+		}
+		names := make([]string, 0, len(projects))
+		for _, p := range projects {
+			names = append(names, p.Name)
+		}
+		sort.Strings(names)
+		if jsonOutput {
+			out := make([]map[string]string, 0, len(names))
+			for _, n := range names {
+				out = append(out, map[string]string{"name": n})
+			}
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(out)
+		}
+		for _, n := range names {
+			fmt.Println(n)
+		}
+		return nil
+	}
+
 	v, err := openAndUnlockVault()
 	if err != nil {
 		return err

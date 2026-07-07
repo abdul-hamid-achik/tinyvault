@@ -324,8 +324,15 @@ func fullCatalog() docsCatalog {
 			{
 				Name:        "multi-project",
 				Summary:     "Isolated projects each with their own DEK.",
-				Commands:    []string{"tvault projects create", "tvault use", "tvault projects list", "tvault projects delete"},
-				Description: "Use --project (or -p) to scope any command. Default project is 'default'.",
+				Commands:    []string{"tvault projects create", "tvault use", "tvault projects list", "tvault projects list --names-only", "tvault projects delete"},
+				Description: "Use --project (or -p) to scope any command. Default project is 'default'. `projects list --names-only` and `list --names-only` enumerate names without unlocking (key/project names are stored in the clear) — value-free, lock-free, exit 0 on a locked vault — so a non-interactive agent can enumerate without a passphrase and without ever seeing descriptions.",
+			},
+			{
+				Name:        "lock-free-status",
+				Summary:     "Lock-free availability + lock/agent state, and a deterministic non-interactive 'vault locked' signal.",
+				Commands:    []string{"tvault status --json", "tvault projects list --json --names-only", "tvault list -p PROJECT --json --names-only"},
+				SeeAlso:     []string{"tvault docs agent", "tvault docs diagnostics"},
+				Description: "`tvault status --json` is lock-free and reports {initialized, locked, agent_running, vault_dir, current_project, project_count}: locked is false when an agent is holding the vault unlocked (value reads can be served without a passphrase), so a caller can distinguish 'reachable but locked' from 'broken/unreachable'. When an unlock-requiring command runs non-interactively (stdin not a TTY) with no TVAULT_PASSPHRASE and no agent, it fails fast with exit code 3 and, under --json, prints {\"error\":\"vault_locked\",\"locked\":true} on stdout with nothing on stderr — instead of prompting or emitting an opaque read error.",
 			},
 			{
 				Name:        "passphrase-rotation",
@@ -412,7 +419,7 @@ func fullCatalog() docsCatalog {
 			{
 				Slug:        "mcp",
 				Title:       "MCP server",
-				Description: "Starts a Model Context Protocol server on stdio. Add to your MCP host config with command=tvault args=[mcp] env={TVAULT_PASSPHRASE:...}. The server exposes 36 tools, 2 prompts, and 3 resources. The model never needs to see secret values: prefer vault_run_with_secrets and vault_export_env over vault_get_secret. vault_secret_history and vault_rollback_secret manage version history without ever returning a value.",
+				Description: "Starts a Model Context Protocol server on stdio. Add to your MCP host config with command=tvault args=[mcp] env={TVAULT_PASSPHRASE:...}. The server exposes 49 tools, 2 prompts, and 3 resources. The model never needs to see secret values: prefer vault_run_with_secrets and vault_export_env over vault_get_secret. vault_secret_history and vault_rollback_secret manage version history without ever returning a value.",
 			},
 			{
 				Slug:        "self-update",

@@ -40,6 +40,20 @@ func dialAgent() (*agent.Client, bool) {
 	return c, true
 }
 
+// agentReachable reports whether a tvault agent socket is reachable under
+// the configured vault dir, regardless of --no-agent / TVAULT_NO_AGENT. It
+// is an observation about the system (used by `status --json`), not a
+// routing decision, so it does NOT honor the no-agent bypass. A short
+// timeout keeps `status` fast. Returns false on non-unix platforms.
+func agentReachable() bool {
+	c, err := agent.Dial(getVaultDir(), time.Second)
+	if err != nil {
+		return false
+	}
+	_ = c // Dial already opens+closes a probe connection; nothing to close.
+	return true
+}
+
 // agentGetSecret tries to fetch one secret via the agent. The second return
 // is false when the caller should fall back to a direct unlock (no agent, or
 // the agent could not serve it).

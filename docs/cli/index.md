@@ -276,6 +276,8 @@ Set the active project. Shorthand for `tvault projects use`. No command-local fl
 tvault run -- node server.js
 tvault run -e .env.local -- ./start.sh
 tvault run --no-vault -- env
+tvault run --only DATABASE_URL,API_TOKEN -- pulumi up
+tvault run --group liftclub --env preview -- ./deploy.sh
 ```
 
 Run a command with the project's secrets injected into its environment. Use `--` to separate `tvault` flags from the child command. Forwards `SIGINT`/`SIGTERM` to the child and propagates its exit code.
@@ -284,6 +286,10 @@ Run a command with the project's secrets injected into its environment. Use `--`
 | --- | --- |
 | `-e`, `--env-file <path>` | Also load variables from this dotenv file. |
 | `--no-vault` | Do not inject vault secrets (use only `--env-file` / inherited env). |
+| `--only <k1,k2>` | Inject only these secret keys (comma-separated allowlist). |
+| `--prefix <p>` | Inject only secret keys with this prefix. |
+| `--group <name>` | Resolve secrets through an [environment group](/guide/env-groups)'s inheritance chain. |
+| `--env <name>` | Environment within the group (requires `--group`). |
 
 ### `env`
 
@@ -302,6 +308,90 @@ Print the project's secrets as environment assignments. The default format is `s
 | `--name <str>` | Secret name (for `k8s-secret`). |
 | `--namespace <str>` | Namespace (for `k8s-secret`). |
 | `--identity <name>` | Read a **shared** project with an X25519 identity — no passphrase needed. |
+
+### `env group`
+
+```bash
+tvault env group create liftclub --env production=liftclub --env preview=liftclub-preview -d "LIFT Club"
+tvault env group list
+tvault env group show liftclub
+tvault env group add staging --group liftclub --project liftclub-staging
+tvault env group remove staging --group liftclub
+tvault env group delete liftclub -y
+```
+
+Link multiple projects as named environments of the same application. Pure metadata — no new crypto, no copied values; deleting a group never touches a secret. A project belongs to at most one group unless `--force` is used on `create`. See [Environment groups](/guide/env-groups).
+
+| Subcommand | Flags |
+| --- | --- |
+| `create <name>` | `-d`, `--description <str>`; `--env <name=project>` (repeatable, required); `--force`. |
+| `list` | — |
+| `show <name>` | — |
+| `add <env>` | `--group <name>` (required); `-p`, `--project <name>` (required). |
+| `remove <env>` | `--group <name>` (required). |
+| `delete <name>` | `-y`, `--yes`. |
+
+### `env diff`
+
+```bash
+tvault env diff liftclub
+tvault env diff liftclub --values
+tvault env diff liftclub --keys-only --json
+```
+
+Compare key sets across all environments in a group. Default is metadata-only (no unlock). `--values` also reports `same`/`different` (needs unlock; values never printed). Exit codes: `0` no drift, `1` drift, `2` group not found, `3` locked (`--values` only).
+
+| Flag | Description |
+| --- | --- |
+| `--values` | Also compare values (same/different; never prints values). |
+| `--keys-only` | Compare only key sets (fast, no decryption). |
+
+### `env promote`
+
+```bash
+tvault env promote DATABASE_URL --group liftclub --from preview --to production
+tvault env promote --all --group liftclub --from preview --to production --dry-run
+```
+
+Copy secret *values* from one environment to another. The source value is decrypted and re-encrypted into the target, creating a new version (prior value archived). Each promoted key is audited as `secret.promote`. Promotes always prompt unless `--yes` is passed.
+
+| Flag | Description |
+| --- | --- |
+| `--group <name>` | Group name (required). |
+| `--from <env>` | Source environment (required). |
+| `--to <env>` | Target environment (required). |
+| `<keys...>` | Positional keys to promote (omit when using `--all`). |
+| `--all` | Promote all keys that differ. |
+| `--dry-run` | Show what would change without writing. |
+| `-y`, `--yes` | Skip the confirmation prompt. |
+
+### `env inherit` / `pin` / `unpin` / `inherited`
+
+```bash
+tvault env inherit --group liftclub --env preview --from production
+tvault env pin API_TOKEN --group liftclub --env preview
+tvault env unpin API_TOKEN --group liftclub --env preview
+tvault env inherited --group liftclub --env preview
+```
+
+Inheritance is metadata-only: a child resolves missing keys from a base at read time. `pin` writes the resolved value into the child (breaking inheritance for that key only); `unpin` deletes it (restoring inheritance). All four take `--group <name>` and `--env <child>` (required).
+
+### `env seal`
+
+```bash
+tvault env seal --group liftclub --recipient tvault1ci… -o ci/migration.sealed
+tvault env seal --group liftclub --keys DATABASE_URL,STRIPE_SECRET_KEY --recipient tvault1ci…
+```
+
+Seal all (or a subset of) environments into one `.env.encrypted` v2 blob keyed by environment name. Output is ciphertext only — values are never returned. In CI, decrypt with `tvault decrypt-env --identity <id> --section <env>` to extract one environment.
+
+| Flag | Description |
+| --- | --- |
+| `--group <name>` | Group name (required). |
+| `--recipient <tvault1…>` | X25519 recipient (repeatable; required). |
+| `-o`, `--out <file>` | Output file (default: stdout). |
+| `--keys <list>` | Specific keys to include (comma-separated or repeatable). |
+| `--envs <list>` | Specific environments to include (comma-separated or repeatable). |
 
 ---
 
@@ -642,6 +732,23 @@ tvault lock
 ```
 
 Lock the vault and clear cached keys. No command-local flags.
+
+### `self-update`
+
+```bash
+tvault self-update
+tvault self-update --check
+tvault self-update --version v0.11.1
+```
+
+Update the `tvault` binary in place: download the latest release for this OS/arch from the official GitHub releases, verify its SHA-256 checksum, and atomically replace the running binary. Alias: `upgrade`. The download source is fixed and cannot be overridden at runtime — a self-replacing binary must not let an attacker redirect it.
+
+`--check` reports whether an update is available without installing. `--version` installs a specific release tag (to pin or downgrade). If you installed via Homebrew or a system package (`apt`/`dnf`/`apk`), update through that package manager instead so its bookkeeping stays correct.
+
+| Flag | Description |
+| --- | --- |
+| `-c`, `--check` | Only report whether an update is available; don't install. |
+| `--version <tag>` | Install a specific release tag (e.g. `v0.11.1`) instead of the latest. |
 
 ---
 
