@@ -18,6 +18,24 @@ go install github.com/abdul-hamid-achik/tinyvault/cmd/tvault@latest
 
 ## Unreleased
 
+## 0.17.0 — 2026-07-11
+
+**Security**
+
+- The production MCP server now fails closed without an explicit access
+  policy: project/status metadata remains available, while secret reads,
+  writes, and command execution are denied.
+- MCP secret allowlists and per-session value-read limits are enforced.
+- CLI- and MCP-launched child processes no longer inherit TinyVault control
+  credentials (`TVAULT_PASSPHRASE`, `TVAULT_IDENTITY_KEY`, or
+  `TVAULT_AGENT_TOKEN`).
+
+**Maintenance**
+
+- CI is pinned to Go 1.26.5 and Goldmark is upgraded to 1.7.17.
+
+## 0.16.0 — 2026-07-07
+
 **Added**
 
 - **Environment groups / profiles** — link projects as named environments (production, preview, staging) of the same application. Pure metadata; each environment keeps its own DEK. See [Environment groups](/guide/env-groups).

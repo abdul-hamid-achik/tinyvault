@@ -95,7 +95,7 @@ func newVaultMCPServer(policy *AccessPolicy) *VaultMCPServer {
 	s.server = sdkmcp.NewServer(
 		&sdkmcp.Implementation{
 			Name:    "tinyvault",
-			Version: "1.0.0",
+			Version: "0.17.0",
 		},
 		&sdkmcp.ServerOptions{
 			Instructions: "TinyVault provides secure local secret management. " +

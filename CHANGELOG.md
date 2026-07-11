@@ -6,6 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-07-11
+
+### Security
+
+- Changed the production MCP server to fail closed when no access policy is
+  configured: project/status metadata remains available, while secret reads,
+  writes, and command execution require an explicit policy.
+- Enforced secret allowlists and per-session value-read limits for MCP access.
+- Removed TinyVault control credentials (`TVAULT_PASSPHRASE`,
+  `TVAULT_IDENTITY_KEY`, and `TVAULT_AGENT_TOKEN`) from CLI- and MCP-launched
+  child-process environments.
+
+### Changed
+
+- Refreshed the security toolchain by pinning CI to Go 1.26.5 and upgrading
+  Goldmark to 1.7.17.
+
 ## [0.16.0] - 2026-07-07
 
 ### Added
@@ -127,7 +144,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 See the [GitHub releases](https://github.com/abdul-hamid-achik/tinyvault/releases)
 for v0.8.0 and earlier.
 
-[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.13.1...v0.14.0
