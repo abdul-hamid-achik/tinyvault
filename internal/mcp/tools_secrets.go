@@ -130,6 +130,9 @@ func (s *VaultMCPServer) handleGetSecret(_ context.Context, _ *sdkmcp.CallToolRe
 		if !s.policy.CanAccessSecret(input.Key) {
 			return nil, getSecretOutput{}, fmt.Errorf("secret %q is not allowed by policy", input.Key)
 		}
+		if !s.consumeValueRead() {
+			return nil, getSecretOutput{}, fmt.Errorf("secret value read limit reached for this MCP session")
+		}
 
 		value, source, err := s.vault.ResolveKey(input.Group, input.Env, input.Key)
 		if err != nil {
@@ -152,6 +155,9 @@ func (s *VaultMCPServer) handleGetSecret(_ context.Context, _ *sdkmcp.CallToolRe
 	}
 	if !s.policy.CanAccessSecret(input.Key) {
 		return nil, getSecretOutput{}, fmt.Errorf("secret %q is not allowed by policy", input.Key)
+	}
+	if !s.consumeValueRead() {
+		return nil, getSecretOutput{}, fmt.Errorf("secret value read limit reached for this MCP session")
 	}
 
 	value, err := s.vault.GetSecret(project, input.Key)

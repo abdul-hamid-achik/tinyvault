@@ -74,3 +74,45 @@ func TestRunWithSecrets_PrefixAndOnly(t *testing.T) {
 		})
 	}
 }
+
+func TestRunWithSecretsScrubsTinyVaultControlCredentials(t *testing.T) {
+	t.Setenv("TVAULT_PASSPHRASE", "must-not-leak")
+	t.Setenv("TVAULT_IDENTITY_KEY", "must-not-leak")
+	t.Setenv("TVAULT_AGENT_TOKEN", "must-not-leak")
+
+	srv, v := newScratchServer(t)
+	if err := v.SetSecret("default", "TVAULT_PASSPHRASE", "also-reserved"); err != nil {
+		t.Fatal(err)
+	}
+	_, out, err := srv.handleRunWithSecrets(context.Background(), nil, runWithSecretsInput{
+		Command: `for k in TVAULT_PASSPHRASE TVAULT_IDENTITY_KEY TVAULT_AGENT_TOKEN; do printenv "$k" >/dev/null 2>&1 && echo "$k"; done`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(out.Stdout) != "" {
+		t.Fatalf("control credential names reached child environment: %q", out.Stdout)
+	}
+}
+
+func TestRunWithSecretsAppliesSecretPolicy(t *testing.T) {
+	srv, _ := newScratchServer(t)
+	srv.policy.SecretsAllow = []string{"DB_*"}
+
+	_, out, err := srv.handleRunWithSecrets(context.Background(), nil, runWithSecretsInput{
+		Command: `for k in DB_URL API_KEY; do printenv "$k" >/dev/null 2>&1 && echo "$k"; done`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(out.Stdout); got != "DB_URL" {
+		t.Fatalf("policy-filtered child environment = %q, want DB_URL", got)
+	}
+
+	if _, _, err := srv.handleRunWithSecrets(context.Background(), nil, runWithSecretsInput{
+		Command: "true",
+		Secrets: []string{"API_KEY"},
+	}); err == nil {
+		t.Fatal("explicitly requested denied secret was accepted")
+	}
+}

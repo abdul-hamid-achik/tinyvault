@@ -11,6 +11,8 @@ import (
 	"time"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/abdul-hamid-achik/tinyvault/internal/processenv"
 )
 
 type runWithSecretsInput struct {
@@ -107,6 +109,16 @@ func (s *VaultMCPServer) handleRunWithSecrets(ctx context.Context, _ *sdkmcp.Cal
 	if err != nil {
 		return nil, runResult{}, err
 	}
+	for _, key := range input.Secrets {
+		if !s.policy.CanAccessSecret(key) {
+			return nil, runResult{}, fmt.Errorf("secret %q is not allowed by policy", key)
+		}
+	}
+	for key := range secrets {
+		if !s.policy.CanAccessSecret(key) {
+			delete(secrets, key)
+		}
+	}
 
 	timeout := time.Duration(input.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
@@ -116,10 +128,11 @@ func (s *VaultMCPServer) handleRunWithSecrets(ctx context.Context, _ *sdkmcp.Cal
 	execCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	env := os.Environ()
+	env := processenv.Sanitize(os.Environ())
 	for k, v := range secrets {
 		env = append(env, k+"="+v)
 	}
+	env = processenv.Sanitize(env)
 
 	cmd := exec.CommandContext(execCtx, "sh", "-c", input.Command) //nolint:gosec // MCP tool intentionally runs user commands
 	cmd.Env = env
@@ -149,8 +162,8 @@ func (s *VaultMCPServer) handleRunWithSecrets(ctx context.Context, _ *sdkmcp.Cal
 	s.audit("secret.exec", "command", input.Command, map[string]any{"project": project, "exit_code": exitCode})
 
 	if s.policy.RedactOutput {
-		outStr = redactSecrets(outStr, allSecrets)
-		errStr = redactSecrets(errStr, allSecrets)
+		outStr = redactSecrets(outStr, secrets)
+		errStr = redactSecrets(errStr, secrets)
 	}
 
 	return nil, runResult{

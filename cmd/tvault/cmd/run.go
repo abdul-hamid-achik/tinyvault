@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/dotenv"
+	"github.com/abdul-hamid-achik/tinyvault/internal/processenv"
 )
 
 var (
@@ -175,10 +176,11 @@ func runRun(cmd *cobra.Command, args []string) error {
 	}
 
 	// Build environment.
-	env := os.Environ()
+	env := processenv.Sanitize(os.Environ())
 	for key, value := range merged {
 		env = append(env, fmt.Sprintf("%s=%s", key, value))
 	}
+	env = processenv.Sanitize(env)
 
 	// Find the executable.
 	executable, err := exec.LookPath(args[0])

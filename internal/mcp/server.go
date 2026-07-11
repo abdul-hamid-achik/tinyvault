@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -38,6 +39,23 @@ type VaultMCPServer struct {
 	dir     string
 	kek     []byte
 	vaultMu sync.Mutex
+	reads   atomic.Int64
+}
+
+func (s *VaultMCPServer) consumeValueRead() bool {
+	limit := int64(s.policy.MaxReadsPerSession)
+	if limit <= 0 {
+		return true
+	}
+	for {
+		current := s.reads.Load()
+		if current >= limit {
+			return false
+		}
+		if s.reads.CompareAndSwap(current, current+1) {
+			return true
+		}
+	}
 }
 
 // NewVaultMCPServer creates a held-open MCP server backed by the given unlocked

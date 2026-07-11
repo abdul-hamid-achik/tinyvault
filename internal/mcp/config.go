@@ -33,6 +33,20 @@ func DefaultPolicy() *AccessPolicy {
 	}
 }
 
+// SafeDefaultPolicy is used by the production MCP command when no policy file
+// exists. It exposes project/status metadata but no secret keys or values,
+// writes, or command execution until the user creates an explicit policy.
+func SafeDefaultPolicy() *AccessPolicy {
+	return &AccessPolicy{
+		AccessMode:         "read-only",
+		ProjectsAllow:      []string{"*"},
+		SecretsDeny:        []string{"*"},
+		AllowExec:          false,
+		MaxReadsPerSession: 0,
+		RedactOutput:       true,
+	}
+}
+
 // LoadPolicy reads an access policy from a YAML file.
 // Returns nil, nil if the file does not exist.
 func LoadPolicy(path string) (*AccessPolicy, error) {

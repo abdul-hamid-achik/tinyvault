@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"path/filepath"
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/crypto"
@@ -51,9 +52,12 @@ func runMCPServer(cmd *cobra.Command, _ []string) error {
 	defer crypto.ZeroBytes(kek)
 
 	policyPath := filepath.Join(getVaultDir(), "mcp-policy.yaml")
-	policy, _ := tvmcp.LoadPolicy(policyPath) //nolint:errcheck // falls back to default policy below
+	policy, err := tvmcp.LoadPolicy(policyPath)
+	if err != nil {
+		return fmt.Errorf("load MCP access policy %s: %w", policyPath, err)
+	}
 	if policy == nil {
-		policy = tvmcp.DefaultPolicy()
+		policy = tvmcp.SafeDefaultPolicy()
 	}
 
 	srv := tvmcp.NewReopeningVaultMCPServer(getVaultDir(), kek, policy)

@@ -37,6 +37,31 @@ func TestDefaultPolicy(t *testing.T) {
 	}
 }
 
+func TestSafeDefaultPolicyFailsClosed(t *testing.T) {
+	p := SafeDefaultPolicy()
+	if p.CanWrite() || p.CanExec() {
+		t.Fatalf("safe default permits mutation: write=%v exec=%v", p.CanWrite(), p.CanExec())
+	}
+	if p.CanAccessSecret("API_KEY") {
+		t.Fatal("safe default permits secret access")
+	}
+	if !p.CanAccessProject("local-project") {
+		t.Fatal("safe default should preserve value-free project discovery")
+	}
+}
+
+func TestValueReadLimitIsEnforced(t *testing.T) {
+	srv, _ := newScratchServer(t)
+	srv.policy.MaxReadsPerSession = 1
+
+	if _, _, err := srv.handleGetSecret(context.Background(), nil, getSecretInput{Key: "API_KEY"}); err != nil {
+		t.Fatalf("first value read failed: %v", err)
+	}
+	if _, _, err := srv.handleGetSecret(context.Background(), nil, getSecretInput{Key: "API_KEY"}); err == nil {
+		t.Fatal("second value read exceeded the session cap but succeeded")
+	}
+}
+
 func TestPolicyCanAccessProject_AllowDeny(t *testing.T) {
 	tests := []struct {
 		name     string

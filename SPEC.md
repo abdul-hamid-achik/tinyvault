@@ -462,6 +462,13 @@ Semantics: `deny_*` is checked first, then `allow_*`. Empty `allow_*` means
 "allow everything not denied." `access_mode: full` is the only mode that
 permits `vault_run_with_secrets`.
 
+If `mcp-policy.yaml` is absent, the production server starts with a
+fail-closed policy: read-only project/status metadata is available, while
+secret access, writes, and command execution are denied. A malformed policy
+is a startup error rather than a fallback. TinyVault control credentials
+(`TVAULT_PASSPHRASE`, `TVAULT_IDENTITY_KEY`, and `TVAULT_AGENT_TOKEN`) are
+never inherited by `tvault run` or MCP-launched child processes.
+
 ### 4.5 Codemap integration surface
 
 TinyVault exposes a set of MCP tools that enable a **strictly value-free**
