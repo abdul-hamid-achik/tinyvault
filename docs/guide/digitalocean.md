@@ -23,7 +23,7 @@ sudo dpkg -i tvault_*_linux_${ARCH}.deb
 # Fedora/RHEL: the .rpm  ·  Alpine: the .apk  (same release page)
 
 # Homebrew (also works on Linux via Linuxbrew)
-brew install abdul-hamid-achik/tap/tvault
+brew install --cask abdul-hamid-achik/tap/tvault
 
 # Have a Go toolchain on the box?
 go install github.com/abdul-hamid-achik/tinyvault/cmd/tvault@latest

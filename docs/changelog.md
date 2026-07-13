@@ -12,11 +12,35 @@ the canonical source is [`CHANGELOG.md`](https://github.com/abdul-hamid-achik/ti
 Install or upgrade:
 
 ```bash
-brew upgrade tvault          # Homebrew
+brew upgrade --cask tvault   # Homebrew
 go install github.com/abdul-hamid-achik/tinyvault/cmd/tvault@latest
 ```
 
+If `tvault` was installed from the retired formula, migrate once with
+`brew uninstall --formula tvault`, then run
+`brew install --cask abdul-hamid-achik/tap/tvault`.
+
 ## Unreleased
+
+## 0.17.2 — 2026-07-13
+
+**Fixed**
+
+- CLI secret-source flags now fail closed before reading a dotenv file,
+  contacting the agent, opening the vault, or launching a child process.
+  Ambiguous `get` modes, incomplete `--group`/`--env` pairs, group selection
+  with `run --no-vault`, and group selection mixed with identity mode are
+  rejected explicitly.
+- Homebrew install and upgrade examples select the maintained cask explicitly.
+- The MCP handshake now reports version 0.17.2.
+
+## 0.17.1 — 2026-07-13
+
+**Fixed**
+
+- `get --group ... --env ...` bypasses the direct-project agent fast path and
+  resolves the requested environment through the unlocked vault, preventing a
+  value from the current project from being returned for a grouped lookup.
 
 ## 0.17.0 — 2026-07-11
 

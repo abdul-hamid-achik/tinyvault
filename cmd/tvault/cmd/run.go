@@ -73,16 +73,21 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("command is required")
 	}
 
-	if runEnvNoVault && (len(runOnly) > 0 || runPrefix != "") {
-		return fmt.Errorf("--only/--prefix select vault secrets and cannot be combined with --no-vault")
-	}
-
 	// Handle -- separator.
 	if args[0] == "--" {
 		args = args[1:]
 		if len(args) == 0 {
 			return fmt.Errorf("command is required after --")
 		}
+	}
+	if err := validateGroupEnvFlags(runGroup, runEnvName); err != nil {
+		return err
+	}
+	if runEnvNoVault && (len(runOnly) > 0 || runPrefix != "") {
+		return fmt.Errorf("--only/--prefix select vault secrets and cannot be combined with --no-vault")
+	}
+	if runEnvNoVault && runGroup != "" {
+		return fmt.Errorf("--group/--env select vault secrets and cannot be combined with --no-vault")
 	}
 
 	var vaultSecrets map[string]string

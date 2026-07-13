@@ -33,6 +33,52 @@ func TestRunOnlyPrefixConflictWithNoVault(t *testing.T) {
 	}
 }
 
+func TestRunGroupConflictWithNoVault(t *testing.T) {
+	oldNoVault, oldGroup, oldEnv := runEnvNoVault, runGroup, runEnvName
+	t.Cleanup(func() {
+		runEnvNoVault, runGroup, runEnvName = oldNoVault, oldGroup, oldEnv
+	})
+
+	runEnvNoVault = true
+	runGroup, runEnvName = "webapp", "preview"
+	err := runRun(nil, []string{"command-must-not-be-resolved"})
+	if err == nil || !strings.Contains(err.Error(), "--group/--env select vault secrets") {
+		t.Fatalf("unexpected validation result: %v", err)
+	}
+}
+
+func TestEnvRejectsIdentityWithGroupBeforeReading(t *testing.T) {
+	oldGroup, oldEnv, oldIdentity := envGroupFlag, envEnvFlag, envIdentity
+	t.Cleanup(func() {
+		envGroupFlag, envEnvFlag, envIdentity = oldGroup, oldEnv, oldIdentity
+	})
+	envGroupFlag, envEnvFlag = "webapp", "preview"
+
+	t.Run("identity flag", func(t *testing.T) {
+		envIdentity = "ci"
+		t.Setenv(envIdentityKey, "")
+		secrets, err := envSecrets()
+		if err == nil || !strings.Contains(err.Error(), "cannot be combined with --identity") {
+			t.Fatalf("unexpected validation result: %v", err)
+		}
+		if secrets != nil {
+			t.Fatal("conflicting identity and group flags returned secrets")
+		}
+	})
+
+	t.Run("identity environment", func(t *testing.T) {
+		envIdentity = ""
+		t.Setenv(envIdentityKey, "synthetic-identity")
+		secrets, err := envSecrets()
+		if err == nil || !strings.Contains(err.Error(), envIdentityKey) {
+			t.Fatalf("unexpected validation result: %v", err)
+		}
+		if secrets != nil {
+			t.Fatal("conflicting identity environment and group flags returned secrets")
+		}
+	})
+}
+
 func TestSelectSecrets(t *testing.T) {
 	all := map[string]string{
 		"DIGITALOCEAN_TOKEN": "dop_v1_x",

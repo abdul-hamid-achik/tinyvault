@@ -5,6 +5,9 @@ package cmd
 import (
 	"errors"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -269,4 +272,123 @@ func TestGetGroupBypassesAgentFastPath(t *testing.T) {
 	if string(resolvedOut) != groupValue {
 		t.Fatal("group/env get resolved an unexpected project value")
 	}
+}
+
+func TestGetInvalidFlagsDoNotReachAgent(t *testing.T) {
+	dir := shortAgentVault(t, "K", "agent-value")
+	stop := startTestAgentForCmd(t, dir)
+	defer stop()
+
+	setGetFlagTestCase(t, getFlagTestCase{showSource: true})
+	t.Setenv("TVAULT_PASSPHRASE", "")
+	t.Setenv(envIdentityKey, "")
+	t.Setenv("TVAULT_NO_AGENT", "")
+
+	var getErr error
+	stdout, stderr := captureStdoutErr(t, func() {
+		getErr = runGet(nil, []string{"K"})
+	})
+	if getErr == nil || !strings.Contains(getErr.Error(), "--show-source requires --group and --env") {
+		t.Fatalf("unexpected validation result: %v", getErr)
+	}
+	if len(stdout) != 0 {
+		t.Fatalf("invalid flags emitted %d bytes from the agent", len(stdout))
+	}
+	if len(stderr) != 0 {
+		t.Fatalf("invalid flags emitted %d stderr bytes", len(stderr))
+	}
+}
+
+func TestEnvIncompleteGroupFlagsDoNotReachAgent(t *testing.T) {
+	dir := shortAgentVault(t, "K", "agent-value")
+	stop := startTestAgentForCmd(t, dir)
+	defer stop()
+
+	oldGroup, oldEnv := envGroupFlag, envEnvFlag
+	t.Cleanup(func() { envGroupFlag, envEnvFlag = oldGroup, oldEnv })
+	t.Setenv("TVAULT_PASSPHRASE", "")
+	t.Setenv(envIdentityKey, "")
+	t.Setenv("TVAULT_NO_AGENT", "")
+
+	for name, flags := range map[string][2]string{
+		"group only": {"webapp", ""},
+		"env only":   {"", "preview"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			envGroupFlag, envEnvFlag = flags[0], flags[1]
+			secrets, err := envSecrets()
+			if err == nil || !strings.Contains(err.Error(), "--group and --env must be used together") {
+				t.Fatalf("unexpected validation result: %v", err)
+			}
+			if secrets != nil {
+				t.Fatal("incomplete group flags returned secrets from the agent")
+			}
+		})
+	}
+}
+
+func TestRunIncompleteGroupFlagsDoNotReachAgentOrTarget(t *testing.T) {
+	dir := shortAgentVault(t, "K", "agent-value")
+	stop := startTestAgentForCmd(t, dir)
+	defer stop()
+
+	oldEnvFile, oldNoVault := runEnvFile, runEnvNoVault
+	oldOnly, oldPrefix := runOnly, runPrefix
+	oldGroup, oldEnv := runGroup, runEnvName
+	runEnvFile, runEnvNoVault = "", false
+	runOnly, runPrefix = nil, ""
+	t.Cleanup(func() {
+		runEnvFile, runEnvNoVault = oldEnvFile, oldNoVault
+		runOnly, runPrefix = oldOnly, oldPrefix
+		runGroup, runEnvName = oldGroup, oldEnv
+	})
+	t.Setenv("TVAULT_PASSPHRASE", "")
+	t.Setenv(envIdentityKey, "")
+	t.Setenv("TVAULT_NO_AGENT", "")
+
+	touch, err := exec.LookPath("touch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, flags := range map[string][2]string{
+		"group only": {"webapp", ""},
+		"env only":   {"", "preview"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			runGroup, runEnvName = flags[0], flags[1]
+			marker := filepath.Join(t.TempDir(), "target-ran")
+			var runErr error
+			stdout, stderr := captureStdoutErr(t, func() {
+				runErr = runRun(runCmd, []string{touch, marker})
+			})
+			if runErr == nil || !strings.Contains(runErr.Error(), "--group and --env must be used together") {
+				t.Fatalf("unexpected validation result: %v", runErr)
+			}
+			if _, err := os.Stat(marker); !os.IsNotExist(err) {
+				t.Fatal("incomplete group flags launched the target process")
+			}
+			if len(stdout) != 0 || len(stderr) != 0 {
+				t.Fatal("incomplete group flags emitted process output")
+			}
+		})
+	}
+
+	t.Run("group with no-vault", func(t *testing.T) {
+		runGroup, runEnvName = "webapp", "preview"
+		runEnvNoVault = true
+		marker := filepath.Join(t.TempDir(), "target-ran")
+		var runErr error
+		stdout, stderr := captureStdoutErr(t, func() {
+			runErr = runRun(runCmd, []string{touch, marker})
+		})
+		if runErr == nil || !strings.Contains(runErr.Error(), "--group/--env select vault secrets") {
+			t.Fatalf("unexpected validation result: %v", runErr)
+		}
+		if _, err := os.Stat(marker); !os.IsNotExist(err) {
+			t.Fatal("--no-vault group flags launched the target process")
+		}
+		if len(stdout) != 0 || len(stderr) != 0 {
+			t.Fatal("--no-vault group flags emitted process output")
+		}
+	})
 }

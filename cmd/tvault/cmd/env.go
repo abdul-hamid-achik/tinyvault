@@ -60,6 +60,14 @@ func init() {
 // or the TVAULT_IDENTITY_KEY environment variable), via a shared X25519
 // identity (recipient read — no passphrase, no unlock).
 func envSecrets() (map[string]string, error) {
+	if err := validateGroupEnvFlags(envGroupFlag, envEnvFlag); err != nil {
+		return nil, err
+	}
+	identityRequested := envIdentity != "" || strings.TrimSpace(os.Getenv(envIdentityKey)) != ""
+	if envGroupFlag != "" && identityRequested {
+		return nil, fmt.Errorf("--group/--env cannot be combined with --identity or %s", envIdentityKey)
+	}
+
 	// Resolution through environment group inheritance.
 	if envGroupFlag != "" && envEnvFlag != "" {
 		v, err := openAndUnlockVault()
@@ -76,7 +84,7 @@ func envSecrets() (map[string]string, error) {
 
 	// The recipient path is opt-in only: a stray ~/.tvault/identities/default.key
 	// must not silently divert a plain `tvault env` away from the passphrase.
-	if envIdentity != "" || strings.TrimSpace(os.Getenv(envIdentityKey)) != "" {
+	if identityRequested {
 		id, source, err := resolveIdentity(envIdentity)
 		if err != nil {
 			return nil, err

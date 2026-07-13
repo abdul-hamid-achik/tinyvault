@@ -12,7 +12,7 @@ This quickstart takes you from a new install to a child process using a vault se
 Install the prebuilt binary with Homebrew:
 
 ```bash
-brew install abdul-hamid-achik/tap/tvault
+brew install --cask abdul-hamid-achik/tap/tvault
 ```
 
 You can instead download a binary from [GitHub Releases](https://github.com/abdul-hamid-achik/tinyvault/releases), or install from source with Go 1.26 or later:

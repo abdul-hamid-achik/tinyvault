@@ -58,12 +58,13 @@ func init() {
 }
 
 func runGet(_ *cobra.Command, args []string) error {
+	if err := validateGetFlags(); err != nil {
+		return err
+	}
+
 	key := args[0]
 
 	if getFromFile != "" {
-		if getVersion > 0 {
-			return fmt.Errorf("--from and --version are mutually exclusive")
-		}
 		value, err := getFromDotenv(getFromFile, key)
 		if err != nil {
 			return err
@@ -101,9 +102,6 @@ func runGet(_ *cobra.Command, args []string) error {
 
 	// Resolution through environment group inheritance.
 	if getGroup != "" && getEnv != "" {
-		if getVersion > 0 {
-			return fmt.Errorf("--version is not supported with --group/--env")
-		}
 		value, source, rErr := v.ResolveKey(getGroup, getEnv, key)
 		if rErr != nil {
 			return fmt.Errorf("failed to resolve secret: %w", rErr)
@@ -150,6 +148,41 @@ func runGet(_ *cobra.Command, args []string) error {
 	}
 
 	fmt.Print(value)
+	return nil
+}
+
+// validateGetFlags rejects ambiguous source selection before runGet reads a
+// dotenv file, contacts the agent, or opens the vault. A get reads from exactly
+// one source: the current project, a dotenv file, a historical version, or an
+// environment group.
+func validateGetFlags() error {
+	hasGroup := getGroup != ""
+
+	if getVersion < 0 {
+		return fmt.Errorf("--version cannot be negative")
+	}
+	if err := validateGroupEnvFlags(getGroup, getEnv); err != nil {
+		return err
+	}
+	if getFromFile != "" && getVersion > 0 {
+		return fmt.Errorf("--from and --version are mutually exclusive")
+	}
+	if getFromFile != "" && hasGroup {
+		return fmt.Errorf("--from and --group/--env are mutually exclusive")
+	}
+	if getFromFile != "" && getShowSource {
+		return fmt.Errorf("--from and --show-source are mutually exclusive")
+	}
+	if getVersion > 0 && hasGroup {
+		return fmt.Errorf("--version is not supported with --group/--env")
+	}
+	if getVersion > 0 && getShowSource {
+		return fmt.Errorf("--version and --show-source are mutually exclusive")
+	}
+	if getShowSource && !hasGroup {
+		return fmt.Errorf("--show-source requires --group and --env")
+	}
+
 	return nil
 }
 

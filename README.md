@@ -41,7 +41,7 @@ TinyVault is built around value-minimizing agent workflows: search metadata, inj
 
 ```bash
 # Homebrew (macOS/Linux)
-brew install abdul-hamid-achik/tap/tvault
+brew install --cask abdul-hamid-achik/tap/tvault
 
 # Go install
 go install github.com/abdul-hamid-achik/tinyvault/cmd/tvault@latest
@@ -51,6 +51,14 @@ go install github.com/abdul-hamid-achik/tinyvault/cmd/tvault@latest
 
 # Already installed? Update in place (checksum-verified):
 tvault self-update
+```
+
+If Homebrew reports that the retired formula is installed, migrate once to the
+maintained cask:
+
+```bash
+brew uninstall --formula tvault
+brew install --cask abdul-hamid-achik/tap/tvault
 ```
 
 Deploying to a server? See [Deploy to DigitalOcean & SSH servers](https://tinyvault.dev/guide/digitalocean) for the passphrase-free, manage-over-SSH workflow.

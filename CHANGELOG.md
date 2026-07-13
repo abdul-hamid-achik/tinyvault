@@ -6,6 +6,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.17.2] - 2026-07-13
+
+### Fixed
+
+- Made CLI secret-source validation fail closed before reading a dotenv file,
+  contacting the agent, opening the vault, or launching a child process.
+  Ambiguous `get` modes, incomplete `--group`/`--env` pairs, group selection
+  with `run --no-vault`, and group selection mixed with identity mode now fail
+  with explicit errors.
+- Updated Homebrew install and upgrade examples to select the maintained cask
+  explicitly instead of the retired formula.
+- Updated the MCP handshake implementation version to 0.17.2.
+
+## [0.17.1] - 2026-07-13
+
+### Fixed
+
+- Made `get --group ... --env ...` bypass the direct-project agent fast path
+  and resolve the requested environment through the unlocked vault, preventing
+  a value from the current project from being returned for a grouped lookup.
+
 ## [0.17.0] - 2026-07-11
 
 ### Security
@@ -144,7 +165,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 See the [GitHub releases](https://github.com/abdul-hamid-achik/tinyvault/releases)
 for v0.8.0 and earlier.
 
-[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.17.2...HEAD
+[0.17.2]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.17.1...v0.17.2
+[0.17.1]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.14.0...v0.15.0
