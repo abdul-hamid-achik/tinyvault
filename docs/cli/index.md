@@ -5,7 +5,7 @@ description: The complete tvault command reference — global flags, exit codes,
 
 # CLI Reference
 
-`tvault` is a single Go binary: a local-first secrets CLI, an MCP server (via the `mcp` subcommand), and an interactive terminal studio. This page documents every command, its usage line, and its command-local flags.
+`tvault` is a single binary, written in Go: a local-first secrets CLI, an MCP server (via the `mcp` subcommand), and an interactive terminal studio. This page documents every command, its usage line, and its command-local flags.
 
 Run `tvault help` for the long-form manual or `tvault docs` for machine-readable docs aimed at agents. Every command also supports `-h`/`--help`.
 

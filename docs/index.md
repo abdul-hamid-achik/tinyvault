@@ -1,12 +1,12 @@
 ---
 layout: home
 title: Local-first secrets manager & MCP server for developers and AI agents
-description: TinyVault is a local-first secrets manager and MCP server for developers and AI agents. A single Go binary (tvault) stores secrets encrypted with AES-256-GCM + Argon2id, ships a full .env toolkit, X25519 sharing, versioned secrets, and a 49-tool MCP server — no servers, no accounts, no cloud.
+description: TinyVault is a local-first secrets manager and MCP server for developers and AI agents, written in Go and shipped as a single binary. It is language-agnostic — tvault run injects secrets as env vars into Node, Python, Ruby, Rust, PHP, Go, or anything. AES-256-GCM + Argon2id, .env toolkit, X25519 sharing, versioned secrets, a 49-tool MCP server. No servers, no accounts, no cloud.
 
 hero:
   name: TinyVault
   text: Secrets that never leave your machine.
-  tagline: A single Go binary — an encrypted local vault, a full .env toolkit, and a 49-tool MCP server for AI agents. No servers, no accounts, no cloud.
+  tagline: One Go binary, any stack — an encrypted local vault, a full .env toolkit, and a 49-tool MCP server for AI agents. No servers, no accounts, no cloud.
   image:
     src: /logo.svg
     alt: TinyVault vault-door logo
@@ -26,8 +26,8 @@ features:
     title: Strong, simple crypto
     details: AES-256-GCM with a two-tier passphrase → KEK → per-project DEK hierarchy. Argon2id (64 MiB, memory-hard) key derivation. Keys zeroed from memory after use.
   - icon: 📦
-    title: One binary, zero deps
-    details: tvault is the CLI, the MCP server, and an interactive terminal studio. No database server, no Docker, no network — just one encrypted bbolt file.
+    title: One binary, any stack
+    details: Written in Go as one static binary — the CLI, the MCP server, and the terminal studio, with no runtime or Docker. Language-agnostic — `tvault run` injects secrets as env vars into Node, Python, Ruby, Rust, Go, or anything that reads them.
   - icon: 🤖
     title: Built for AI agents
     details: A 49-tool MCP server where secret values never enter the model's context. Inject into a subprocess, write to disk, or seal to a recipient instead.

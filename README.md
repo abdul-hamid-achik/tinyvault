@@ -7,7 +7,7 @@ Dead-simple local secrets management for developers and AI agents.
 
 📖 **Documentation → [tinyvault.dev](https://tinyvault.dev)**
 
-TinyVault is a single-binary CLI tool and [MCP server](https://modelcontextprotocol.io) that stores secrets locally with strong encryption. No accounts, no servers, no cloud -- just a passphrase-protected vault on your machine.
+TinyVault is a single-binary CLI tool and [MCP server](https://modelcontextprotocol.io), written in Go, that stores secrets locally with strong encryption and works with any stack — `tvault run` injects secrets as env vars into Node, Python, Ruby, Rust, Go, or anything. No accounts, no servers, no cloud -- just a passphrase-protected vault on your machine.
 
 > **See [SPEC.md](SPEC.md) for the full design doc** -- architecture, threat model, MCP security story, comparison with 1Password CLI / `pass` / Vault / Doppler, and roadmap.
 
@@ -23,7 +23,7 @@ TinyVault is built to be driven by agents without secret values ever entering th
 
 - **AES-256-GCM Encryption** -- Two-tier key hierarchy with per-project data encryption keys
 - **Argon2id Key Derivation** -- Memory-hard passphrase hashing resistant to GPU/ASIC attacks
-- **Single Binary** -- One `tvault` binary for CLI use and MCP server mode
+- **Single Binary, Any Stack** -- One `tvault` binary (written in Go) for CLI use and MCP server mode. Language-agnostic: inject secrets as env vars into any process.
 - **MCP Server** -- 49 tools: AI agents can manage secrets via the Model Context Protocol (stdio) without the values ever entering the model context
 - **Multi-Project** -- Organize secrets into projects with independent encryption keys
 - **.env Ecosystem** -- Safe dotenv parser (no shell expansion), `tvault://` placeholder interpolation, two-way sync (pull/push/mirror), and `.env.encrypted` files (Rails credentials pattern, safe to commit)

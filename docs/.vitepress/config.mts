@@ -9,9 +9,10 @@ const SITE_TAGLINE = 'Local-first secrets for developers & AI agents'
 // or AI engineer searches for ("secrets manager", "MCP server", "local secrets",
 // "secrets CLI", ".env", "AI agent secrets") while staying a natural sentence.
 const SITE_DESC =
-  'TinyVault is a local-first secrets manager and MCP server for developers and AI agents. ' +
-  'A single Go binary (tvault) stores secrets encrypted with AES-256-GCM + Argon2id, ' +
-  'ships a full .env toolkit, X25519 sharing, versioned secrets, and a 49-tool MCP server — ' +
+  'TinyVault is a local-first secrets manager and MCP server for developers and AI agents, ' +
+  'written in Go and shipped as a single binary. It is language-agnostic — `tvault run` ' +
+  'injects secrets as env vars into Node, Python, Ruby, Rust, PHP, Go, or anything. ' +
+  'AES-256-GCM + Argon2id, .env toolkit, X25519 sharing, versioned secrets, a 49-tool MCP server — ' +
   'no servers, no accounts, no cloud.'
 
 const GH = 'https://github.com/abdul-hamid-achik/tinyvault'

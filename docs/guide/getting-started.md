@@ -5,7 +5,7 @@ description: Install TinyVault, create your first encrypted vault, and learn the
 
 # Getting Started
 
-TinyVault is a single Go binary, `tvault`, that stores secrets locally in one encrypted file. This page takes you from zero to a working vault: install the binary, initialize a vault, store and read a secret, and inject secrets into a process.
+TinyVault is a single binary (`tvault`, written in Go) that stores secrets locally in one encrypted file and works with any stack — `tvault run` injects secrets as env vars into Node, Python, Ruby, Rust, PHP, Go, or anything that reads them. This page takes you from zero to a working vault: install the binary, initialize a vault, store and read a secret, and inject secrets into a process.
 
 ## Install
 

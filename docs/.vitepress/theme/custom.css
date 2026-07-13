@@ -5,6 +5,17 @@
  * studio's "warm orange = a secret is revealed" accent and the vault-of-gold
  * metaphor. Dark-first, with a readable light mode.
  *
+ * Color contract:
+ *   --tv-gold / --tv-gold-bright  → FILLS (buttons, terminal caret) with
+ *                                   --tv-ink (near-black) on top. High-contrast
+ *                                   in both themes.
+ *   --tv-accent                   → TEXT & accent borders on page surfaces.
+ *                                   Deepened to #b45309 in light mode (WCAG AA
+ *                                   on white, ~5.2:1) and bright #ffc861 in
+ *                                   dark mode. Never use --tv-gold for text on a
+ *                                   light background — it fails AA.
+ *   --tv-grad                     → Section-title gradient, theme-specific.
+ *
  * VitePress brand vars: --vp-c-brand-1 = links/active text, -2 = hover,
  * -3 = solid button background, -soft = tinted block backgrounds.
  */
@@ -17,6 +28,14 @@
   --tv-gold-deep: #b45309;
   --tv-gold-deeper: #92400e;
   --tv-ink: #1a1206; /* near-black ink for use on gold fills */
+
+  /* Accent TEXT on page surfaces — deepened in light mode for WCAG AA. */
+  --tv-accent: var(--tv-gold-deep);        /* #b45309 — ~5.2:1 on white */
+  --tv-grad: linear-gradient(120deg, #c2740c, var(--tv-gold-deep));
+
+  /* CTA band — warm light surface in light mode (no near-black island). */
+  --tv-cta-bg: linear-gradient(160deg, rgba(245, 166, 35, 0.10) 0%, var(--vp-c-bg-soft) 100%);
+  --tv-cta-border: rgba(180, 83, 9, 0.40);
 
   /* Light-mode brand: deepen the gold so links pass contrast on white. */
   --vp-c-brand-1: #a8620a;
@@ -50,6 +69,14 @@
   --vp-c-bg-alt: #161410;
   --vp-c-bg-elv: #1b1813;
   --vp-c-bg-soft: #1b1813;
+
+  /* Accent TEXT — bright gold on dark surfaces. */
+  --tv-accent: var(--tv-gold-bright);      /* #ffc861 — pops on near-black */
+  --tv-grad: linear-gradient(120deg, #ffd488, var(--tv-gold));
+
+  /* CTA band — warm near-black in dark mode. */
+  --tv-cta-bg: linear-gradient(160deg, #1b1813 0%, #0e0d0b 100%);
+  --tv-cta-border: rgba(245, 166, 35, 0.35);
 
   /* Keep dark-mode brand buttons dark-ink on gold too. */
   --vp-button-brand-text: var(--tv-ink);
@@ -117,6 +144,11 @@
   margin: 0 auto;
   padding: 0 24px 4rem;
 }
+/* VitePress renders the home body inside .vp-doc, whose `.vp-doc a` rule
+ * colors every link gold and `.vp-doc :not(pre) > code` colors inline code.
+ * Reset links in the landing to inherit so component rules below (scoped
+ * under .tv-landing) control color explicitly, not the vp-doc link default. */
+.tv-landing a { color: inherit; text-decoration: none; }
 
 /* Section heads shared by how/use/compare ------------------------------- */
 .tv-section__head {
@@ -129,17 +161,11 @@
   font-weight: 700;
   letter-spacing: -0.02em;
   margin: 0 0 0.6rem;
-  background: linear-gradient(120deg, var(--tv-gold-bright), var(--tv-gold));
+  background: var(--tv-grad);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  color: var(--tv-gold);
-}
-.dark .tv-section__title {
-  background: linear-gradient(120deg, #ffd488, var(--tv-gold));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--tv-accent); /* fallback if gradient clip unsupported */
 }
 .tv-section__sub {
   margin: 0;
@@ -175,10 +201,9 @@
   font-size: 1.85rem;
   font-weight: 800;
   letter-spacing: -0.02em;
-  color: var(--tv-gold);
+  color: var(--tv-accent);
   line-height: 1.1;
 }
-.dark .tv-stat__value { color: var(--tv-gold-bright); }
 .tv-stat__label {
   font-size: 0.8rem;
   font-weight: 600;
@@ -197,6 +222,8 @@
 }
 
 /* Terminal showcase ---------------------------------------------------- */
+/* Intentionally dark in both themes — a terminal emulator aesthetic. The
+ * body text colors below are tuned for the dark chip and stay fixed. */
 .tv-term {
   max-width: 760px;
   margin: 3rem auto 1rem;
@@ -237,7 +264,7 @@
   overflow-x: auto;
   white-space: pre;
 }
-.tv-prompt { color: var(--tv-gold); font-weight: 700; }
+.tv-prompt { color: var(--tv-gold-bright); font-weight: 700; }
 .tv-ok { color: #27c93f; }
 .tv-dim { color: #6b5d44; }
 .tv-str { color: #ffd488; }
@@ -273,7 +300,7 @@
   transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
 }
 .tv-how__step:hover {
-  border-color: var(--tv-gold);
+  border-color: var(--tv-accent);
   transform: translateY(-3px);
   box-shadow: 0 14px 36px -22px rgba(245, 166, 35, 0.6);
 }
@@ -281,9 +308,8 @@
   font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: 0.12em;
-  color: var(--tv-gold);
+  color: var(--tv-accent);
 }
-.dark .tv-how__num { color: var(--tv-gold-bright); }
 .tv-how__title { font-size: 1.2rem; font-weight: 700; margin: 0; }
 .tv-how__body {
   margin: 0;
@@ -294,15 +320,13 @@
 }
 .tv-how__body code {
   font-size: 0.86em;
-  color: var(--tv-gold);
+  color: var(--tv-accent);
 }
-.dark .tv-how__body code { color: var(--tv-gold-bright); }
 .tv-how__cta {
   font-size: 0.88rem;
   font-weight: 600;
-  color: var(--tv-gold);
+  color: var(--tv-accent);
 }
-.dark .tv-how__cta { color: var(--tv-gold-bright); }
 @media (max-width: 760px) { .tv-how__grid { grid-template-columns: 1fr; } }
 
 /* Use cases ------------------------------------------------------------- */
@@ -323,7 +347,7 @@
   transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
 }
 .tv-use__card:hover {
-  border-color: var(--tv-gold);
+  border-color: var(--tv-accent);
   transform: translateY(-3px);
   box-shadow: 0 14px 36px -22px rgba(245, 166, 35, 0.6);
 }
@@ -355,16 +379,14 @@
   content: '▸';
   position: absolute;
   left: 0;
-  color: var(--tv-gold);
+  color: var(--tv-accent);
 }
-.dark .tv-use__points li::before { color: var(--tv-gold-bright); }
 .tv-use__cta {
   font-size: 0.88rem;
   font-weight: 600;
-  color: var(--tv-gold);
+  color: var(--tv-accent);
   margin-top: 0.5rem;
 }
-.dark .tv-use__cta { color: var(--tv-gold-bright); }
 @media (max-width: 760px) { .tv-use__grid { grid-template-columns: 1fr; } }
 
 /* Comparison table ------------------------------------------------------ */
@@ -399,9 +421,8 @@
   background: var(--vp-c-bg-alt);
 }
 .tv-cmp__col--brand {
-  color: var(--tv-gold);
+  color: var(--tv-accent);
 }
-.dark .tv-cmp__col--brand { color: var(--tv-gold-bright); }
 .tv-cmp__cell--brand {
   background: rgba(245, 166, 35, 0.07);
   font-weight: 600;
@@ -415,8 +436,7 @@
   font-size: 0.86rem;
   color: var(--vp-c-text-3);
 }
-.tv-cmp__note a { color: var(--tv-gold); font-weight: 600; }
-.dark .tv-cmp__note a { color: var(--tv-gold-bright); }
+.tv-cmp__note a { color: var(--tv-accent); font-weight: 600; }
 
 /* Final CTA ------------------------------------------------------------- */
 .tv-cta {
@@ -425,14 +445,10 @@
   max-width: 1152px;
   border-radius: 22px;
   overflow: hidden;
-  border: 1px solid var(--tv-gold-deep);
-  background: linear-gradient(160deg, #1a1206 0%, #0e0d0b 100%);
+  border: 1px solid var(--tv-cta-border);
+  background: var(--tv-cta-bg);
   padding: 3.5rem 2rem;
   text-align: center;
-}
-.dark .tv-cta {
-  border-color: rgba(245, 166, 35, 0.35);
-  background: linear-gradient(160deg, #1b1813 0%, #0e0d0b 100%);
 }
 .tv-cta__glow {
   position: absolute;
@@ -454,11 +470,10 @@
   color: var(--vp-c-text-1);
 }
 .tv-cta__title code {
-  color: var(--tv-gold);
+  color: var(--tv-accent);
   background: none;
   font-size: 1em;
 }
-.dark .tv-cta__title code { color: var(--tv-gold-bright); }
 .tv-cta__sub {
   font-size: 1.05rem;
   line-height: 1.6;
@@ -483,7 +498,7 @@
   color: var(--vp-c-text-1);
   transition: background 0.2s, border-color 0.2s, transform 0.15s;
 }
-.tv-cta__btn:hover { transform: translateY(-2px); border-color: var(--tv-gold); }
+.tv-cta__btn:hover { transform: translateY(-2px); border-color: var(--tv-accent); }
 .tv-cta__btn--primary {
   background: var(--tv-gold);
   color: var(--tv-ink);
@@ -493,6 +508,7 @@
   background: var(--tv-gold-bright);
   border-color: transparent;
 }
+/* Dark code chip — intentionally dark in both themes (terminal aesthetic). */
 .tv-cta__install {
   display: inline-block;
   margin: 0;
@@ -506,3 +522,18 @@
 @media (max-width: 640px) {
   .tv-cta__title { font-size: 1.5rem; }
 }
+
+/* Specificity bumps — VitePress renders the home body inside .vp-doc, so its
+ * .vp-doc a / .vp-doc :not(pre) > code / .vp-doc th rules (element-typed) outrank
+ * our single-class landing rules above. Scope under .tv-landing to win without
+ * !important, keeping the theme-aware --tv-accent token. */
+.tv-landing .tv-use__cta,
+.tv-landing .tv-how__cta,
+.tv-landing .tv-cmp__note a,
+.tv-landing .tv-cmp__col--brand { color: var(--tv-accent); }
+.tv-landing .tv-how__body code,
+.tv-landing .tv-cta__title code { color: var(--tv-accent); }
+/* Primary CTA button: near-black ink on gold fill (high contrast both themes). */
+.tv-landing .tv-cta__btn { color: var(--vp-c-text-1); }
+.tv-landing .tv-cta__btn--primary,
+.tv-landing .tv-cta__btn--primary:hover { color: var(--tv-ink); }

@@ -7,7 +7,7 @@ description: The mental model behind TinyVault — the encrypted vault, lock/unl
 
 This page is the mental model for TinyVault. It is a concept map, not a command reference — each idea links to the page that covers it in depth. Read it once and the rest of the docs will click into place.
 
-TinyVault is a single Go binary, `tvault`. The same binary is your CLI, an interactive terminal studio, and (via the `mcp` subcommand) an MCP server for AI agents. All three sit on one local, encrypted file. There are no servers, no accounts, and no network calls.
+TinyVault is a single binary, `tvault`, written in Go. The same binary is your CLI, an interactive terminal studio, and (via the `mcp` subcommand) an MCP server for AI agents. It is language-agnostic — secrets are injected as env vars into any process — and all three surfaces sit on one local, encrypted file. There are no servers, no accounts, and no network calls.
 
 ## The vault
 

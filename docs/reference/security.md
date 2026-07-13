@@ -5,7 +5,7 @@ description: TinyVault's honest threat model — what local-first encryption, th
 
 # Security & Threat Model
 
-This is the honest security page. TinyVault is a single Go binary that encrypts secrets at rest, redacts them from AI agents, and serves them over a tightly-confined local socket. None of those layers is magic. This page tells you exactly what each one stops, what it does not, and how TinyVault compares to the tools you might reach for instead.
+This is the honest security page. TinyVault is a single binary (written in Go) that encrypts secrets at rest, redacts them from AI agents, and serves them over a tightly-confined local socket. None of those layers is magic. This page tells you exactly what each one stops, what it does not, and how TinyVault compares to the tools you might reach for instead.
 
 Read this before you trust TinyVault with anything that matters. The short version: it protects your secrets at rest with strong cryptography and keeps values out of an AI model's context window, but it has no recovery story, no team sync, and it cannot defend a running, unlocked process from another process running as the same user.
 

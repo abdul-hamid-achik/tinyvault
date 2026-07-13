@@ -1,11 +1,12 @@
 ---
 title: What is TinyVault?
-description: TinyVault is a single-binary, local-first secrets manager with a CLI, an interactive terminal studio, and a built-in MCP server for AI agents — backed by one encrypted file.
+description: TinyVault is a local-first secrets manager, written in Go and shipped as a single binary, with a CLI, an interactive terminal studio, and a built-in MCP server for AI agents. Language-agnostic — it injects secrets as env vars into any process.
 ---
 
 # What is TinyVault?
 
-TinyVault is a local-first secrets manager that lives in a single Go binary (`tvault`). It stores your secrets in one encrypted file on your own machine — no servers, no accounts, no cloud — and exposes that same store through three surfaces: a CLI, an interactive terminal studio, and an MCP server for AI agents.
+TinyVault is a local-first secrets manager that lives in a single binary, `tvault`, written in Go. It stores your secrets in one encrypted file on your own machine — no servers, no accounts, no cloud — and exposes that same store through three surfaces: a CLI, an interactive terminal studio, and an MCP server for AI agents.
+It is **not** a Go-only tool. TinyVault is written in Go (which is why it ships as one self-contained binary with no runtime dependencies), but it works with any stack: `tvault run` injects secrets as environment variables into any subprocess, so your app can be Node, Python, Ruby, Rust, PHP, Go, or anything that reads env vars.
 
 If you have ever wanted a `.env` file that is actually encrypted, versioned, shareable, and safe to hand to an AI agent, that is the problem TinyVault solves.
 

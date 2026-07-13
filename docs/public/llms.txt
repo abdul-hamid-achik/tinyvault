@@ -1,6 +1,6 @@
 # TinyVault
 
-> TinyVault (`tvault`) is a single-binary, local-first secrets manager and MCP server. It stores secrets in one encrypted file (AES-256-GCM + Argon2id) with no servers, accounts, or cloud, and is built to be driven by AI agents without secret values ever entering the model's context.
+> TinyVault (`tvault`) is a single-binary, local-first secrets manager and MCP server, written in Go. It is language-agnostic: `tvault run` injects secrets as env vars into any process (Node, Python, Ruby, Rust, Go, etc.). It stores secrets in one encrypted file (AES-256-GCM + Argon2id) with no servers, accounts, or cloud, and is built to be driven by AI agents without secret values ever entering the model's context.
 
 For agents: run `tvault docs features` for a machine-readable JSON manifest of every capability, then follow the discover → search → use loop. An MCP client should connect to `tvault mcp`.
 

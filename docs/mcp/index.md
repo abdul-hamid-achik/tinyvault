@@ -1,6 +1,6 @@
 ---
 title: MCP Server
-description: Connect AI agents to TinyVault over the Model Context Protocol — one Go binary that serves 49 tools over stdio while keeping secret values out of the model context.
+description: Connect AI agents to TinyVault over the Model Context Protocol — a single binary (written in Go) that serves 49 tools over stdio while keeping secret values out of the model context.
 ---
 
 # MCP Server
