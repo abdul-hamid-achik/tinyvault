@@ -77,9 +77,11 @@ func runGet(_ *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Fast path: a running agent serves current-version reads with no prompt
-	// and no Argon2id. Historical versions (--version) always go direct.
-	if getVersion == 0 {
+	// Fast path: a running agent serves direct current-version reads with no
+	// prompt and no Argon2id. Historical versions (--version) and environment
+	// group resolution always go direct because the agent protocol does not
+	// carry group/environment context.
+	if getVersion == 0 && getGroup == "" && getEnv == "" {
 		if value, ok := agentGetSecret(projectName, key); ok {
 			if jsonOutput {
 				enc := json.NewEncoder(os.Stdout)

@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -162,5 +163,110 @@ func TestGetVersionBypassesAgent(t *testing.T) {
 	})
 	if got := string(out); got != "old" {
 		t.Errorf("get --version 1 = %q, want \"old\" (agent must be bypassed for historical reads)", got)
+	}
+}
+
+// TestGetGroupBypassesAgentFastPath proves environment-group reads never use
+// the agent's direct-project get operation. The direct path resolves an empty
+// project to the current project, which is not necessarily the project mapped
+// to the requested group/environment.
+func TestGetGroupBypassesAgentFastPath(t *testing.T) {
+	const (
+		key             = "SHARED_KEY"
+		currentValue    = "current-project-value"
+		groupValue      = "group-project-value"
+		groupProject    = "preview-project"
+		groupName       = "webapp"
+		environmentName = "preview"
+	)
+
+	dir := shortAgentVault(t, key, currentValue)
+	v, err := ivault.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := v.Unlock("test-passphrase"); err != nil {
+		_ = v.Close()
+		t.Fatal(err)
+	}
+	if _, err := v.CreateProject(groupProject, ""); err != nil {
+		_ = v.Close()
+		t.Fatal(err)
+	}
+	if err := v.SetSecret(groupProject, key, groupValue); err != nil {
+		_ = v.Close()
+		t.Fatal(err)
+	}
+	if _, err := v.CreateEnvGroup(groupName, "", []ivault.EnvGroupEntry{
+		{Name: environmentName, Project: groupProject},
+	}, false); err != nil {
+		_ = v.Close()
+		t.Fatal(err)
+	}
+	if err := v.SetCurrentProject("default"); err != nil {
+		_ = v.Close()
+		t.Fatal(err)
+	}
+	if err := v.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	stop := startTestAgentForCmd(t, dir)
+	defer stop()
+
+	oldVersion, oldFrom := getVersion, getFromFile
+	oldGroup, oldEnv, oldShowSource := getGroup, getEnv, getShowSource
+	getVersion, getFromFile = 0, ""
+	getGroup, getEnv, getShowSource = "", "", false
+	t.Cleanup(func() {
+		getVersion, getFromFile = oldVersion, oldFrom
+		getGroup, getEnv, getShowSource = oldGroup, oldEnv, oldShowSource
+	})
+
+	// Model a non-interactive client that has access only to the agent socket.
+	t.Setenv("TVAULT_PASSPHRASE", "")
+	t.Setenv(envIdentityKey, "")
+	t.Setenv("TVAULT_NO_AGENT", "")
+	withNonInteractiveStdin(t)
+
+	// Direct-project get must retain its existing prompt-free agent behavior.
+	var directErr error
+	directOut := captureStdout(t, func() {
+		directErr = runGet(nil, []string{key})
+	})
+	if directErr != nil {
+		t.Fatalf("direct get through agent failed: %v", directErr)
+	}
+	if string(directOut) != currentValue {
+		t.Fatal("direct get through agent returned an unexpected value")
+	}
+
+	getGroup, getEnv = groupName, environmentName
+	var groupErr error
+	groupOut := captureStdout(t, func() {
+		groupErr = runGet(nil, []string{key})
+	})
+	if groupErr == nil {
+		t.Fatal("group/env get unexpectedly succeeded without an unlock credential")
+	}
+	if !errors.Is(groupErr, ivault.ErrLocked) {
+		t.Fatalf("group/env get returned the wrong error class: %v", groupErr)
+	}
+	if len(groupOut) != 0 {
+		t.Fatal("group/env get emitted a project value instead of failing locked")
+	}
+
+	// With an explicit unlock credential, the same request follows normal
+	// inheritance resolution and returns the environment project's value.
+	t.Setenv("TVAULT_PASSPHRASE", "test-passphrase")
+	var resolvedErr error
+	resolvedOut := captureStdout(t, func() {
+		resolvedErr = runGet(nil, []string{key})
+	})
+	if resolvedErr != nil {
+		t.Fatalf("group/env get with unlock credential failed: %v", resolvedErr)
+	}
+	if string(resolvedOut) != groupValue {
+		t.Fatal("group/env get resolved an unexpected project value")
 	}
 }
