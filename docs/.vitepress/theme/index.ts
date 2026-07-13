@@ -1,22 +1,15 @@
 import type { Theme } from 'vitepress'
-import DefaultTheme from 'vitepress/theme'
+import DefaultTheme from 'vitepress/theme-without-fonts'
+import '@fontsource-variable/geist'
 import './custom.css'
 
-import HomeStatBar from './components/HomeStatBar.vue'
-import HomeTerminal from './components/HomeTerminal.vue'
-import HomeHowItWorks from './components/HomeHowItWorks.vue'
-import HomeUseCases from './components/HomeUseCases.vue'
-import HomeCompare from './components/HomeCompare.vue'
-import HomeCTA from './components/HomeCTA.vue'
+import HomePage from './components/HomePage.vue'
+import ThemeLayout from './components/ThemeLayout.vue'
 
 export default {
   extends: DefaultTheme,
+  Layout: ThemeLayout,
   enhanceApp({ app }) {
-    app.component('HomeStatBar', HomeStatBar)
-    app.component('HomeTerminal', HomeTerminal)
-    app.component('HomeHowItWorks', HomeHowItWorks)
-    app.component('HomeUseCases', HomeUseCases)
-    app.component('HomeCompare', HomeCompare)
-    app.component('HomeCTA', HomeCTA)
+    app.component('HomePage', HomePage)
   },
 } satisfies Theme

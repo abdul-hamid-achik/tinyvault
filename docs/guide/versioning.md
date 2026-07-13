@@ -105,7 +105,7 @@ Run `tvault history <key>` (or `tvault history <key> --json`) to see which versi
 History is encrypted with the **per-project DEK**, the same key that protects current values. This has two practical consequences.
 
 - **Passphrase rotation leaves history untouched.** `tvault key rotate` re-wraps each project's DEK under a new KEK but never re-encrypts the values themselves. Your full version history survives a passphrase change with no extra work — and stays just as cheap.
-- **Revocation re-encrypts history too.** `tvault projects unshare <recipient>` is true revocation: it rotates the project DEK and re-encrypts **every current value and the entire version history** under the fresh DEK, then re-wraps it to the remaining recipients only. A removed recipient cannot read old versions even with a stale copy of the vault.
+- **Recipient removal re-encrypts the live history too.** `tvault projects unshare <recipient>` rotates the project DEK and re-encrypts **every current value and the entire version history in the updated vault** under the fresh DEK, then re-wraps it to the remaining recipients only. The removed identity cannot read that re-keyed state. A vault snapshot copied before removal still contains the old history and recipient wrap and remains readable.
 
 ::: warning Delete purges history
 `tvault delete <key>` removes the key **and all of its archived versions**. Deletion is the one operation that is destructive to history — there is no version to roll back to once a key is deleted. Use rollback, not delete, if you only want to revert a value.
@@ -113,7 +113,7 @@ History is encrypted with the **per-project DEK**, the same key that protects cu
 
 ## Over MCP
 
-The same two capabilities are exposed to AI agents through the MCP server, and both honor the rule that **no MCP tool returns a raw secret value** (the sole exception is `vault_get_secret`, which warns):
+The same two capabilities are exposed to AI agents through the MCP server. These two versioning tools return metadata only; they do not return secret values:
 
 | MCP tool | CLI equivalent | Returns a value? |
 | --- | --- | --- |
@@ -130,5 +130,5 @@ MCP output redaction only replaces literal secret values longer than three chara
 
 - [Secrets](/guide/secrets) — setting, reading, listing, and deleting keys.
 - [Key management](/guide/key-management) — passphrase rotation and the key hierarchy that protects history.
-- [Sharing](/guide/sharing) — recipients, and how `unshare` rotates the DEK and re-encrypts every value and version.
+- [Sharing](/guide/sharing) — recipients, live-vault DEK rotation, and retained-data limits.
 - [MCP tools](/mcp/tools) — the full list of tools available to AI agents.

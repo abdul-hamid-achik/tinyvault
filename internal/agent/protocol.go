@@ -37,7 +37,8 @@ type Options struct {
 	// valid capability token from TokenFile — a privilege-separation gate for a
 	// delegate the OS confines from the raw socket (a different uid / container
 	// / sandbox). It is NOT a control against a same-uid attacker, who can read
-	// the token or dial the socket directly. See the threat model in SPEC.md.
+	// the token or dial the socket directly. See
+	// docs/reference/security.md#token-honesty.
 	RequireToken bool
 	TokenFile    string // 0600 file of `token[:project]` lines (require-token mode)
 }

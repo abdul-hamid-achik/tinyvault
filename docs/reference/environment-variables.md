@@ -1,33 +1,31 @@
 ---
 title: Environment Variables
-description: Reference for every TVAULT_* environment variable that tvault reads — passphrase, vault directory, agent bypass, identity keys, and precedence rules.
+description: Reference for the supported TVAULT_* runtime variables — passphrase, vault directory, agent routing, identities, and studio animation control.
 ---
 
 # Environment Variables
 
-`tvault` reads a small set of `TVAULT_*` environment variables so you can run it non-interactively — in CI, over ssh, inside containers, or behind an AI agent — without a prompt or a config file. This page lists every variable, who reads it, how it interacts with flags, and the security caveats for the sensitive ones.
+`tvault` reads a small, explicit set of `TVAULT_*` environment variables so you can run it non-interactively — in CI, over ssh, inside containers, or behind an AI agent. This page lists the runtime variables that the command implementation uses and the security caveats for the sensitive ones.
 
-An environment variable never overrides an explicit command-line flag. The general order is **flag > environment variable > config file > built-in default**.
+There is no generic environment-variable mapping for command flags. Use only the variables listed below; each section documents its actual resolution rules.
 
 ## Quick reference
 
 | Variable | Reads it | What it does |
 | --- | --- | --- |
-| `TVAULT_PASSPHRASE` | `unlock`, `init`, `agent start`, `studio`, `mcp` | Vault passphrase for non-interactive unlock; skips the prompt. |
+| `TVAULT_PASSPHRASE` | commands that unlock directly; also `init`, `agent start`, `studio`, `mcp` | Vault passphrase for non-interactive unlock; skips the prompt. |
 | `TVAULT_DIR` | every command | Vault directory override. Default `~/.tvault`. |
 | `TVAULT_NO_AGENT` | `get`, `env`, `run` | If set, bypass a running agent and unlock directly (same as `--no-agent`). |
-| `TVAULT_AGENT_TOKEN` | agent clients (`get` / `env` / `run`) | Capability token sent to a `--require-token` agent. |
-| `TVAULT_IDENTITY_KEY` | `open`, `decrypt-env`, `env --identity`, git filters | A **private** identity string (`tvault-key1...`) for passphrase-free decryption when no key file is on disk. |
-| `TVAULT_IDENTITY` | git filters, recipient reads | Default identity **name** (not the key). Default `default`. |
+| `TVAULT_AGENT_TOKEN` | agent-routed `get`, `env`, `run` | Bearer token sent to a `--require-token` agent after the mandatory same-uid check. |
+| `TVAULT_IDENTITY_KEY` | `open`, `decrypt-env`, identity-mode `env`, `k8s render`, git filters | A **private** identity string (`tvault-key1...`) for passphrase-free decryption when the selected key file is absent. |
+| `TVAULT_IDENTITY` | `open`, git filters | Default identity **name** (not the key). |
 | `TVAULT_NO_ANIM` | `studio` | Disable studio animations. |
-
-Beyond these, viper's `AutomaticEnv` (prefix `TVAULT`) lets you set any flag-bound key from the environment — see [viper-bound variables](#viper-bound-variables) below.
 
 ## Vault location
 
 ### `TVAULT_DIR`
 
-Points `tvault` at a vault directory other than `~/.tvault`. The directory holds `vault.db` (the encrypted bbolt file), the optional `config.yaml` and `mcp-policy.yaml`, your `identities/` keys, and — on Unix — the agent runtime files.
+Points `tvault` at a vault directory other than `~/.tvault`. The directory holds `vault.db` (the local bbolt database; secret payloads and key material are encrypted while operational metadata remains readable), the optional `config.yaml` and `mcp-policy.yaml`, your `identities/` keys, and — on Unix — the agent runtime files.
 
 ```bash
 export TVAULT_DIR=/srv/secrets/tvault
@@ -48,7 +46,7 @@ Precedence for the vault directory is:
 
 ### `TVAULT_PASSPHRASE`
 
-Supplies the vault passphrase so commands that need to decrypt the master key can run without an interactive prompt. It is read by `unlock`, `init`, `agent start`, `studio`, and the `mcp` subcommand.
+Supplies the vault passphrase so a command that opens the vault directly can unlock without an interactive prompt. This includes ordinary direct reads/writes and the `unlock`, `init`, `agent start`, `studio`, and `mcp` commands. Agent-served `get`, `env`, and `run` calls do not need it.
 
 ```bash
 # CI: unlock without a TTY
@@ -64,6 +62,10 @@ tvault env --project api > .env
 :::
 
 If the passphrase is wrong, `tvault` exits with code **6**. If the vault has not been initialized yet, it exits with code **5**.
+
+::: info `unlock` and `lock` do not persist across commands
+Each CLI invocation is a separate process. `tvault unlock` validates the passphrase, holds the derived key only for that invocation, and then exits. `tvault lock` clears only its own process state; it does not persist a locked flag and does not stop a running agent. Use `tvault agent start` / `tvault agent stop` for a persistent in-memory unlock.
+:::
 
 ## The local agent
 
@@ -83,8 +85,10 @@ tvault get --project api STRIPE_KEY
 
 When an agent is started with `--require-token`, clients must present a capability token. `TVAULT_AGENT_TOKEN` carries that token to the agent.
 
-::: warning Tokens are privilege separation, not a same-uid control
-Capability tokens gate access for an **OS-confined delegate that runs as a different uid** (a sandboxed subprocess, a constrained service account). They are **not** a defense against a malicious process running as your own user — a same-uid process can read the token file or simply dial the agent socket directly. For real delegation across trust boundaries, use the [recipient/identity sharing model](/guide/sharing), not tokens.
+The agent first verifies that the connecting process has the **same uid** as the agent. Only after that check succeeds does it parse the request and validate `TVAULT_AGENT_TOKEN`. A token therefore cannot grant access to a different uid; it is an additional, optionally project-scoped bearer gate among same-uid clients.
+
+::: warning Tokens do not replace the same-uid boundary
+A malicious same-uid process may be able to read the token file, inspect another process's environment, or otherwise obtain a bearer token. Use tokens for an extra gate between cooperating or OS-confined same-uid clients, not for cross-uid delegation. For a cryptographic boundary across CI, machines, teammates, or untrusted agents, use the [recipient/identity sharing model](/guide/sharing).
 :::
 
 ## Identities and sharing
@@ -119,21 +123,22 @@ When a file overrides a set env key, `tvault` prints a one-line warning to stder
 
 ### `TVAULT_IDENTITY`
 
-The default identity **name** — not the key — used by the git filters and recipient reads to pick which identity to act as. The built-in default is `default`.
+The default identity **name** — not the key — used automatically by `tvault open` and the git clean/smudge filters.
 
 ```bash
 export TVAULT_IDENTITY=ci-runner
-tvault env --project api --identity "$TVAULT_IDENTITY"
+tvault open --in .env.encrypted > .env
 ```
 
-Precedence for the identity name is:
+The name is resolved differently by those two surfaces:
 
-```
---identity   >   TVAULT_IDENTITY   >   git config tvault.identity   >   "default"
-```
+- `tvault open`: `--identity` > `TVAULT_IDENTITY` > `default`.
+- Git filters: `TVAULT_IDENTITY` > `git config tvault.identity` > `default`.
+
+Other `--identity` flags do not read `TVAULT_IDENTITY` automatically. For example, `decrypt-env` and `k8s render` use the explicit flag when present and otherwise select the `default` identity file before trying `TVAULT_IDENTITY_KEY`.
 
 ::: tip Name vs. key
-`TVAULT_IDENTITY` selects a key by name (it expects a matching `~/.tvault/identities/<name>.key`). `TVAULT_IDENTITY_KEY` *is* the key material itself, for when no file exists. Set one or the other depending on whether your runner has a key file on disk.
+`TVAULT_IDENTITY` selects a key by name (it expects a matching `<vault-dir>/identities/<name>.key`). `TVAULT_IDENTITY_KEY` *is* the key material itself, for when the selected file does not exist. Set one or the other depending on whether your runner has a key file on disk.
 :::
 
 ## Studio
@@ -146,33 +151,7 @@ Disables animations in the interactive [studio](/guide/studio). Set it for scree
 TVAULT_NO_ANIM=1 tvault studio
 ```
 
-Animations are also disabled automatically over ssh and when `TERM=dumb`. The same setting can be made permanent via `browse.no_anim` in [`config.yaml`](/reference/configuration); an explicit flag still wins over both.
-
-## viper-bound variables
-
-`tvault` uses viper's `AutomaticEnv` with the prefix `TVAULT`, so the global persistent flags that are bound to config keys can also be set from the environment. The env name maps to the flag key:
-
-| Variable | Equivalent flag | Effect |
-| --- | --- | --- |
-| `TVAULT_VAULT` | `--vault <dir>` | Vault directory. |
-| `TVAULT_PROJECT` | `-p` / `--project <name>` | Default project. |
-| `TVAULT_VERBOSE` | `-v` / `--verbose` | Verbose output. |
-
-```bash
-export TVAULT_PROJECT=api
-export TVAULT_VERBOSE=1
-tvault list      # operates on the "api" project, verbosely
-```
-
-These read from `config.yaml` as well (`vault`, `project`, `verbose`), and an explicit flag always overrides the environment.
-
-::: info `TVAULT_VAULT` vs `TVAULT_DIR`
-Both can point `tvault` at a vault directory. `TVAULT_VAULT` is the viper-bound twin of `--vault`; `TVAULT_DIR` is the lower-precedence default location. The full order is `--vault` (and its `TVAULT_VAULT` binding) `> TVAULT_DIR > ~/.tvault`.
-:::
-
-## Test-only variables
-
-`TVAULT_TUI_DUMP`, `TVAULT_COLS`, and `TVAULT_ROWS` exist solely for the studio test harness (deterministic PTY sizing and frame dumps). They are not part of the public interface, and you should not rely on them in scripts.
+Animations are also disabled automatically over ssh. The same setting can be made permanent via `browse.no_anim` in [`config.yaml`](/reference/configuration), and the `--no-anim` flag disables them for one invocation. If `TERM=dumb`, the studio refuses to start rather than merely disabling animation.
 
 ## Exit codes
 
@@ -192,5 +171,5 @@ Scripts that read these variables will want to branch on the process exit code:
 
 - [Configuration](/reference/configuration) — the `config.yaml` file and the `browse:` block.
 - [CI/CD](/guide/ci-cd) — wiring up passphrase-free and identity-based pipelines.
-- [Sharing Secrets](/guide/sharing) — identities, recipients, and true revocation.
+- [Sharing Secrets](/guide/sharing) — identities, recipients, live-vault re-keying, and retained-data limits.
 - [Local Agent](/guide/agent) — the unlocked-vault daemon and `--require-token`.

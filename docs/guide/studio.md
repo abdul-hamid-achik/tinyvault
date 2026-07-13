@@ -135,7 +135,7 @@ The studio edits values; it does not manage the vault's structure. Project creat
 | `--no-anim` | off | Disable animations (good for SSH, `screen`/`tmux`, and screen readers). Also set via `TVAULT_NO_ANIM`. |
 | `--audit-limit <N>` | `100` | How many recent audit entries to load into the audit pane. |
 
-The six global persistent flags work here too: `--config <file>`, `--vault <dir>`, `-p`/`--project <name>`, `--json`, `-v`/`--verbose`, and `--no-agent`. `-h`/`--help` is available on every command.
+The six global persistent flags are accepted here too: `--config <file>`, `--vault <dir>`, `-p`/`--project <name>`, `--json`, `-v`/`--verbose`, and `--no-agent`. The typed `browse:` settings still load from `<vault-dir>/config.yaml`; `--config` does not relocate them. `-h`/`--help` is available on every command.
 
 ```bash
 # Small terminal, single pane, no animations

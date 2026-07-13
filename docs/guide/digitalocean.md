@@ -42,9 +42,9 @@ tvault self-update             # download + verify + replace in place
 
 If you installed via Homebrew or a system package, update through that package manager instead so its bookkeeping stays correct.
 
-## Model A — sealed secrets, passphrase-free
+## Model A: sealed secrets, passphrase-free
 
-The server holds only a keypair, never the passphrase. Compromising the droplet exposes only what you sealed to it, and you can revoke it centrally.
+The server holds only a keypair, never the passphrase. Compromising the droplet exposes what you sealed to it. You can remove the identity from future live-vault access centrally, but you cannot retract data the server already received.
 
 **1. On your laptop — make a per-server identity and seal to it.** Generate the identity locally so the public half can be committed and the private half handed to the server:
 
@@ -82,18 +82,23 @@ ExecStartPre=/usr/local/bin/tvault open --in /etc/app/.env.encrypted --out /run/
 ExecStart=/usr/local/bin/myapp               # reads /run/myapp/.env
 ```
 
-**Rotate / revoke** centrally from your laptop. Editing a secret means re-seal + redeploy; removing a server's access is a true cryptographic revocation (it **rotates the project DEK and re-encrypts every value**):
+**Rotate / remove access** centrally from your laptop. Editing a secret means re-seal + redeploy; removing a server from the updated live vault **rotates the project DEK and re-encrypts every current value and archived version**:
 
 ```bash
 tvault set NUXT_DATABASE_URL "…"; tvault seal --recipient tvault1<web-prod> --out .env.encrypted   # update
-tvault projects unshare tvault1<web-prod>                                                          # revoke
+tvault projects unshare tvault1<web-prod>                                                          # remove from live vault
 ```
+
+The droplet can still read a pre-removal vault snapshot or sealed artifact it
+already received. Rotate the underlying credentials, re-seal without the
+removed recipient, and redeploy when the server or its identity may be
+compromised.
 
 ::: tip
 `tvault ci init --provider github-actions --mode identity --identity web-prod` scaffolds the same passphrase-free flow for a pipeline that builds and ships to the droplet.
 :::
 
-## Model B — a full vault you manage over SSH
+## Model B: a full vault you manage over SSH
 
 When you want to author secrets *on the server*, give it a real vault.
 
@@ -169,12 +174,12 @@ In Pulumi, supply that `user_data` as a `pulumi.secret()` so the key stays encry
 - The server holds a **private identity key** (Model A) or a **passphrase** (Model B) — never both, and never the vault passphrase in Model A.
 - Decrypt to **tmpfs** (`/run/...`, `RuntimeDirectory=`), not to a persistent disk path.
 - Never commit `vault.db` or `tvault-key1…`. `tvault1…` (public) and `.env.encrypted` (sealed) are safe to commit.
-- Revoke a lost server with `tvault projects unshare` — it rotates the DEK and re-encrypts, so the old key is truly dead.
+- Remove a lost server with `tvault projects unshare` to re-key the updated live vault, then rotate the underlying credentials and re-seal artifacts; the old identity can still open data it retained before removal.
 
 ## See also
 
 - [Pulumi & IaC](/guide/pulumi) — provision the droplet and deploy with secrets injected
 - [Committable Secrets](/guide/committable-secrets) — the `.env.encrypted` v2 format and `seal`/`open`
-- [Sharing Secrets](/guide/sharing) — identities, recipients, and true revocation
+- [Sharing Secrets](/guide/sharing) — identities, recipients, live-vault re-keying, and retained-data limits
 - [Local Agent](/guide/agent) — prompt-free reads on the server
 - [CI/CD](/guide/ci-cd) — passphrase-free pipelines with `TVAULT_IDENTITY_KEY`

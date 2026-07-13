@@ -9,7 +9,7 @@ Use your secrets at runtime without writing them to disk or pasting them into sh
 
 ## tvault run — inject secrets into one process
 
-`tvault run -- <command> [args...]` unlocks the active project, sets each secret as an environment variable in a child process, runs the command, and exits with the child's exit code. The secrets live only in that child's environment — never in a file, never in your shell.
+`tvault run -- <command> [args...]` unlocks the active project, sets each secret as an environment variable in a child process, runs the command, and exits with the child's exit code. TinyVault does not write those values to a file or export them into your parent shell; they are still plaintext in TinyVault and child-process memory while the command runs.
 
 ```bash
 tvault run -- npm start
@@ -127,7 +127,7 @@ tvault env --format pulumi-config --stack prod | sh   # push into Pulumi config
 ```
 
 ::: tip Pulumi
-For Pulumi you usually want `tvault run -- pulumi up` (inject at deploy time, nothing lands in state). The `pulumi-config` format is for teams who instead store secrets in Pulumi's own encrypted config. See [Pulumi & IaC](/guide/pulumi).
+For Pulumi you usually want `tvault run -- pulumi up`: it injects provider credentials at deploy time without first copying them into Pulumi config or your parent shell. Your Pulumi program still determines what is persisted in state. The `pulumi-config` format is for teams who intentionally store values in Pulumi's encrypted config. See [Pulumi & IaC](/guide/pulumi).
 :::
 
 For the `shell` format, `-e`/`--export` (on by default) controls the `export ` prefix. Pass `--export=false` to emit bare `KEY=value` lines:

@@ -72,7 +72,7 @@ func (s *VaultMCPServer) registerSecretTools() {
 		Name: "vault_get_secret",
 		Description: "Get the decrypted value of a specific secret. " +
 			"WARNING: The secret value will be visible in the AI conversation context. " +
-			"Use vault_run_with_secrets instead when you need to pass secrets to commands without exposing them.",
+			"Use vault_run_with_secrets when a trusted command can receive the value without first returning it as a dedicated tool-result field.",
 	}, s.handleGetSecret)
 
 	sdkmcp.AddTool(s.server, &sdkmcp.Tool{

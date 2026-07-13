@@ -14,8 +14,9 @@ import (
 // Asymmetric sharing (Spine A). A project's DEK can be additionally wrapped
 // to X25519 recipients (alongside the KEK wrap the owner uses), so a holder
 // of the matching private key can decrypt the project WITHOUT the vault
-// passphrase. Revoking a recipient rotates the DEK and re-encrypts every
-// value, so a removed recipient (who still holds the old DEK) loses access.
+// passphrase. Removing a recipient rotates the DEK and re-encrypts every value
+// in the updated live vault, so the old DEK cannot decrypt that new state.
+// Pre-rotation snapshots and previously exported artifacts are unaffected.
 
 // ShareProject grants the recipient (an X25519 public key) access to a
 // project by wrapping the project DEK to it. Requires the vault unlocked
@@ -49,11 +50,14 @@ func (v *Vault) ShareProject(name string, recipientPub []byte) error {
 	return mapStoreError(v.store.UpdateProject(project))
 }
 
-// UnshareProject revokes a recipient. Because the recipient already holds
-// the project DEK, revocation is not a simple unwrap-removal: it rotates the
-// DEK, re-encrypts every secret in the project, re-wraps the new DEK under
+// UnshareProject removes a recipient from the updated live vault. Because the
+// recipient already holds the project DEK, removal is not a simple unwrap:
+// it rotates the DEK, re-encrypts every secret in the project, re-wraps the new DEK under
 // the KEK, and re-wraps it to all REMAINING recipients — atomically. The
-// removed recipient's old DEK can no longer decrypt anything.
+// removed recipient's old DEK can no longer decrypt the updated live-vault
+// state. A pre-rotation snapshot still contains the old ciphertext and wrap
+// and remains readable; callers must rotate underlying credentials separately
+// if previously copied data may have been retained.
 func (v *Vault) UnshareProject(name string, recipientPub []byte) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -90,7 +94,7 @@ func (v *Vault) UnshareProject(name string, recipientPub []byte) error {
 	defer crypto.ZeroBytes(newDEK)
 
 	// Re-encrypt every value (old DEK -> new DEK), then the archived version
-	// history too — or a rollback to a pre-revocation version would be
+	// history too — or a rollback to a pre-removal version would be
 	// undecryptable under the rotated DEK. Version/timestamps are preserved.
 	reEncrypted, err := v.reEncryptCurrentSecrets(project.ID, oldDEK, newDEK)
 	if err != nil {

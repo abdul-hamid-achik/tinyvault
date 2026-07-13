@@ -172,7 +172,7 @@ Every secret value is encrypted with **AES-256-GCM** under the project's data-en
 Commands that exist to emit usable values — `tvault get`, [`env`](/guide/run-and-env), [`export`](/cli/), and `k8s render` — print **plaintext**. Pipe them into the consumer (a shell, `kubectl`, a process) and never redirect them into a committed file.
 :::
 
-When revoking access, TinyVault does real cryptographic revocation: [`tvault projects unshare`](/guide/sharing) **rotates the project DEK and re-encrypts every value and its history**, so a removed recipient's key can no longer decrypt anything — re-wrapping alone would be security theater.
+When removing a recipient, [`tvault projects unshare`](/guide/sharing) **rotates the project DEK and re-encrypts every current value and archived version in the updated live vault**. The removed identity cannot decrypt that new state or future writes under the new DEK. Pre-removal vault copies and already exported, sealed, or decrypted data remain readable, so rotate underlying credentials when needed.
 
 ## Global flags
 
@@ -180,7 +180,7 @@ These persistent flags work on every command on this page:
 
 | Flag | Purpose |
 | --- | --- |
-| `--config <file>` | Use a specific config file. |
+| `--config <file>` | Compatibility selector for Viper input; it does not relocate the typed studio config. |
 | `--vault <dir>` | Use a specific vault directory. |
 | `-p`, `--project <name>` | Operate on this project instead of the active one. |
 | `--json` | Emit machine-readable JSON. |

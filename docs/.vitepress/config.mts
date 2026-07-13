@@ -4,16 +4,11 @@ import { defineConfig } from 'vitepress'
 // Keep this in sync with the canonical host configured in Vercel → Domains.
 const SITE_URL = 'https://www.tinyvault.dev'
 const SITE_TITLE = 'TinyVault'
-const SITE_TAGLINE = 'Local-first secrets for developers & AI agents'
-// SEO: keyword-targeted description. Covers the high-intent terms a developer
-// or AI engineer searches for ("secrets manager", "MCP server", "local secrets",
-// "secrets CLI", ".env", "AI agent secrets") while staying a natural sentence.
+const SITE_TAGLINE = 'Local secrets. Agent-ready workflows.'
 const SITE_DESC =
-  'TinyVault is a local-first secrets manager and MCP server for developers and AI agents, ' +
-  'written in Go and shipped as a single binary. It is language-agnostic — `tvault run` ' +
-  'injects secrets as env vars into Node, Python, Ruby, Rust, PHP, Go, or anything. ' +
-  'AES-256-GCM + Argon2id, .env toolkit, X25519 sharing, versioned secrets, a 49-tool MCP server — ' +
-  'no servers, no accounts, no cloud.'
+  'TinyVault is one Go binary for local secrets management. Encrypt values per project, ' +
+  'inject them into any process, and give MCP agents value-minimizing tools without an account ' +
+  'or hosted backend.'
 
 const GH = 'https://github.com/abdul-hamid-achik/tinyvault'
 
@@ -22,6 +17,15 @@ export default defineConfig({
   title: SITE_TITLE,
   titleTemplate: ':title · TinyVault',
   description: SITE_DESC,
+
+  markdown: {
+    // Code blocks use a dark terminal surface in both site themes, so keep
+    // syntax tokens on the matching high-contrast palette as well.
+    theme: {
+      light: 'github-dark',
+      dark: 'github-dark',
+    },
+  },
 
   cleanUrls: true,
   ignoreDeadLinks: false,
@@ -40,7 +44,8 @@ export default defineConfig({
 
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }],
-    ['meta', { name: 'theme-color', content: '#f5a623' }],
+    ['meta', { name: 'theme-color', content: '#fbfaf6', media: '(prefers-color-scheme: light)' }],
+    ['meta', { name: 'theme-color', content: '#11120f', media: '(prefers-color-scheme: dark)' }],
     ['meta', { name: 'author', content: 'Abdul Hamid Achik' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:site_name', content: SITE_TITLE }],
@@ -57,8 +62,6 @@ export default defineConfig({
     ['meta', { name: 'twitter:description', content: SITE_DESC }],
     ['meta', { name: 'twitter:image', content: `${SITE_URL}/og.png` }],
     ['meta', { name: 'twitter:image:alt', content: 'TinyVault — local-first secrets for developers and AI agents' }],
-    // Structured data: helps Google classify this as a developer tool and
-    // powers rich results (software application, organization, website).
     ['script', { type: 'application/ld+json' }, JSON.stringify({
       '@context': 'https://schema.org',
       '@graph': [
@@ -69,9 +72,6 @@ export default defineConfig({
           operatingSystem: 'Linux, macOS, Windows (amd64, arm64)',
           url: SITE_URL,
           downloadUrl: `${GH}/releases`,
-          softwareVersion: '0.17.0',
-          datePublished: '2026-05-01',
-          dateModified: '2026-07-11',
           description: SITE_DESC,
           offers: {
             '@type': 'Offer',
@@ -80,11 +80,10 @@ export default defineConfig({
             availability: 'https://schema.org/InStock',
           },
           featureList: [
-            'AES-256-GCM encryption with two-tier key hierarchy',
-            'Argon2id passphrase key derivation',
-            '49-tool MCP server for AI agents (value-free by default)',
-            'Full .env toolkit: parser, sync, drift diff, encrypted .env',
-            'X25519 recipient sharing with revocation',
+            'Per-project AES-256-GCM encryption with Argon2id passphrase derivation',
+            'MCP tools designed to minimize secret-value exposure',
+            'Dotenv import, synchronization, drift detection, and encrypted files',
+            'X25519 recipient sharing with project re-keying',
             'Transparent git filters for commit-safe secrets',
             'Versioned secrets with rollback',
             'Interactive terminal studio (TUI)',
@@ -125,66 +124,57 @@ export default defineConfig({
     siteTitle: 'TinyVault',
 
     nav: [
-      { text: 'Guide', link: '/guide/what-is-tinyvault', activeMatch: '/guide/' },
+      { text: 'Quickstart', link: '/guide/getting-started' },
+      { text: 'Guides', link: '/guide/', activeMatch: '^/guide/(?!getting-started$)' },
       { text: 'CLI', link: '/cli/', activeMatch: '/cli/' },
       { text: 'MCP', link: '/mcp/', activeMatch: '/mcp/' },
-      { text: 'AI Agents', link: '/guide/for-ai-agents' },
+      { text: 'Security', link: '/reference/security' },
       {
         text: 'Reference',
-        activeMatch: '/reference/',
+        activeMatch: '^/reference/(?!security$)',
         items: [
-          { text: 'Configuration', link: '/reference/configuration' },
-          { text: 'Environment Variables', link: '/reference/environment-variables' },
           { text: 'Architecture', link: '/reference/architecture' },
-          { text: 'Security & Threat Model', link: '/reference/security' },
-          { text: 'Troubleshooting & FAQ', link: '/reference/troubleshooting' },
+          { text: 'Configuration', link: '/reference/configuration' },
+          { text: 'Environment variables', link: '/reference/environment-variables' },
+          { text: 'Troubleshooting', link: '/reference/troubleshooting' },
+          { text: 'Changelog', link: '/changelog' },
+          { text: 'Releases', link: `${GH}/releases` },
         ],
       },
-      { text: 'Changelog', link: '/changelog' },
-      { text: 'Releases', link: `${GH}/releases` },
     ],
 
     sidebar: {
       '/guide/': [
         {
-          text: 'Introduction',
+          text: 'Start Here',
           collapsed: false,
           items: [
+            { text: 'Guides overview', link: '/guide/' },
             { text: 'What is TinyVault?', link: '/guide/what-is-tinyvault' },
-            { text: 'Getting Started', link: '/guide/getting-started' },
+            { text: 'Install & quickstart', link: '/guide/getting-started' },
             { text: 'Core Concepts', link: '/guide/concepts' },
-            { text: 'For AI Agents', link: '/guide/for-ai-agents' },
           ],
         },
         {
-          text: 'Working with Secrets',
+          text: 'Everyday Workflows',
           collapsed: false,
           items: [
-            { text: 'Secrets & Search', link: '/guide/secrets' },
+            { text: 'Store & find secrets', link: '/guide/secrets' },
+            { text: 'Run apps with secrets', link: '/guide/run-and-env' },
             { text: 'Projects', link: '/guide/projects' },
             { text: 'Environment Groups', link: '/guide/env-groups' },
-            { text: 'Run & Environment', link: '/guide/run-and-env' },
-            { text: '.env Files', link: '/guide/dotenv' },
+            { text: 'Import & sync .env', link: '/guide/dotenv' },
             { text: 'Versioning & Rollback', link: '/guide/versioning' },
-            { text: 'Key Management', link: '/guide/key-management' },
           ],
         },
         {
-          text: 'Sharing & Committing',
+          text: 'Share & Deploy',
           collapsed: false,
           items: [
-            { text: 'Sharing Secrets', link: '/guide/sharing' },
+            { text: 'Identities & sharing', link: '/guide/sharing' },
             { text: 'Committable Secrets', link: '/guide/committable-secrets' },
             { text: 'Git Filter', link: '/guide/git-filter' },
             { text: 'CI/CD', link: '/guide/ci-cd' },
-          ],
-        },
-        {
-          text: 'Deploying',
-          collapsed: false,
-          items: [
-            { text: 'Pulumi & IaC', link: '/guide/pulumi' },
-            { text: 'DigitalOcean & SSH', link: '/guide/digitalocean' },
           ],
         },
         {
@@ -193,6 +183,24 @@ export default defineConfig({
           items: [
             { text: 'Interactive Studio', link: '/guide/studio' },
             { text: 'Local Agent', link: '/guide/agent' },
+            { text: 'For AI Agents', link: '/guide/for-ai-agents' },
+          ],
+        },
+        {
+          text: 'Operations',
+          collapsed: true,
+          items: [
+            { text: 'Backup, restore & rotate', link: '/guide/key-management' },
+            { text: 'Configuration', link: '/reference/configuration' },
+            { text: 'Troubleshooting', link: '/reference/troubleshooting' },
+          ],
+        },
+        {
+          text: 'Integrations',
+          collapsed: true,
+          items: [
+            { text: 'Pulumi & IaC', link: '/guide/pulumi' },
+            { text: 'DigitalOcean & SSH', link: '/guide/digitalocean' },
             { text: 'Codemap integration', link: '/guide/codemap' },
           ],
         },
@@ -203,9 +211,10 @@ export default defineConfig({
           collapsed: false,
           items: [
             { text: 'Overview & Setup', link: '/mcp/' },
-            { text: 'Tools Reference', link: '/mcp/tools' },
-            { text: 'Recipes', link: '/mcp/recipes' },
+            { text: 'Safe agent workflow', link: '/guide/for-ai-agents' },
             { text: 'Access Policy', link: '/mcp/access-policy' },
+            { text: 'Recipes', link: '/mcp/recipes' },
+            { text: 'Tools Reference', link: '/mcp/tools' },
           ],
         },
       ],
@@ -221,10 +230,10 @@ export default defineConfig({
           text: 'Reference',
           collapsed: false,
           items: [
+            { text: 'Security & Threat Model', link: '/reference/security' },
+            { text: 'Architecture', link: '/reference/architecture' },
             { text: 'Configuration', link: '/reference/configuration' },
             { text: 'Environment Variables', link: '/reference/environment-variables' },
-            { text: 'Architecture', link: '/reference/architecture' },
-            { text: 'Security & Threat Model', link: '/reference/security' },
             { text: 'Troubleshooting & FAQ', link: '/reference/troubleshooting' },
           ],
         },

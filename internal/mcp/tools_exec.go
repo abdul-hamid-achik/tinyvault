@@ -61,9 +61,9 @@ func (s *VaultMCPServer) registerExecTools() {
 	sdkmcp.AddTool(s.server, &sdkmcp.Tool{
 		Name: "vault_run_with_secrets",
 		Description: "Execute a command with vault secrets injected as environment variables. " +
-			"Secret values are NEVER returned to the AI -- they are only passed to the subprocess environment. " +
-			"Output is scanned and any secret values are redacted. " +
-			"This is the PREFERRED way to use secrets.",
+			"Selected values are not returned as dedicated result fields, but the command's stdout and stderr are. " +
+			"When policy enables redact_output, literal values longer than three characters are replaced; short or transformed values can still leak. " +
+			"Use only with commands trusted to receive the selected secrets.",
 	}, s.handleRunWithSecrets)
 }
 

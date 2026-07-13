@@ -188,8 +188,9 @@ func runEnv(_ *cobra.Command, _ []string) error {
 	case "pulumi-config":
 		// Emit `pulumi config set --secret KEY VALUE` lines, shell-quoted so the
 		// output is safe to pipe to `sh`. Prefer `tvault run -- pulumi up` when
-		// you can — it keeps values out of Pulumi's state file and your shell
-		// history entirely; this is for teams that want them in Pulumi config.
+		// you can — it avoids first copying provider credentials into Pulumi
+		// config or the parent shell; this format is for teams that do want them
+		// in Pulumi config. The Pulumi program still controls what reaches state.
 		stackArg := ""
 		if envPulumiStack != "" {
 			stackArg = " --stack " + shellArgQuote(envPulumiStack)

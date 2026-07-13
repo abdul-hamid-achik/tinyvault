@@ -90,4 +90,4 @@ This writes values into Pulumi's state/config and, transiently, your shell's pro
 
 - [Run & Environment](/guide/run-and-env) — `tvault run`, `--only`/`--prefix`, output formats
 - [CI/CD](/guide/ci-cd) — passphrase-free pipelines with identity keys
-- [Sharing Secrets](/guide/sharing) — identities, recipients, revocation
+- [Sharing Secrets](/guide/sharing) — identities, recipients, live-vault re-keying, and retained-data limits

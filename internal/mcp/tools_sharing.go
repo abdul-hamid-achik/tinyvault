@@ -28,7 +28,7 @@ type shareProjectOutput struct {
 // --- vault_unshare_project ---
 
 type unshareProjectInput struct {
-	Recipient string `json:"recipient" jsonschema:"X25519 recipient string (tvault1…) to revoke."`
+	Recipient string `json:"recipient" jsonschema:"X25519 recipient string (tvault1…) to remove from the updated live vault."`
 	Project   string `json:"project,omitempty" jsonschema:"Project name. If omitted uses the current project."`
 }
 
@@ -59,9 +59,10 @@ func (s *VaultMCPServer) registerSharingTools() {
 
 	sdkmcp.AddTool(s.server, &sdkmcp.Tool{
 		Name: "vault_unshare_project",
-		Description: "Revoke a recipient's access to a project. TRUE revocation: rotates the project data key " +
-			"and re-encrypts every value and version, so an old copy of the vault is useless to the removed " +
-			"recipient. Write op; returns metadata only.",
+		Description: "Remove a recipient from the updated live vault by rotating the project data key " +
+			"and re-encrypting every current value and archived version. Pre-removal vault snapshots and " +
+			"previously exported, sealed, or decrypted data remain readable; rotate underlying credentials " +
+			"when needed. Write op; returns metadata only.",
 	}, s.handleUnshareProject)
 
 	sdkmcp.AddTool(s.server, &sdkmcp.Tool{

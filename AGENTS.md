@@ -6,10 +6,12 @@ TinyVault is a **local-first CLI tool and MCP server** for secrets management.
 One Go binary, no servers, no accounts, no cloud.
 
 - **Primary users:** developers managing `.env` sprawl; AI agents that need
-  to use secrets without the values ever entering the model context.
+  value-minimizing ways to discover and use secrets without routinely returning
+  raw values to the model.
 - **Adjacent tools:** `pass`, 1Password CLI, Doppler, Vault dev mode. TinyVault
-  is the local-first, agent-first complement. See [SPEC.md](SPEC.md) for the
-  full positioning and threat model.
+  is the local-first, agent-first complement. See
+  [What is TinyVault?](docs/guide/what-is-tinyvault.md) for positioning and
+  [Security](docs/reference/security.md) for the threat model.
 - **Storage:** bbolt (pure Go key-value store) at `~/.tvault/vault.db`,
   accessed through a **SQL-shaped tabular Store interface** with
   per-table sub-interfaces (MetaStore, ProjectStore, SecretStore,
@@ -22,9 +24,11 @@ One Go binary, no servers, no accounts, no cloud.
 - **CLI:** `tvault` using cobra/viper
 - **MCP:** stdio-based server using `github.com/modelcontextprotocol/go-sdk`
 
-**Before making non-trivial changes, read [SPEC.md](SPEC.md).** It documents
-the architecture, threat model, and roadmap. The README is a quickstart;
-SPEC.md is the source of truth for *why* things are the way they are.
+**Before making non-trivial changes, read
+[Architecture](docs/reference/architecture.md) and
+[Security](docs/reference/security.md).** They document the implementation
+model and threat boundary. The README is a quickstart, and
+[ROADMAP.md](ROADMAP.md) records product direction.
 
 ## Quick Commands
 
@@ -130,7 +134,7 @@ internal/
                              # ListSecretVersions, GetSecretVersionValue, RollbackSecret
     query.go                 # Relational query layer (Search, CountSecrets,
                              # SearchProjects, ListAudit, SnapshotProjects)
-    sharing.go               # ShareProject/UnshareProject (DEK re-key on revoke),
+    sharing.go               # ShareProject/UnshareProject (live-vault DEK re-key on removal),
                              # GetAllSecretsWithIdentity (recipient read) — Spine A
     envgroup.go              # Environment groups: EnvGroup CRUD, DiffEnvironments,
                              # Promote, SetInheritance, ResolveKey, PinKey/UnpinKey,
@@ -218,10 +222,16 @@ Recipient layer (passphrase-independent, alongside the KEK wrap):
   -> powers projects share/unshare, .env.encrypted v2, and git-filter
 ```
 
+Recipient removal re-keys only the updated live vault. A pre-removal vault
+snapshot still contains the old ciphertext and recipient wrap, and previously
+exported, sealed, or decrypted data remains readable. Rotate underlying
+credentials and re-seal distributed artifacts after removing a compromised
+recipient.
+
 ### MCP Security
 - `redactSecrets()` scans command output and replaces secret values with `[REDACTED:KEY]`
 - `vault_export_env` writes .env file to disk but only returns the file path to the AI
-- `vault_generate_secret` stores the secret but only returns `{stored: true}` to the AI
+- `vault_generate_secret` stores the secret and returns only non-secret generation metadata (`key`, `length`, `charset`, `stored`) to the AI
 - Access policy controls which projects/secrets the AI can access
 - `allow_exec: false` disables `vault_run_with_secrets` entirely
 - Every privileged MCP action writes an entry to the audit bucket
@@ -244,8 +254,8 @@ Recipient layer (passphrase-independent, alongside the KEK wrap):
   uses v2 for transparent encrypt-on-commit / decrypt-on-checkout; secret
   values never enter git history in plaintext.
 
-See [SPEC.md section 3](SPEC.md#3-threat-model) for the full threat model,
-including out-of-scope items (no HSM, no recovery without passphrase, etc.).
+See [Security](docs/reference/security.md) for the full threat model,
+including out-of-scope items such as no HSM and no owner-KEK recovery service.
 
 ## Code Conventions
 
@@ -315,7 +325,7 @@ Before every commit:
 - [ ] New crypto code uses `crypto/rand` and zeros keys after use
 - [ ] Tests added for new functionality
 - [ ] Error messages don't leak internal details to users
-- [ ] If MCP surface changed, [SPEC.md](SPEC.md) section 4 is updated
+- [ ] If the MCP surface changed, `docs/mcp/tools.md`, `docs/mcp/index.md`, and `cmd/tvault/cmd/docs.go` are updated
 
 ## Environment Variables
 
@@ -323,7 +333,7 @@ Before every commit:
 |------------------------|----------------------------------------------------------------------------|
 | `TVAULT_PASSPHRASE`    | Vault passphrase (CI/CD, scripts, MCP server — skips interactive prompt).  |
 | `TVAULT_NO_AGENT`      | Bypass a running `tvault agent` and unlock the vault directly.             |
-| `TVAULT_AGENT_TOKEN`   | Capability token for a `--require-token` agent (privilege separation; same-uid is NOT a threat it defends — see SPEC §5.5). |
+| `TVAULT_AGENT_TOKEN`   | Capability token for a `--require-token` agent (privilege separation; same-uid is NOT a threat it defends — see [token honesty](docs/reference/security.md#token-honesty)). |
 | `TVAULT_IDENTITY_KEY`  | Private identity (`tvault-key1…`) for passphrase-free decrypt in CI/ssh/agents (`resolveIdentity`); a local key file takes precedence + warns. Never echoed in errors. |
 | `TVAULT_IDENTITY`      | Default identity name for git filters / recipient reads (default: `default`). |
 | `TVAULT_DIR`           | Vault directory (default: `~/.tvault`).                                    |
@@ -336,7 +346,7 @@ Before every commit:
 | `github.com/spf13/viper`                 | Configuration                            |
 | `github.com/fatih/color`                 | Colored terminal output                  |
 | `github.com/google/uuid`                 | UUID generation for project IDs          |
-| `go.etcd.io/bbolt`                       | Encrypted vault storage (single file)    |
+| `go.etcd.io/bbolt`                       | Single-file local vault storage          |
 | `golang.org/x/crypto`                    | Argon2id, HKDF (encrypted-env)           |
 | `golang.org/x/term`                      | Secure passphrase input (no echo)        |
 | `golang.org/x/sys`                       | unix peer-credential check for the agent (now a direct require; was indirect — no new module) |
@@ -356,10 +366,12 @@ hand-rolled easing.
 
 ## Where things live
 
-- **Product framing, threat model, roadmap:** [SPEC.md](SPEC.md)
+- **Product framing:** [What is TinyVault?](docs/guide/what-is-tinyvault.md)
+- **Architecture and threat model:** [Architecture](docs/reference/architecture.md) and [Security](docs/reference/security.md)
+- **Roadmap:** [ROADMAP.md](ROADMAP.md)
 - **Quickstart and feature list:** [README.md](README.md)
 - **Documentation site:** `docs/` (VitePress + Bun) → **[tinyvault.dev](https://tinyvault.dev)**, deployed on Vercel; auto-deploys on push to `main` that touches `docs/` (Vercel root dir `docs/`). Local dev: `cd docs && bun run docs:dev`; gate with `bun run docs:build`.
 - **Contributing guide:** [CONTRIBUTING.md](CONTRIBUTING.md)
 - **CI:** `.github/workflows/ci.yml` (test, lint, govulncheck, build)
 - **Release:** `.github/workflows/release.yml` (GoReleaser on `v*` tags)
-- **MCP host config example:** see SPEC.md section 8 or README.md
+- **MCP host config example:** see [MCP server](docs/mcp/index.md) or [README.md](README.md)

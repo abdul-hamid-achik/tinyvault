@@ -30,12 +30,16 @@ Examples:
 
 var projectUnshareCmd = &cobra.Command{
 	Use:   "unshare <recipient>",
-	Short: "Revoke a recipient's access to a project (rotates the key)",
-	Long: `Revoke a recipient. Because the recipient already holds the project's
-data key, this is a true revocation: the project key is rotated and every
-secret re-encrypted, so the removed recipient can no longer decrypt
-anything — even from an old copy of the vault. Remaining recipients keep
-access. Requires the vault unlocked.`,
+	Short: "Remove a recipient and re-key the updated live vault",
+	Long: `Remove a recipient from the updated live vault. Because the recipient
+already has access to the project's data key, the project key is rotated and
+every current secret and archived version is re-encrypted. Remaining
+recipients keep access through fresh key wraps. Requires the vault unlocked.
+
+This does not rewrite vault snapshots copied before the operation or any
+previously exported, sealed, or decrypted data. A removed recipient can still
+read data retained under the old key. Rotate the underlying credentials and
+re-seal distributed artifacts when access must be withdrawn completely.`,
 	Args: cobra.ExactArgs(1),
 	RunE: runProjectUnshare,
 }
@@ -85,7 +89,7 @@ func runProjectUnshare(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to unshare project: %w", err)
 	}
 	recordAudit(v, "project.unshare", "project", project, map[string]any{"recipient": args[0]})
-	Success("Revoked %s from project '%s' (key rotated, secrets re-encrypted)", args[0], project)
+	Success("Removed %s from project '%s' (live vault re-keyed, secrets re-encrypted)", args[0], project)
 	return nil
 }
 

@@ -85,7 +85,7 @@ tvault identity export ci --force | gh secret set TVAULT_IDENTITY_KEY
 `tvault identity export` prints the **private** key. It is TTY-guarded: it refuses to print to a terminal unless you pass `--force`. Piping it straight into your CI secret manager — `gh secret set` here — keeps it off your screen and out of your shell history.
 
 ::: danger
-`tvault identity export` emits a private `tvault-key1…` key. Treat it like a password: never commit it, never echo it into CI logs, never paste it into a chat. The only place it belongs is a CI/CD secret store (a GitHub Actions secret, a GitLab masked variable, etc.). If a CI identity leaks, revoke it with `tvault projects unshare` — that is true revocation: it rotates the project DEK and re-encrypts every value and its history.
+`tvault identity export` emits a private `tvault-key1…` key. Treat it like a password: never commit it, never echo it into CI logs, never paste it into a chat. The only place it belongs is a CI/CD secret store (a GitHub Actions secret, a GitLab masked variable, etc.). If a CI identity leaks, remove it with `tvault projects unshare`; this rotates the project DEK and re-encrypts the updated live vault. It cannot invalidate snapshots or artifacts the runner already obtained, so also rotate the underlying credentials and re-seal distributed files.
 :::
 
 ### 4. Decrypt on the runner — no `--identity` needed
@@ -160,7 +160,7 @@ ssh deploy@host '
 '
 ```
 
-Because identities are independent keypairs, you can mint one per host or per pipeline and revoke any of them individually with `tvault projects unshare` without disturbing the others.
+Because identities are independent keypairs, you can mint one per host or per pipeline and remove any of them from the updated live vault with `tvault projects unshare` without disturbing the remaining recipients. Pre-removal snapshots and artifacts remain readable, so rotate underlying credentials after a compromise.
 
 ## Verifying a pipeline
 

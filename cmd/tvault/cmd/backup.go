@@ -11,10 +11,11 @@ import (
 
 var backupCmd = &cobra.Command{
 	Use:   "backup <path>",
-	Short: "Copy encrypted vault to a backup location",
-	Long: `Create a backup of the encrypted vault database file.
+	Short: "Copy the vault database to a backup location",
+	Long: `Create a backup of the vault database file.
 
-The backup is a direct copy of the encrypted vault.db file.
+The backup is a direct copy of vault.db. Secret payloads and key material
+remain encrypted, while the database's operational metadata remains readable.
 
 Examples:
   tvault backup ~/backups/vault.db.bak

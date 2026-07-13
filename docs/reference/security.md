@@ -5,15 +5,15 @@ description: TinyVault's honest threat model — what local-first encryption, th
 
 # Security & Threat Model
 
-This is the honest security page. TinyVault is a single binary (written in Go) that encrypts secrets at rest, redacts them from AI agents, and serves them over a tightly-confined local socket. None of those layers is magic. This page tells you exactly what each one stops, what it does not, and how TinyVault compares to the tools you might reach for instead.
+This is the honest security page. TinyVault is a single binary (written in Go) that encrypts secret payloads at rest, offers value-minimizing tools for AI agents, and can serve reads over a tightly confined local socket. None of those layers is magic. This page tells you exactly what each one stops and what it does not.
 
-Read this before you trust TinyVault with anything that matters. The short version: it protects your secrets at rest with strong cryptography and keeps values out of an AI model's context window, but it has no recovery story, no team sync, and it cannot defend a running, unlocked process from another process running as the same user.
+Read this before you trust TinyVault with anything that matters. The short version: it protects secret values at rest with strong cryptography and supports agent workflows that do not return those values, but it has no recovery story, no team sync, and it cannot defend a running, unlocked process from another process running as the same user.
 
 ## The model at a glance
 
-- The vault is a single file (`~/.tvault/vault.db`, mode `0600`, in a `0700` directory). Every secret value is AES-256-GCM encrypted under a per-project key.
-- The encryption key for the whole vault (the KEK) is derived from your passphrase with Argon2id and only ever lives in RAM while the vault is unlocked.
-- There is no account, no server, no network. The vault never leaves your disk unless you explicitly back it up, seal it, or commit a sealed blob.
+- The vault is a single bbolt file (`~/.tvault/vault.db`, mode `0600`, in a `0700` directory). Secret values and key material are encrypted; project names, key names, timestamps, versions, configuration, and audit metadata are readable.
+- The root wrapping key (the KEK) is derived from your passphrase with Argon2id and only ever lives in RAM while a process has the vault unlocked. It wraps per-project DEKs and the verifier; it does not encrypt the database as one opaque blob.
+- There is no TinyVault account or hosted vault backend. Normal vault operations stay local, but exports, backups, recipient-sealed artifacts, `self-update`, and launched subprocesses can cross disk or network boundaries when you invoke them.
 - Three optional surfaces extend this: an MCP server for AI agents, a unix-socket agent for fast repeated access, and a recipient/identity layer for sharing. Each has its own security model, covered below.
 
 For the cryptographic design and key hierarchy, see [Architecture](/reference/architecture). For how the pieces fit together conceptually, see [Concepts](/guide/concepts).
@@ -45,13 +45,13 @@ Rotating your passphrase (`tvault key rotate`) re-derives a new KEK and re-wraps
 
 These are the threats TinyVault is built to mitigate, and how.
 
-- **Someone reads `vault.db` at rest.** Every value is AES-256-GCM encrypted under a per-project DEK, and each DEK is wrapped by the KEK. Without the passphrase (or a recipient identity), the file is ciphertext.
+- **Someone reads `vault.db` at rest.** Every value is AES-256-GCM encrypted under a per-project DEK, and each DEK is wrapped by the KEK. Without the passphrase (or a matching recipient identity), the secret payloads are unreadable. Names and operational metadata are not encrypted and may still be sensitive.
 - **Someone brute-forces your passphrase.** Argon2id at 64 MiB / 3 / 4 makes each guess roughly 200 ms and memory-bound, which is hostile to GPU and ASIC cracking.
 - **The vault file is tampered with.** Every value, DEK, and the verifier carries an AES-GCM authentication tag. Any modification fails authentication and is rejected with a decryption error rather than silently returning corrupt data.
-- **An AI agent leaks a secret into its prompt or logs.** The MCP layer is built so values never need to enter the model context: `vault_run_with_secrets` injects values as environment variables into a subprocess, `vault_export_env` writes to disk and returns a path, `vault_generate_secret` returns only `{ "stored": true }`, and `vault_seal_for_recipients` returns ciphertext. Only `vault_get_secret` returns a raw value, and it attaches a warning.
-- **An AI agent escapes its allow-list.** An [access policy](/mcp/access-policy) (`~/.tvault/mcp-policy.yaml`) gates projects and secret keys with glob allow/deny lists, and `access_mode` controls whether writes and command execution are permitted. It is loaded from disk at server start; the model cannot edit it at runtime.
-- **A revoked recipient keeps an old copy of the vault.** `tvault projects unshare` is true revocation: it rotates the project DEK, re-encrypts every value and its version history, and re-wraps to the remaining recipients atomically. A removed recipient cannot read new data even with a stale vault file. See [Sharing](/guide/sharing).
-- **An OS-confined (different-uid) process reaches the agent socket.** The agent performs a mandatory peer-credential check and rejects any peer whose uid does not match its own. The optional `--require-token` flag adds a second gate for confined delegates.
+- **An AI agent accidentally pulls a secret into its prompt or logs.** The MCP layer offers workflows that do not intentionally return values: `vault_run_with_secrets` injects selected values into a subprocess, `vault_export_env` writes to disk and returns a path, `vault_generate_secret` returns generation metadata but not the generated value, and `vault_seal_for_recipients` returns ciphertext. `vault_get_secret` deliberately returns a raw value, `vault_set_secret` accepts one from the client, and subprocesses can leak or transform what they receive; policy is the real control.
+- **An AI agent escapes its allow-list through normal tool handlers.** An [access policy](/mcp/access-policy) (`~/.tvault/mcp-policy.yaml`) gates projects and secret keys with glob allow/deny lists, and `access_mode` controls whether writes and command execution are permitted. The in-memory policy is loaded once and has no mutation tool. If command execution is enabled, however, the launched shell can modify any file the server user can write — including the policy file used on a future restart.
+- **A removed recipient tries to read the updated live vault.** `tvault projects unshare` atomically rotates the project DEK, re-encrypts every current value and archived version, and re-wraps the new DEK to the remaining recipients. The removed identity cannot decrypt that updated state or future writes under the new DEK. See [Sharing](/guide/sharing).
+- **A different-uid process reaches the agent socket.** The agent performs a mandatory peer-credential check before token validation and rejects any peer whose uid does not match its own. For accepted same-uid clients, `--require-token` adds a second bearer-token gate and can scope a token to one project.
 - **A malicious dotenv file is imported.** The parser does no shell, variable, or command expansion; it enforces a filename allowlist, skips symlinks, and caps files at 1 MiB. Importing a `.env` cannot execute a payload embedded in it. See [Dotenv files](/guide/dotenv).
 
 ## Threat model: out of scope
@@ -59,11 +59,15 @@ These are the threats TinyVault is built to mitigate, and how.
 These are explicit non-goals. They are not bugs — they are the accepted residual risk of a local-first, single-passphrase design. Plan around them.
 
 ::: danger No passphrase recovery
-There is no escrow, no recovery key, no social recovery. If you forget your passphrase, the vault is **irrecoverable**. This is intentional: an escrow path is an attack surface and a trust dependency that a local-first tool refuses to take on. Back up your passphrase the same way you would back up any root credential, and keep an offline copy of the vault file.
+There is no escrow, recovery key, or social recovery for the owner KEK. If you forget the passphrase, you cannot recover the complete owner view of the vault. A private recipient identity created beforehand may still read only the projects shared to it. Back up the passphrase as a root credential, keep an offline copy of the vault file, and preserve any identities your recovery plan relies on.
 :::
 
 ::: danger A malicious same-uid process is the trust boundary
 Any process running as **your user** can read your secrets when the agent is unlocked, or unlock the vault itself if it can prompt for or capture your passphrase. Capability tokens do **not** change this — a same-uid process can read the token file, the environment, or dial the socket directly. If you do not trust code running as your own user, do not run it on a machine where your vault is unlocked.
+:::
+
+::: danger Recipient removal cannot invalidate retained data
+A vault snapshot copied before `tvault projects unshare` still contains the old ciphertext and the removed recipient's DEK wrap, so it remains readable. The operation also cannot retract plaintext already decrypted or update previously exported or sealed artifacts. Rotate the underlying credentials, then re-seal and redeploy distributed artifacts when access must be withdrawn completely.
 :::
 
 ::: warning Memory forensics of a running, unlocked process
@@ -83,24 +87,24 @@ The following are deliberately not on the roadmap and are not provided:
 
 ## The MCP safety model
 
-The [MCP server](/mcp/) is the most security-sensitive surface, because it hands tools to an AI agent. Its core principle: **secret values never need to enter the model's context window.**
+The [MCP server](/mcp/) is the most security-sensitive surface, because it hands tools to an AI agent. Its core principle is value minimization: prefer destination-shaped operations over returning stored secrets as dedicated plaintext fields.
 
-The server is a thin policy-and-redaction layer over the same vault API the CLI uses. The tools that touch values are designed so the agent can accomplish its task without ever seeing the bytes:
+The server is a thin policy-and-redaction layer over the same vault API the CLI uses. Most value-touching tools avoid a dedicated plaintext result, with command output as the important exception:
 
 | Tool | What it returns to the model |
 |------|------------------------------|
-| `vault_run_with_secrets` | exit status and (redacted) output — values are injected into the subprocess env |
+| `vault_run_with_secrets` | exit status and command output — literal-value redaction applies only when policy enables it |
 | `vault_export_env` | a file path on disk, not the contents |
-| `vault_generate_secret` | only `{ "stored": true }` |
+| `vault_generate_secret` | key, length, charset, and `stored: true` — never the generated value |
 | `vault_seal_for_recipients` | ciphertext (a sealed `.env.encrypted` blob) |
 | `vault_get_secret` | the raw value — **plus a warning** that it is now in context |
 
-`vault_get_secret` is the single deliberate exception, gated by `max_reads_per_session` and intended for cases where the agent genuinely has no alternative. No other tool returns a raw value.
+`vault_get_secret` is the single tool that deliberately returns a stored secret in a dedicated plaintext field, gated by `max_reads_per_session`. `vault_run_with_secrets` can still carry raw, short, or transformed values back through arbitrary child-process output, especially when redaction is disabled; the warning below is the controlling caveat.
 
-Every privileged action is audited — `secret.read`, `secret.write`, `secret.delete`, `secret.generate`, `secret.exec`, `secret.export`, `project.create`, and `project.delete` all write to the audit log, which is queryable over MCP via `vault_audit_log`.
+Explicit MCP handlers for `secret.read`, `secret.write`, `secret.delete`, `secret.generate`, `secret.exec`, `secret.export`, `project.create`, and `project.delete` write to the audit log, which is queryable over MCP via `vault_audit_log`. The trail is not exhaustive: unlocking, passphrase rotation, direct passphrase-based `tvault env`, and some value comparisons are not recorded.
 
 ::: warning Redaction is a safety net, not a control
-`vault_run_with_secrets` post-processes subprocess output and replaces any literal occurrence of a secret value longer than 3 characters with `[REDACTED:KEY]`. This catches accidental leakage to stdout/stderr. It does **not** stop:
+When policy enables `redact_output`, `vault_run_with_secrets` post-processes subprocess output and replaces literal occurrences of secret values longer than 3 characters with `[REDACTED:KEY]`. This can catch accidental leakage to stdout/stderr. It does **not** stop:
 
 - Secrets sent over the **network** — the subprocess has full network access.
 - Secrets written to a **file** outside the captured output.
@@ -141,7 +145,7 @@ A malicious same-uid process can read the token from the file, the environment, 
 Tokens are provisioned out-of-band in a `0600` file (a `SIGHUP` reloads it to revoke). There is no in-agent mint operation, so there is no same-uid mint primitive to abuse. Only the token's SHA-256 is stored, and the audit log records an 8-character hash prefix (`token_id`), never the token itself.
 :::
 
-For genuinely untrusted delegation — CI runners, containers, another person — use a scoped **identity** instead of a token. An identity is cryptographic, transport-agnostic, and atomically revocable via DEK re-key, and it needs no socket or running agent. See [Sharing](/guide/sharing) and [CI/CD](/guide/ci-cd).
+For genuinely untrusted delegation — CI runners, containers, another person — use a scoped **identity** instead of a token. An identity is cryptographic and transport-agnostic, and its access to the updated live vault can be removed atomically via DEK re-key. Pre-removal snapshots and artifacts remain readable, so rotate underlying credentials after a compromise. See [Sharing](/guide/sharing) and [CI/CD](/guide/ci-cd).
 
 ## Sharing, committing, and rendering: handle with care
 
@@ -163,29 +167,18 @@ The rendered output is a real Kubernetes `Secret` with **plaintext** values (bas
 
 Sealed `.env.encrypted` v2 blobs, `tvault1...` recipients, and the `.tvault-recipients` file are all safe to commit — they are ciphertext or public keys. See [Committable secrets](/guide/committable-secrets) and [Git filter](/guide/git-filter).
 
-## Honest comparison
+## Where TinyVault fits
 
-TinyVault is a local-first, agent-first complement to these tools, not a drop-in replacement for any of them in production. Here is the candid breakdown.
+TinyVault is a local developer tool, not an enterprise control plane. It fits
+when one developer or machine needs encrypted-at-rest values, process injection,
+recipient-sealed artifacts, and an agent tool surface without operating a
+hosted vault backend.
 
-| | TinyVault | 1Password CLI | `pass` | HashiCorp Vault | Doppler |
-|--|-----------|---------------|--------|-----------------|---------|
-| Account / cloud required | no | yes | no | no (self-host) | yes |
-| Network round-trip | no | no | no | yes | yes |
-| First-class AI agent (MCP) | yes | no | no | no | no |
-| Redaction-safe exec | yes | no | no | no | no |
-| Per-project key isolation | yes | yes | no | yes | yes |
-| Team sync | no | yes | via git | yes | yes (core) |
-| Recovery without passphrase | no | yes | yes (GPG) | yes (recovery shards) | yes |
-| Dynamic / short-lived secrets | no | no | no | yes | no |
-| HSM / KMS | no | no | no | yes | no |
-| Single binary | yes | no | no | no | no |
-
-- **vs 1Password CLI.** TinyVault has no account and no cloud, ships as one binary, and adds first-class MCP with redaction-safe exec. 1Password gives you team sync and passphrase recovery, which TinyVault deliberately does not.
-- **vs `pass`.** Both are local and account-free. TinyVault adds per-project DEK isolation, the MCP surface, and redaction-safe exec. `pass` gives you GPG-based recovery and git-based sharing out of the box.
-- **vs HashiCorp Vault.** Vault is the production answer: dynamic secrets, HSM/KMS, recovery shards, HA. Those are explicit non-goals for TinyVault, which is local-first and agent-first. If you need a production secrets backend, use Vault — TinyVault is not a replacement.
-- **vs Doppler.** Doppler solves team sync with a hosted backend, which means an account, a network round-trip, and a subscription. TinyVault is fully local with MCP, but it does not do Doppler-style team sync.
-
-The honest gap, stated plainly: **no team sync, no recovery without the passphrase, no dynamic credentials.** If those are requirements, TinyVault is the wrong tool.
+Choose a production secrets platform instead when you need organization-wide
+team sync, centralized RBAC or SSO, account recovery, high availability,
+dynamic credentials, audit export pipelines, HSMs, or cloud KMS. Product
+feature matrices age quickly; the durable distinction is the operating model:
+TinyVault is deliberately local and single-user.
 
 ## Exit codes
 
@@ -205,7 +198,7 @@ Scripts and CI can branch on TinyVault's exit codes.
 tvault get API_KEY >/dev/null 2>&1
 case $? in
   0) echo "ok" ;;
-  3) echo "locked — run tvault unlock" ;;
+  3) echo "locked — run in a TTY, set TVAULT_PASSPHRASE, or start the local agent" ;;
   6) echo "wrong passphrase" ;;
   *) echo "error" ;;
 esac
@@ -220,4 +213,4 @@ TinyVault is a small, security-sensitive tool. If you find a vulnerability, plea
 - [Architecture](/reference/architecture) — the cryptographic design and storage internals behind this threat model.
 - [MCP access policy](/mcp/access-policy) — how to constrain what an AI agent can reach.
 - [The local agent](/guide/agent) — set up and operate the unix-socket agent.
-- [Sharing](/guide/sharing) — recipients, identities, and true revocation.
+- [Sharing](/guide/sharing) — recipients, identities, live-vault re-keying, and retained-data limits.

@@ -277,7 +277,7 @@ func fullCatalog() docsCatalog {
 				Name:        "mcp",
 				Summary:     "MCP server over stdio with 49 tools, 2 prompts, 3 resources.",
 				Commands:    []string{"tvault mcp", "tvault mcp-server"},
-				Description: "Agents can manage secrets without the values ever entering the model context: vault_run_with_secrets injects env vars, vault_export_env writes to disk and returns the path, vault_generate_secret returns only {stored: true}. (`mcp-server` remains a backward-compatible alias.)",
+				Description: "Value-minimizing workflows keep raw values out of most tool results: vault_run_with_secrets injects env vars, vault_export_env writes to disk and returns the path, and vault_generate_secret returns non-secret generation metadata but not the generated value. Explicit raw-value tools such as vault_get_secret and vault_set_secret remain policy-gated. (`mcp-server` remains a backward-compatible alias.)",
 			},
 			{
 				Name:        "relational-search",
@@ -311,9 +311,9 @@ func fullCatalog() docsCatalog {
 			},
 			{
 				Name:        "backup-restore",
-				Summary:     "Copy the still-encrypted vault.db to and from a backup path.",
+				Summary:     "Copy vault.db to and from a backup path without decrypting sensitive records.",
 				Commands:    []string{"tvault backup <path>", "tvault restore <path>"},
-				Description: "Backups are byte-identical encrypted copies; the passphrase is still required to use them. Not exposed over MCP by design.",
+				Description: "Backups are byte-identical database copies: secret payloads and key material remain encrypted, while operational metadata remains readable. The matching passphrase restores the complete owner view; a matching recipient identity can read only projects shared to it. Not exposed over MCP by design.",
 			},
 			{
 				Name:        "kubernetes-sealed-secrets",
@@ -352,7 +352,7 @@ func fullCatalog() docsCatalog {
 				Summary:     "Share/commit secrets to X25519 recipients without sharing the passphrase (age-style).",
 				Commands:    []string{"tvault identity new", "tvault projects share <recipient>", "tvault projects unshare <recipient>", "tvault env --identity <name>"},
 				SeeAlso:     []string{"tvault identity list", "tvault projects recipients"},
-				Description: "An identity is an X25519 keypair (tvault identity new) whose public 'recipient' (tvault1…) is safe to share/commit. `tvault projects share <recipient>` wraps the project's data key to that recipient; the holder of the matching private identity then reads the project with `tvault env --identity <name>` — no vault passphrase needed. `tvault projects unshare` truly revokes: it rotates the project key and re-encrypts every value, so a removed recipient loses access even from an old vault copy. The DEK wrapping is X25519 → HKDF-SHA256 → ChaCha20-Poly1305 (internal/crypto/recipient.go), with no new dependency.",
+				Description: "An identity is an X25519 keypair (tvault identity new) whose public 'recipient' (tvault1…) is safe to share/commit. `tvault projects share <recipient>` wraps the project's data key to that recipient; the holder of the matching private identity then reads the project with `tvault env --identity <name>` — no vault passphrase needed. `tvault projects unshare` rotates the project key and re-encrypts every current value and archived version in the updated live vault. It does not invalidate pre-removal vault snapshots or previously exported, sealed, or decrypted data; rotate underlying credentials when retained data is a concern. The DEK wrapping is X25519 → HKDF-SHA256 → ChaCha20-Poly1305 (internal/crypto/recipient.go), with no new dependency.",
 			},
 			{
 				Name:        "committable-secrets",
@@ -380,14 +380,14 @@ func fullCatalog() docsCatalog {
 				Summary:     "Every overwrite archives the prior value; inspect history and roll back.",
 				Commands:    []string{"tvault history <key>", "tvault get <key> --version N", "tvault rollback <key> --to N"},
 				SeeAlso:     []string{"tvault docs versioning"},
-				Description: "Each `set` archives the prior value as a version in the secret_versions bucket. `tvault history` lists every version (metadata only — no values, no unlock); `tvault get --version N` prints a past value; `tvault rollback --to N` restores an earlier version as a NEW version (non-destructive — the replaced value is itself archived, and version numbers are never reused). History is encrypted with the project DEK, so it survives passphrase rotation and recipient revocation (the DEK rotates and every version is re-encrypted). `tvault delete` purges a key's history. Over MCP, vault_secret_history and vault_rollback_secret expose the same — neither ever returns a value.",
+				Description: "Each `set` archives the prior value as a version in the secret_versions bucket. `tvault history` lists every version (metadata only — no values, no unlock); `tvault get --version N` prints a past value; `tvault rollback --to N` restores an earlier version as a NEW version (non-destructive — the replaced value is itself archived, and version numbers are never reused). History is encrypted with the project DEK, so it survives passphrase rotation and live-vault recipient removal (the DEK rotates and every version in the updated vault is re-encrypted; pre-removal snapshots remain readable). `tvault delete` purges a key's history. Over MCP, vault_secret_history and vault_rollback_secret expose the same — neither ever returns a value.",
 			},
 			{
 				Name:        "codemap-integration",
-				Summary:     "Strictly value-free MCP surface for codemap: rotation blast radius, least-privilege seals, private-registry LSP creds, env-var audit, credential freshness.",
+				Summary:     "Metadata-first MCP surface for codemap: rotation blast radius, least-privilege seals, scoped private-registry credentials, env-var audit, and credential freshness.",
 				Commands:    []string{"tvault mcp"},
 				SeeAlso:     []string{"tvault docs codemap", "tvault docs mcp"},
-				Description: "Five integrations with codemap (a local code-graph indexer), all backed by existing MCP tools — no functional code changes were needed. Only key names, metadata, audit rows, and recipients cross the seam; codemap NEVER ingests secret values. (A) rotation blast radius via vault_list_secrets_by_prefix + vault_search_secrets; (B) private-registry LSP creds via vault_run_with_secrets with secrets[] allowlist; (C) env-var audit via vault_list_secrets_global; (D) credential freshness via vault_secret_history + vault_audit_log_since; (E) least-privilege seal scope via vault_seal_for_recipients/vault_export_env/vault_export_env_encrypted with keys[] filter. Integration tests: internal/mcp/codemap_integration_test.go.",
+				Description: "Five integrations with codemap (a local code-graph indexer), all backed by existing MCP tools. Most results contain only names, metadata, audit rows, recipients, paths, or ciphertext; the private-registry recipe deliberately injects selected credentials into the launched indexer process and returns its stdout/stderr. Literal-value redaction applies only when policy enables it and can miss short or transformed values. (A) rotation blast radius via vault_list_secrets_by_prefix + vault_search_secrets; (B) private-registry LSP creds via vault_run_with_secrets with secrets[] allowlist; (C) env-var audit via vault_list_secrets_global; (D) credential freshness via vault_secret_history + vault_audit_log_since; (E) least-privilege seal scope via vault_seal_for_recipients/vault_export_env/vault_export_env_encrypted with keys[] filter. Integration tests: internal/mcp/codemap_integration_test.go.",
 			},
 			{
 				Name:        "environment-profiles",
@@ -407,7 +407,7 @@ func fullCatalog() docsCatalog {
 			{
 				Slug:        "versioning",
 				Title:       "Secret history & rollback",
-				Description: "Every overwrite of a secret archives the prior value as a version (the secret_versions bucket), so values are recoverable. `tvault history KEY` lists versions (metadata only, no unlock); `tvault get KEY --version N` prints a past value; `tvault rollback KEY --to N` restores an earlier version as a new version (non-destructive; numbers never reused). History is encrypted with the project key and survives passphrase rotation and recipient revocation. MCP: vault_secret_history (no values) and vault_rollback_secret (version numbers only).",
+				Description: "Every overwrite of a secret archives the prior value as a version (the secret_versions bucket), so values are recoverable. `tvault history KEY` lists versions (metadata only, no unlock); `tvault get KEY --version N` prints a past value; `tvault rollback KEY --to N` restores an earlier version as a new version (non-destructive; numbers never reused). History is encrypted with the project key and survives passphrase rotation and live-vault recipient removal; pre-removal snapshots remain readable. MCP: vault_secret_history (no values) and vault_rollback_secret (version numbers only).",
 				Example:     "  tvault set API_KEY v1 && tvault set API_KEY v2\n  tvault history API_KEY\n  tvault get API_KEY --version 1\n  tvault rollback API_KEY --to 1",
 			},
 			{
@@ -419,7 +419,7 @@ func fullCatalog() docsCatalog {
 			{
 				Slug:        "mcp",
 				Title:       "MCP server",
-				Description: "Starts a Model Context Protocol server on stdio. Add to your MCP host config with command=tvault args=[mcp] env={TVAULT_PASSPHRASE:...}. The server exposes 49 tools, 2 prompts, and 3 resources. The model never needs to see secret values: prefer vault_run_with_secrets and vault_export_env over vault_get_secret. vault_secret_history and vault_rollback_secret manage version history without ever returning a value.",
+				Description: "Starts a Model Context Protocol server on stdio. Add to your MCP host config with command=tvault args=[mcp] env={TVAULT_PASSPHRASE:...}. The server exposes 49 tools, 2 prompts, and 3 resources. Prefer value-minimizing workflows such as vault_run_with_secrets and vault_export_env over the deliberately plaintext-returning vault_get_secret; vault_set_secret likewise accepts plaintext from the client. vault_secret_history and vault_rollback_secret manage version history without returning a value.",
 			},
 			{
 				Slug:        "self-update",
@@ -460,7 +460,7 @@ func fullCatalog() docsCatalog {
 			{
 				Slug:        "safety",
 				Title:       "Safety properties",
-				Description: "Secrets at rest are encrypted. The KEK is derived with Argon2id (64 MiB, 3 iter, 4 threads). All AES-GCM nonces are unique and random. Keys are zeroed after use. The MCP server redacts secret values from subprocess output. The FTS index never stores secret values. The dotenv parser does not perform shell expansion or command substitution.",
+				Description: "Secret payloads and key material at rest are encrypted; names and operational metadata remain readable. The KEK is derived with Argon2id (64 MiB, 3 iter, 4 threads). All AES-GCM nonces are unique and random. Keys are zeroed after use. When MCP policy enables redact_output, the server replaces literal secret values longer than three characters in subprocess output as a safety net; short or transformed values can still leak. Relational searches use stored metadata and there is no derived search index. The dotenv parser does not perform shell expansion or command substitution.",
 			},
 			{
 				Slug:        "quickstart",
@@ -478,7 +478,7 @@ func fullCatalog() docsCatalog {
 			{
 				Slug:        "codemap",
 				Title:       "Codemap integration",
-				Description: "TinyVault exposes a strictly value-free MCP surface for codemap (a local code-graph indexer). Codemap knows where in the code a secret is used; TinyVault knows which secrets exist and their lineage. Only key names, metadata, audit rows, and recipient strings cross the seam — codemap NEVER ingests secret values. Five integrations: (A) rotation blast radius — vault_list_secrets_by_prefix + vault_search_secrets; (B) private-registry LSP creds — vault_run_with_secrets with secrets[] allowlist; (C) env-var audit — vault_list_secrets_global; (D) credential freshness — vault_secret_history + vault_audit_log_since; (E) least-privilege seal — vault_seal_for_recipients/vault_export_env/vault_export_env_encrypted with keys[] filter. All are backed by existing tools and covered by integration tests (internal/mcp/codemap_integration_test.go).",
+				Description: "TinyVault exposes a metadata-first MCP surface for codemap (a local code-graph indexer). Codemap knows where in the code a secret is used; TinyVault knows which secrets exist and their lineage. Most tool results contain only names, metadata, audit rows, recipients, paths, or ciphertext. The private-registry workflow is the exception: vault_run_with_secrets injects selected credentials into the launched indexer process and returns its stdout/stderr. Literal-value redaction applies only when policy enables it and can miss short or transformed values. Five integrations: (A) rotation blast radius — vault_list_secrets_by_prefix + vault_search_secrets; (B) private-registry LSP creds — vault_run_with_secrets with secrets[] allowlist; (C) env-var audit — vault_list_secrets_global; (D) credential freshness — vault_secret_history + vault_audit_log_since; (E) least-privilege seal — vault_seal_for_recipients/vault_export_env/vault_export_env_encrypted with keys[] filter. All are backed by existing tools and covered by integration tests (internal/mcp/codemap_integration_test.go).",
 				Example:     "  # A: list STRIPE_ keys (value-free)\n  # B: codemap index --via-vault payments  (wraps vault_run_with_secrets)\n  # E: seal only required keys derived from call graph\n  tvault mcp   # expose all codemap-facing tools to the MCP host",
 			},
 		},

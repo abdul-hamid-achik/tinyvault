@@ -1,15 +1,18 @@
 # CLAUDE.md — working in this repo with Claude Code
 
 TinyVault is a **single Go binary**: a local-first secrets CLI (`tvault`) plus
-an MCP server (`tvault mcp`, alias `mcp-server`), backed by one encrypted bbolt
-file. No servers, no accounts, no cloud. There is also an interactive terminal
+an MCP server (`tvault mcp`, alias `mcp-server`), backed by one local bbolt
+database whose secret payloads and key material are encrypted. No servers, no
+accounts, no cloud. There is also an interactive terminal
 studio UI, `tvault studio` (aliases: `browse`, `ui`).
 
 **Read these first — they are the source of truth:**
 - [AGENTS.md](AGENTS.md) — project structure, code conventions, security
   rules, dependency table. **Read it before any non-trivial change.**
-- [SPEC.md](SPEC.md) — architecture, threat model, crypto design, the *why*.
+- [Architecture](docs/reference/architecture.md) and
+  [Security](docs/reference/security.md) — crypto design and threat boundary.
 - [README.md](README.md) — user-facing quickstart and feature list.
+- [ROADMAP.md](ROADMAP.md) — product direction and deferred work.
 
 ## Quick commands (these mirror CI exactly — there is no Makefile/Taskfile)
 
@@ -37,7 +40,9 @@ Security Scan, Build**. All four must be green.
 - **Errors:** wrap with `%w`; sentinel errors in `internal/vault/errors.go`.
 - **Security:** never log or print a secret value; never commit `~/.tvault/`
   or `*.db`; AES-256-GCM + Argon2id only; output redaction is a safety net,
-  not a control. The MCP server must never return raw secret values.
+  not a control. Only deliberately value-returning surfaces such as
+  `vault_get_secret` may return plaintext, and they must remain explicit and
+  policy-gated.
 - **Exhaustive switches:** a `default:` clause counts as exhaustive
   (`default-signifies-exhaustive`). Enum sentinels like `paneCount` don't need
   an explicit case.
@@ -49,9 +54,10 @@ Security Scan, Build**. All four must be green.
   only stdlib `crypto/ecdh` + already-vendored `x/crypto` — **do not add
   `filippo.io/age` or any new crypto dependency** without discussion.
 - Built on it: `tvault identity new/list`, `projects share/unshare/recipients`
-  (revocation **rotates the DEK and re-encrypts every value** via
-  `store.RekeyProject` — re-wrapping alone would be security theater), the
-  `.env.encrypted` **v2** format (`EncryptV2`/`DecryptV2`, commit-safe,
+  (recipient removal **rotates the DEK and re-encrypts every current value and
+  archived version in the updated live vault** via `store.RekeyProject`;
+  pre-removal snapshots and previously distributed artifacts remain readable),
+  the `.env.encrypted` **v2** format (`EncryptV2`/`DecryptV2`, commit-safe,
   KEK-independent), and `tvault git-filter` (clean/smudge, `gitfilter.go`).
 - Identities are passphrase-independent keypairs at
   `~/.tvault/identities/<name>.key` (0600). Public half = `tvault1…`
@@ -105,7 +111,9 @@ Security Scan, Build**. All four must be green.
 - **`--require-token` honesty:** capability tokens (`tokens_unix.go`) are a
   privilege-separation gate for an **OS-confined** delegate only — they are
   **not** a control against a same-uid process (it can read the token or dial
-  the socket). Keep the SPEC §5.5 threat-model note truthful. **Do not** build
+  the socket). Keep [token honesty](docs/reference/security.md#token-honesty)
+  and [capability tokens](docs/guide/agent.md#capability-tokens-same-uid-clients-only)
+  truthful. **Do not** build
   the full broker (in-band mint, per-key allowlists, TTL) — a design panel ruled
   it security theater; the recipient/identity model is the answer for real
   delegation. Tokens are out-of-band (0600 file, SIGHUP reload), only their
@@ -151,6 +159,6 @@ verified against the real binary — there is **no `tvault generate` and no
 ## Committing
 
 Branch off `main` for changes; ensure all four CI checks pass locally before
-pushing. Keep `AGENTS.md`, `SPEC.md`, `README.md`, the `docs/` site, and
-`tvault help` / `tvault docs` in sync when behavior changes — they
-cross-reference each other.
+pushing. Keep `AGENTS.md`, `README.md`, `ROADMAP.md`, the Architecture,
+Security, and MCP docs, and `tvault help` / `tvault docs` in sync when behavior
+changes — they cross-reference each other.

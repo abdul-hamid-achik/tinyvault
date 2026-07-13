@@ -72,9 +72,11 @@ func TestUnshareRotatesAndRevokes(t *testing.T) {
 		t.Fatalf("unshare bob: %v", err)
 	}
 
-	// Bob (revoked) can no longer read — the DEK was rotated + re-encrypted.
+	// Bob can no longer read the updated live vault: its DEK was rotated and
+	// its current values were re-encrypted. A pre-removal snapshot would remain
+	// readable under the old DEK.
 	if _, err := v.GetAllSecretsWithIdentity("default", bob); !errors.Is(err, crypto.ErrNoMatchingRecipient) {
-		t.Errorf("revoked bob should not read, got %v", err)
+		t.Errorf("removed bob should not read the updated live vault, got %v", err)
 	}
 	// Alice (still shared) can read, with values intact.
 	got, err := v.GetAllSecretsWithIdentity("default", alice)

@@ -12,7 +12,7 @@ import (
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize a new vault",
-	Long: `Initialize a new encrypted vault.
+	Long: `Initialize a new passphrase-protected vault.
 
 You will be prompted to create a passphrase that protects your secrets.
 A default project is created automatically.

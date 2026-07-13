@@ -47,13 +47,13 @@ go install github.com/abdul-hamid-achik/tinyvault/cmd/tvault@latest
   - Studio bindings for grouped projects (`g`, `D`, `G`) with inherited (`←`) and pinned (`◈`) markers.
   - 13 new MCP tools (`vault_env_group_*`, `vault_env_diff`, `vault_env_promote`, `vault_env_inherit`, `vault_env_inherited`, `vault_env_pin`, `vault_env_unpin`, `vault_env_seal`) — all metadata- or ciphertext-only. Tool count: 36 → 49. See [MCP tools reference](/mcp/tools).
 - **`tvault self-update`** (alias `upgrade`) — checksum-verified in-place binary update from the official GitHub releases. `--check` reports availability without installing; `--version vX.Y.Z` pins/downgrades. Replaces the removed `install.sh`. See [CLI reference](/cli/).
-- **Codemap integration** — a documented, strictly value-free MCP surface for codemap (a local code-graph indexer): rotation blast radius, private-registry LSP creds, env-var audit, credential freshness, and least-privilege seal scope. Only key names, metadata, audit rows, and recipients cross the seam — codemap never ingests a secret value. See [Codemap integration](/guide/codemap).
+- **Codemap integration** — a documented, metadata-first MCP surface for codemap (a local code-graph indexer): rotation blast radius, private-registry LSP creds, env-var audit, credential freshness, and least-privilege seal scope. Most results are metadata, paths, or ciphertext; the private-registry recipe deliberately injects selected credentials into the launched indexer process. See [Codemap integration](/guide/codemap).
 
 ## 0.11.0 — 2026-06-20
 
 **Added**
 
-- **15 new MCP tools** (21 → 36), all metadata- or ciphertext-only — none return a raw secret value (only `vault_get_secret` does):
+- **15 new MCP tools** (21 → 36), all metadata- or ciphertext-only. `vault_get_secret` remains the dedicated plaintext-read tool; separately, command execution can relay child-process output:
   - *Navigation & discovery:* `vault_get_current_project`, `vault_set_current_project`, `vault_count_secrets`, `vault_search_projects`, `vault_projects_overview`, `vault_list_secrets_detailed`, `vault_list_secrets_global`.
   - *Sharing:* `vault_share_project`, `vault_unshare_project`, `vault_project_recipients`.
   - *.env:* `vault_diff_env`, `vault_sync_env`, `vault_export_env_encrypted`.
@@ -82,7 +82,7 @@ See the new [MCP Recipes](/mcp/recipes) for end-to-end agent workflows using the
 
 ## 0.9.0 — 2026-06-14
 
-- **Added:** X25519 recipient layer + `tvault identity`; project sharing with key-rotating revocation; `.env.encrypted` v2 (commit-safe); `tvault git-filter`; `tvault seal`/`open`; per-context identity transport (`TVAULT_IDENTITY_KEY`); Kubernetes commit-safe SealedSecrets; versioned secrets + rollback; the local `tvault agent` + shell hooks; `vault_seal_for_recipients`; `tvault diff`; `tvault doctor`; studio `--rw` mode.
+- **Added:** X25519 recipient layer + `tvault identity`; project sharing with key rotation on live-vault recipient removal (retained snapshots and artifacts remain readable); `.env.encrypted` v2 (commit-safe); `tvault git-filter`; `tvault seal`/`open`; per-context identity transport (`TVAULT_IDENTITY_KEY`); Kubernetes commit-safe SealedSecrets; versioned secrets + rollback; the local `tvault agent` + shell hooks; `vault_seal_for_recipients`; `tvault diff`; `tvault doctor`; studio `--rw` mode.
 
 ## Earlier
 

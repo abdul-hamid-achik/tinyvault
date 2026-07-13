@@ -7,7 +7,7 @@ description: How TinyVault works under the hood — its two-tier key hierarchy, 
 
 This page is the deep technical design of TinyVault: the *how* behind the binary. For the conceptual model first, read [Concepts](/guide/concepts); for the threat model and what TinyVault does and does not defend against, read [Security](/reference/security).
 
-TinyVault is a single binary, `tvault`, written in Go. The same binary is the CLI, an interactive terminal [studio](/guide/studio), and (via the `mcp` subcommand) an [MCP server](/mcp/) for AI agents. All three sit on one vault API and one encrypted file on disk. There are no servers, no accounts, and no network calls.
+TinyVault is a single binary, `tvault`, written in Go. The same binary is the CLI, an interactive terminal [studio](/guide/studio), and (via the `mcp` subcommand) an [MCP server](/mcp/) for AI agents. All three sit on one vault API and one local bbolt database. Secret payloads and key material are encrypted; names, timestamps, versions, audit entries, and configuration metadata are readable. Normal vault operations need no account or hosted backend.
 
 ## The big picture
 
@@ -36,7 +36,7 @@ Three layers sit on top of one storage file:
 
 1. A symmetric key hierarchy that turns your passphrase into the key that encrypts values.
 2. An asymmetric recipient layer that wraps a project key to other people or machines, so secrets can be shared and committed without sharing the passphrase.
-3. A single bbolt file holding everything, exposed through one API to three front ends.
+3. A single bbolt file holding encrypted payloads and readable metadata, exposed through one API to three front ends.
 
 ## Two-tier key hierarchy
 
@@ -180,9 +180,9 @@ The HKDF `info` string domain-separates this construction from any other use of 
 
 This is the foundation for [sharing](/guide/sharing), [committable secrets](/guide/committable-secrets) (the v2 `.env.encrypted` format), and the [git filter](/guide/git-filter).
 
-## DEK rotation on revocation
+## DEK rotation on recipient removal
 
-Sharing is easy to add; the hard part is taking it back. `tvault projects unshare` is **true revocation**, not a paper exercise.
+Sharing is easy to add; removing future access requires more than deleting a recipient stanza. `tvault projects unshare` re-keys the updated live vault.
 
 ```bash
 tvault projects unshare myapp tvault1exampleRecipient
@@ -204,10 +204,10 @@ unshare recipient R:
   (all in one transaction)
 ```
 
-Because the DEK itself changes, a removed recipient loses access even if they kept an old copy of the entire vault file — their identity can no longer derive a key that opens any value. Merely re-wrapping the *same* DEK to fewer recipients would be security theater (the old stanza in the old copy still works), so TinyVault deliberately does not do that.
+Because the DEK itself changes, the removed identity cannot decrypt the updated live vault or future writes under the new DEK. Merely re-wrapping the *same* DEK to fewer recipients would leave the updated vault's existing ciphertext readable with a cached old DEK, so TinyVault re-encrypts the live current values and history instead.
 
-::: warning Revocation cannot un-read what was already read
-Rotation stops future access. It cannot retract a value a recipient already decrypted and copied. After revoking a recipient, rotate the underlying credential at its source (the database password, the API key, and so on).
+::: warning Rotation cannot rewrite retained data
+A vault snapshot copied before `unshare` still contains the old ciphertext and the removed recipient's old DEK wrap, so that snapshot remains readable. The operation also cannot retract plaintext already decrypted or update previously exported or sealed artifacts. Rotate the underlying credential at its source (the database password, API key, and so on), then re-seal and redeploy distributed artifacts when access must be withdrawn completely.
 :::
 
 ## Versioning storage
@@ -228,7 +228,7 @@ tvault rollback DATABASE_URL --to 3  # restore v3 as a new, current version
 Because history is encrypted under the **project DEK** (not the KEK):
 
 - It survives passphrase rotation untouched (rotation only re-wraps DEKs).
-- It is re-encrypted whenever the DEK rotates (revocation), keeping it consistent with current values.
+- It is re-encrypted whenever the DEK rotates during live-vault recipient removal, keeping it consistent with current values.
 
 See [Versioning](/guide/versioning) for the full workflow.
 
@@ -264,7 +264,7 @@ Every command accepts the same global persistent flags, plus `-h`/`--help` every
 
 | Flag | Meaning |
 | --- | --- |
-| `--config <file>` | Use a specific config file |
+| `--config <file>` | Compatibility selector for Viper input; typed studio settings still load from `<vault-dir>/config.yaml` |
 | `--vault <dir>` | Use a specific vault directory |
 | `-p`, `--project <name>` | Operate on a named project |
 | `--json` | Machine-readable JSON output |
@@ -278,7 +278,7 @@ See [Configuration](/reference/configuration) and [Environment variables](/refer
 The MCP server gives an AI agent the same vault API, but under an [access policy](/mcp/access-policy). Two honesty points matter at the architecture level.
 
 ::: danger Output redaction is a safety net, not a control
-The MCP server redacts secret values from tool output, but redaction only replaces literal value strings longer than 3 characters. It can be evaded by transforming a value (encoding it, splicing it, computing on it). Do not rely on redaction to keep a value from an agent that can run code. The real control is **not exposing the value in the first place** — which is why the MCP server **never returns a raw secret value, except `vault_get_secret`** (and that tool warns). Secret generation lives only over MCP as `vault_generate_secret`; auditing is internal and surfaced as `vault_audit_log` and in the studio — there is no `tvault generate` or `tvault audit` CLI command. See [MCP tools](/mcp/tools).
+When policy enables `redact_output`, the MCP server replaces literal value strings longer than 3 characters in captured subprocess output. Redaction can be disabled and can be evaded by transforming a value (encoding it, splicing it, computing on it). Do not rely on it to keep a value from an agent that can run code. `vault_get_secret` deliberately returns a stored secret in a plaintext field; `vault_run_with_secrets` can also leak raw, short, or transformed values through arbitrary child output. Secret generation lives only over MCP as `vault_generate_secret`; auditing is internal and surfaced as `vault_audit_log` and in the studio — there is no `tvault generate` or `tvault audit` CLI command. See [MCP tools](/mcp/tools).
 :::
 
 The studio is read-only by default. With no flags it never writes; its only decryption is the on-demand reveal, which is audited exactly like `tvault get`. The `--rw` flag enables audited in-app edits that reuse the CLI's own `SetSecret`/`DeleteSecret` path. See [Studio](/guide/studio).

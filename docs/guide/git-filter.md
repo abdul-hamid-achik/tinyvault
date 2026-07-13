@@ -32,7 +32,7 @@ The filter needs an identity to decrypt your working tree. If you don't have one
 tvault identity new
 ```
 
-This writes a keypair to `~/.tvault/identities/default.key` (mode `0600`). The public half (`tvault1…`) is shareable and committable; the private half (`tvault-key1…`) never leaves that file. See [Sharing & identities](/guide/sharing) for the model.
+This writes a keypair to `~/.tvault/identities/default.key` (mode `0600`). The public half (`tvault1…`) is shareable and committable; keep the private half (`tvault-key1…`) in that protected file unless you deliberately export it for a trusted runtime. See [Sharing & identities](/guide/sharing) for the model.
 
 ### 2. Install the filters and seed recipients
 
@@ -112,7 +112,7 @@ git commit -m "share secrets with new reader"
 ```
 
 ::: warning Adding a recipient does not revoke history
-Anyone who could read a value before can still read the old committed ciphertext from git history. The git filter is an **access list for new commits**, not a revocation mechanism. For true revocation of a *vault* project — rotating the DEK and re-encrypting every value and its history — use [`tvault projects unshare`](/guide/sharing). For committed files, removing a recipient only stops *future* encryptions from including them; rotate the underlying secrets if a key is compromised.
+Anyone who could read a value before can still read the old committed ciphertext from git history. The git filter is an **access list for new commits**, not a revocation mechanism. Use [`tvault projects unshare`](/guide/sharing) to re-key the updated live vault. For committed files, removing a recipient only stops *future* encryptions from including them; rotate the underlying secrets and re-seal tracked artifacts if a key is compromised.
 :::
 
 ### CI without a passphrase
@@ -190,6 +190,6 @@ If you want manual control over *when* files are encrypted, use those. If you wa
 ## See also
 
 - [Committable secrets](/guide/committable-secrets) — the v2 encrypted-env format the filter is built on
-- [Sharing & identities](/guide/sharing) — recipients, `tvault identity`, and true revocation
+- [Sharing & identities](/guide/sharing) — recipients, `tvault identity`, live-vault re-keying, and retained-data limits
 - [CI/CD](/guide/ci-cd) — passphrase-free identity workflows for pipelines
 - [CLI reference](/cli/) — every command and flag

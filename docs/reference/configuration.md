@@ -1,19 +1,19 @@
 ---
 title: Configuration & File Layout
-description: How TinyVault reads ~/.tvault/config.yaml, where it stores the encrypted vault and identities on disk, and the precedence rules for the vault directory, identity, and project.
+description: How TinyVault uses the studio browse settings in config.yaml, where it stores vault and identity files, and how vault, identity, and project paths are resolved.
 ---
 
 # Configuration & File Layout
 
-This page documents the optional `~/.tvault/config.yaml` file, the complete on-disk layout under `~/.tvault/`, the repo-side files TinyVault touches in your project, and the precedence rules that decide which vault, identity, and project a command uses.
+This page documents the optional `config.yaml` file in the resolved vault directory, the on-disk layout under that directory, the repo-side files TinyVault touches, and the rules that decide which vault, identity, and project a command uses.
 
 TinyVault works with zero configuration. A config file is optional, and a missing file is never an error. Everything here is for when you want to tune defaults or understand exactly where bytes live.
 
-## The config file: `~/.tvault/config.yaml`
+## The config file: `<vault-dir>/config.yaml`
 
-`tvault` reads a single optional YAML file at `~/.tvault/config.yaml`. Point at a different file with the global `--config <file>` flag.
+The interactive studio reads a single optional YAML file from the resolved vault directory. Its default path is `~/.tvault/config.yaml`; `--vault <dir>` or `TVAULT_DIR` moves it together with the rest of the vault files.
 
-A **missing** file is fine — `tvault` falls back to built-in defaults. A **malformed** file is a real error and is flagged by [`tvault doctor`](/cli/), so you can catch a broken config before it bites you in CI.
+A **missing** file is fine — the studio uses built-in defaults. If the file is malformed or unreadable, the studio ignores it and continues with flags/defaults; [`tvault doctor`](/cli/) reports the problem and exits non-zero.
 
 ```yaml
 # ~/.tvault/config.yaml
@@ -24,11 +24,6 @@ browse:
   no_anim: false       # disable studio animations
   single_pane: false   # use a single-pane layout instead of split panes
   audit_limit: 100     # how many audit-log entries the studio loads
-
-# Bound to the global persistent flags (read by viper).
-vault: ~/.tvault       # vault directory (same as --vault)
-project: default       # current project (same as --project / -p)
-verbose: false         # verbose output (same as --verbose / -v)
 ```
 
 ### What the typed config parses
@@ -37,22 +32,14 @@ Only the `browse:` block is parsed into TinyVault's typed config. It configures 
 
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `browse.no_anim` | bool | `false` | Disable studio animations. Also auto-disabled over SSH or when `TERM=dumb`. |
+| `browse.no_anim` | bool | `false` | Disable studio animations. Animations are also disabled by `TVAULT_NO_ANIM` or an SSH session; `TERM=dumb` makes the studio refuse to start. |
 | `browse.single_pane` | bool | `false` | Render a single-pane layout instead of the split-pane view. |
 | `browse.audit_limit` | int | `100` | How many audit-log entries the studio loads on open. |
 
-### viper-bound keys
+Only the `browse:` block is applied by the typed config loader. Top-level `vault`, `project`, and `verbose` keys do not configure those command flags.
 
-Beyond `browse:`, viper reads three top-level keys from the same file and binds them to the global persistent flags: `vault`, `project`, and `verbose`. Each is overridable by the matching environment variable.
-
-| Config key | Flag | Environment override |
-| --- | --- | --- |
-| `vault` | `--vault <dir>` | `TVAULT_VAULT` |
-| `project` | `-p` / `--project <name>` | `TVAULT_PROJECT` |
-| `verbose` | `-v` / `--verbose` | `TVAULT_VERBOSE` |
-
-::: tip Explicit flags always win
-For every setting above, an explicit command-line flag overrides the config file. So `tvault studio --no-anim` disables animations even if `browse.no_anim` is `false`, and `tvault -p prod get API_KEY` uses `prod` regardless of `project:` in the file.
+::: tip Studio flags override browse defaults
+An explicitly provided `--no-anim`, `--single-pane`, or `--audit-limit` value overrides the corresponding `browse:` value for that invocation.
 :::
 
 ::: warning A broken config is caught by doctor
@@ -67,12 +54,12 @@ tvault doctor
 
 ## The MCP access policy: `mcp-policy.yaml`
 
-If you run the MCP server, an optional `~/.tvault/mcp-policy.yaml` lets you allow- or deny-list tools and enforce per-project access for AI agents. It lives alongside `config.yaml` and is validated by `tvault doctor`.
+If you run the MCP server, `<vault-dir>/mcp-policy.yaml` lets you allow- or deny-list projects and secret keys, control writes, and control command execution. It lives alongside `config.yaml` and is validated by `tvault doctor`. If the file is absent, production `tvault mcp` uses a fail-closed safe policy that denies secret access, writes, and execution.
 
 That file has its own page. See [MCP Access Policy](/mcp/access-policy) for the schema and examples.
 
 ::: danger Redaction is a safety net, not a control
-The MCP server redacts secret values from tool output, but redaction only replaces literal values longer than three characters and can be evaded by transforming a value (encoding, slicing, reordering). It reduces accidental leaks; it does not contain a hostile agent. The MCP server never returns a raw secret value **except** `vault_get_secret`, which warns when it does. Use [`tvault projects share`](/guide/sharing) and the recipient model for real delegation, and lock down agents with [`mcp-policy.yaml`](/mcp/access-policy).
+When policy enables `redact_output`, the MCP server replaces literal secret values longer than three characters in captured command output. Redaction can be disabled and can be evaded by shortening or transforming a value, so it reduces accidental leaks rather than containing a hostile agent. `vault_get_secret` deliberately returns a stored value; `vault_run_with_secrets` can also carry plaintext back through child output. Use [`tvault projects share`](/guide/sharing) and the recipient model for real delegation, and lock down agents with [`mcp-policy.yaml`](/mcp/access-policy).
 :::
 
 ## File layout: `~/.tvault/`
@@ -81,7 +68,7 @@ The vault directory is created with `0700` permissions (owner-only). Override it
 
 ```text
 ~/.tvault/                         0700  vault directory (owner-only)
-├── vault.db                       0600  bbolt database — the encrypted vault
+├── vault.db                       0600  bbolt database — encrypted payloads, readable metadata
 ├── config.yaml                    0600  optional, this page
 ├── mcp-policy.yaml                0600  optional, MCP access policy
 ├── identities/                    0700  asymmetric identities
@@ -95,8 +82,8 @@ The vault directory is created with `0700` permissions (owner-only). Override it
 
 | Path | Mode | Contents |
 | --- | --- | --- |
-| `vault.db` | `0600` | The bbolt database. Holds the encrypted `secrets` and `secret_versions`, project metadata with wrapped per-project DEKs, the audit log, and the KEK verifier plus Argon2id salt. This is the only file that contains secret material. |
-| `config.yaml` | `0600` | Optional configuration ([above](#the-config-file-tvault-config-yaml)). |
+| `vault.db` | `0600` | The bbolt database. Holds encrypted `secrets` and `secret_versions`, project metadata with wrapped per-project DEKs, the audit log, and the KEK verifier plus Argon2id salt. It is the only file containing stored project secret values; private identity key material lives separately under `identities/`. |
+| `config.yaml` | `0600` | Optional configuration ([above](#the-config-file-vault-dir-config-yaml)). |
 | `mcp-policy.yaml` | `0600` | Optional [MCP access policy](/mcp/access-policy). |
 | `identities/<name>.key` | `0600` | One asymmetric identity per file. Stores the **private** half (`tvault-key1...`); the **public** half (`tvault1...`) is derived and shareable. See [Sharing](/guide/sharing) and [Key management](/guide/key-management). |
 | `agent.sock` | `0600` | Unix-only. The [agent](/guide/agent) listens here so `get`/`env`/`run` can skip the passphrase prompt. |
@@ -108,7 +95,7 @@ The vault directory is created with `0700` permissions (owner-only). Override it
 :::
 
 ::: danger Never commit the vault directory
-`~/.tvault/` contains your encrypted vault and private identity keys. Keep it out of version control and out of backups you do not control. `tvault identity export` prints a **private** key (`tvault-key1...`); it is TTY-guarded and requires `--force` to write off a terminal, precisely because that output must never land in a log or a committed file.
+`~/.tvault/` contains encrypted secret material, readable operational metadata, and private identity keys. Treat the entire directory as sensitive: keep it out of version control and out of backups you do not control. `tvault identity export` prints a **private** key (`tvault-key1...`); it is TTY-guarded and requires `--force` to write off a terminal, precisely because that output must never land in a log or a committed file.
 :::
 
 ## Repo-side files (in your project)
@@ -138,8 +125,8 @@ tvault k8s render myapp --project myapp | kubectl apply -f -
 ```
 :::
 
-::: tip Revocation is real, not cosmetic
-When you remove a recipient with `tvault projects unshare`, TinyVault rotates the project DEK and **re-encrypts every value and its version history**. A revoked recipient cannot decrypt new ciphertext, and old wrapped keys are invalidated — this is true revocation, not key re-wrapping.
+::: tip Recipient removal re-keys the live vault
+When you remove a recipient with `tvault projects unshare`, TinyVault rotates the project DEK and **re-encrypts every current value and archived version** in the updated vault. The removed recipient cannot decrypt that updated state or future ciphertext under the new DEK. Pre-removal snapshots and previously sealed or exported artifacts remain readable; rotate underlying credentials and re-seal distributed artifacts when needed.
 :::
 
 ## Path precedence
@@ -170,13 +157,14 @@ A local identity **file** always takes precedence over a `TVAULT_IDENTITY_KEY` s
 
 ### Identity name
 
-Which named identity to use (when not supplying raw key material):
+Identity-name resolution depends on the command:
 
-```text
---identity <name>   >   TVAULT_IDENTITY   >   git config tvault.identity   >   "default"
-```
+- `tvault open`: `--identity <name>` > `TVAULT_IDENTITY` > `default`.
+- Git clean/smudge filters: `TVAULT_IDENTITY` > `git config tvault.identity` > `default`.
+- For recipient-encrypted `decrypt-env` and `k8s render`, an explicit `--identity` selects the file name; without it, the resolver checks the `default` file before falling back to `TVAULT_IDENTITY_KEY`.
+- `tvault env` enters identity mode only when `--identity` or `TVAULT_IDENTITY_KEY` is present. In that mode, the selected file (the explicit name, or `default`) takes precedence over the environment key.
 
-This is the **name** used for git-filter and recipient reads, not the key itself. The fallback chain ends at the identity literally named `default`.
+`TVAULT_IDENTITY` is therefore not a generic environment override for every `--identity` flag.
 
 ### Project
 
@@ -186,18 +174,16 @@ This is the **name** used for git-filter and recipient reads, not the key itself
 
 The `-p`/`--project` flag beats the project you last selected (stored in the vault), which beats the project named `default`.
 
-## Global persistent flags
+## Relevant command-line flags
 
-These six flags work on **every** `tvault` command:
+These command-line flags affect the paths and workflows described on this page:
 
 | Flag | Effect |
 | --- | --- |
-| `--config <file>` | Use an alternate config file instead of `~/.tvault/config.yaml`. |
 | `--vault <dir>` | Use an alternate vault directory. |
 | `-p`, `--project <name>` | Operate on a specific project. |
-| `--json` | Emit machine-readable JSON. |
-| `-v`, `--verbose` | Verbose output. |
-| `--no-agent` | Bypass a running agent and unlock directly (same as `TVAULT_NO_AGENT`). |
+| `--json` | Emit machine-readable JSON on commands that support it. |
+| `--no-agent` | Make `get`, `env`, or `run` bypass a running agent and unlock directly (same as `TVAULT_NO_AGENT`). |
 
 `-h`/`--help` is available everywhere. `--version` is **root-only** — print it with `tvault --version` (there is no `version` subcommand).
 
@@ -218,16 +204,19 @@ Scripts can branch on `tvault`'s exit status:
 | `7` | Vault database is in use by another process. |
 
 ```bash
-if ! tvault get API_KEY --project myapp >/dev/null 2>&1; then
-  case $? in
-    3) echo "vault is locked — run: tvault unlock" ;;
-    4) echo "no such secret" ;;
-    5) echo "run: tvault init" ;;
-    6) echo "wrong passphrase" ;;
-    *) echo "tvault failed" ;;
-  esac
-fi
+tvault get API_KEY --project myapp >/dev/null 2>&1
+status=$?
+case $status in
+  0) echo "secret is available" ;;
+  3) echo "vault is locked — provide TVAULT_PASSPHRASE, use a TTY, or start the agent" ;;
+  4) echo "no such secret" ;;
+  5) echo "run: tvault init" ;;
+  6) echo "wrong passphrase" ;;
+  *) echo "tvault failed" ;;
+esac
 ```
+
+`tvault unlock` and `tvault lock` are per-process operations. `unlock` validates the passphrase and then exits; it does not cache an unlock for the next command. `lock` does not persist state or stop a running agent. Use `tvault agent start` / `tvault agent stop` when you want a persistent in-memory unlock.
 
 ## See also
 

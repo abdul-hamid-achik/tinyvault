@@ -1,15 +1,15 @@
 ---
 title: Key Management & Maintenance
-description: Rotate the TinyVault passphrase, back up and restore the encrypted vault, run read-only diagnostics, and lock or unlock the vault — the day-two operations for tvault.
+description: Rotate the TinyVault passphrase, back up and restore its local database, run read-only diagnostics, and understand per-process locking — the day-two operations for tvault.
 ---
 
 # Key Management & Maintenance
 
-These are the day-two operations for a TinyVault vault: rotating the passphrase, taking and restoring backups, checking health with read-only diagnostics, and locking the vault. They all operate on the single encrypted `vault.db` file and never touch the network.
+These are the day-two operations for a TinyVault vault: rotating the passphrase, taking and restoring backups, checking health with read-only diagnostics, and understanding lock state. They operate on the local `vault.db` file and do not call a hosted TinyVault service.
 
 ## How the key hierarchy works (the 30-second version)
 
-Knowing the key layout makes the rest of this page obvious — especially why rotation is cheap and why a backup is still useless to an attacker.
+Knowing the key layout makes the rest of this page obvious — especially why rotation is cheap and which parts of a backup remain protected.
 
 - Your **passphrase** is stretched through Argon2id into a **KEK** (key-encryption key). The KEK lives in RAM only while the vault is unlocked.
 - Each project has its own **DEK** (data-encryption key). Every DEK is AES-256-GCM-wrapped by the KEK and stored inside the project record.
@@ -52,22 +52,22 @@ This does **not** affect **v2** files (made with `--recipient`), which are keyed
 :::
 
 ::: tip Rotate the passphrase vs. rotate a DEK
-`key rotate` changes the passphrase. To rotate a **project's DEK** (re-encrypting every value), revoke a recipient with `tvault projects unshare`, which atomically generates a new DEK and re-encrypts all values and history. That is true revocation — see [Sharing Secrets](/guide/sharing).
+`key rotate` changes the passphrase. To rotate a **project's DEK** (re-encrypting every value in the updated live vault), remove a recipient with `tvault projects unshare`, which atomically generates a new DEK and re-encrypts all current values and history. Pre-removal snapshots remain readable under the old DEK; see [Sharing Secrets](/guide/sharing).
 :::
 
 ## Back up the vault
 
-`tvault backup <path>` writes a byte copy of the **still-encrypted** `vault.db` to the path you give. The backup is exactly as safe as the original: it is ciphertext, and it is worthless without the passphrase (or, for shared projects, a recipient identity).
+`tvault backup <path>` writes a byte copy of `vault.db` to the path you give. Secret payloads and key material stay encrypted, so decrypting values still requires the passphrase or a matching recipient identity. Operational metadata — including project and key names, timestamps, versions, configuration, and audit rows — remains readable to anyone who can inspect the backup.
 
 ```bash
 # Timestamped backup into a directory you control
 tvault backup ~/backups/tvault-$(date +%Y%m%d).db
 ```
 
-Because the file is encrypted at rest, you can store backups anywhere you would store any other opaque blob. The vault does **not** need to be unlocked to take a backup — you are copying ciphertext, not decrypting it.
+The vault does **not** need to be unlocked to take a backup; the command copies the database without decrypting its records. Still treat every backup as sensitive because its metadata is visible and its ciphertext can be attacked offline. Store it only in a location whose access and retention you control.
 
 ::: warning Keep your passphrase and identities with your strategy
-A backup of `vault.db` is only recoverable if you still have the passphrase that derives its KEK. If you also use shared projects, keep the relevant private identities (`~/.tvault/identities/<name>.key`) backed up too. Losing the passphrase means losing the data — there is no recovery service.
+Restoring the complete owner view of a `vault.db` snapshot requires the passphrase that derived its KEK. A matching private recipient identity can instead recover only the projects that snapshot shared with it. Preserve the snapshot's passphrase and any identities your recovery plan relies on; if every matching credential is lost, there is no recovery service.
 :::
 
 ::: danger Never commit a vault or a private key
@@ -144,17 +144,17 @@ tvault doctor || exit 1
 
 ## Lock and unlock
 
-`tvault unlock` validates your passphrase and confirms the vault can be opened; `tvault lock` clears any cached state.
+`tvault unlock` validates your passphrase and confirms the vault can be opened. Both `unlock` and `lock` run in short-lived processes; neither creates or clears a persistent session.
 
 ```bash
-tvault unlock   # prompts for the passphrase, then verifies it
-tvault lock     # forget cached unlock state
+tvault unlock   # prompts for the passphrase, verifies it, then exits
+tvault lock     # clears only this command's in-memory vault handle
 ```
 
 The passphrase check uses a dedicated **verifier** — AES-256-GCM over a fixed constant — so `unlock` can confirm the passphrase is correct **without reading any secret**. After use, the KEK and DEKs are zeroed from memory.
 
 ::: info Locking, the agent, and per-command unlock
-Most commands (`get`, `env`, `run`, …) unlock on demand and re-lock when they finish, so you do not normally manage lock state by hand. If you run the optional [local agent](/guide/agent), it holds the KEK so those commands skip the prompt; `tvault lock` and stopping the agent both clear it. Use `--no-agent` on any command to force a direct unlock.
+Most commands (`get`, `env`, `run`, …) unlock on demand and clear their key material when they finish, so you do not normally manage lock state by hand. If you run the optional [local agent](/guide/agent), it holds the KEK so those commands skip the prompt. `tvault lock` does not control that process; use `tvault agent stop` (or a termination signal) to clear the agent's cached key. Use `--no-agent` on any command to force a direct unlock.
 :::
 
 ## Common maintenance recipes
@@ -180,6 +180,6 @@ Every command accepts the global flags `--config <file>`, `--vault <dir>`, `-p`/
 ## See also
 
 - [Versioning & Rollback](/guide/versioning) — prior values, history, and non-destructive rollback.
-- [Sharing Secrets](/guide/sharing) — DEK rotation and true revocation via `projects unshare`.
+- [Sharing Secrets](/guide/sharing) — DEK rotation, live-vault recipient removal, and retained-data limits.
 - [Architecture](/reference/architecture) — the full key hierarchy and crypto design.
 - [Security & Threat Model](/reference/security) — what TinyVault does and does not protect against.

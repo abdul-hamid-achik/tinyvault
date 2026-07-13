@@ -1,13 +1,13 @@
 ---
 title: Codemap integration
-description: How TinyVault's value-free MCP surface plugs into codemap — a local code-graph indexer — so a code index can answer "where is this secret used?", "what's its blast radius?", and "is it fresh?" without ever ingesting a secret value.
+description: How TinyVault's metadata-first MCP surface can support a local code-graph indexer for secret usage, blast-radius, and freshness analysis.
 ---
 
 # Codemap integration
 
-[codemap](https://github.com/abdul-hamid-achik/tinyvault) is a local code-graph indexer: it learns *where* in your code a secret is referenced. TinyVault knows *which* secrets exist and their lineage. The integration connects the two so a code index can answer rotation, blast-radius, and freshness questions without a secret value ever crossing the seam.
+[codemap](https://github.com/abdul-hamid-achik/codemap) is a local code-graph indexer: it learns *where* in your code a secret is referenced. TinyVault knows *which* secrets exist and their lineage. The integration connects the two so a code index can answer rotation, blast-radius, and freshness questions from metadata.
 
-The contract is strict: **only key names, metadata, audit rows, and recipient strings leave the vault.** codemap never ingests a secret value. Every integration below is backed by an existing MCP tool — no functional code was added to TinyVault, only tests pinning the contract.
+Most integrations below return only key names, metadata, audit rows, recipients, paths, or ciphertext. The execution recipe is the deliberate exception: `vault_run_with_secrets` gives the launched codemap process selected values through its environment and returns its stdout/stderr. Literal-value redaction applies only when policy enables it and can miss short or transformed values. Every integration uses an existing MCP tool.
 
 :::: info This page is about the agent integration, not a CLI command
 There is no `tvault codemap` command. The surface is the MCP server (`tvault mcp`); codemap is an MCP host that calls these tools. Discover it programmatically with `tvault docs codemap`.
@@ -40,20 +40,20 @@ Neither returns a value. The result is a set of key names; codemap maps those ba
 
 ### B. Private-registry LSP credentials
 
-*Question: "An LSP / indexer needs to fetch from a private registry. How do I hand it the credentials without leaking them into the index or the model context?"*
+*Question: "An LSP / indexer needs to fetch from a private registry. How do I hand it selected credentials without first returning them to the model?"*
 
-`vault_run_with_secrets` runs codemap's indexing command in a subprocess with only the requested secrets injected as environment variables. The `secrets[]` argument is an **allowlist** — codemap's process sees exactly those keys and nothing else. The values live only in the child's environment; the MCP response carries only the (redacted) `stdout`/`stderr` and exit code.
+`vault_run_with_secrets` runs codemap's indexing command in a subprocess with only the requested secrets injected as environment variables. The `secrets[]` argument is an **allowlist** — codemap's process sees exactly those injected vault keys and no other project secrets. The MCP response carries the exit code and stdout/stderr, with literal-value redaction only when policy enables it.
 
 This is the same tool used to run any command with secrets; here it scopes the index to exactly the keys the private-registry fetch needs.
 
 ```text
 # vault_run_with_secrets(project="infra", command="codemap index --registry private",
 #                        secrets=["NPM_TOKEN","GH_PACKAGE_TOKEN"])
-# → { exit_code: 0, stdout: "...", stderr: "..." }   (values redacted)
+# → { exit_code: 0, stdout: "...", stderr: "..." }   (command output; optional literal redaction)
 ```
 
 :::: warning Redaction is a guardrail, not a boundary
-`redact_output` only replaces literal secret values longer than 3 characters in `stdout`/`stderr`. A command that transforms a value defeats it. The real control is the `secrets[]` allowlist plus `secrets_deny` in policy. See [MCP tools reference](/mcp/tools#vault-run-with-secrets).
+When enabled, `redact_output` only replaces literal secret values longer than 3 characters in `stdout`/`stderr`. A short or transformed value defeats it. The real control is the `secrets[]` allowlist plus `secrets_deny` in policy. See [MCP tools reference](/mcp/tools#vault-run-with-secrets).
 ::::
 
 ### C. Environment-variable audit
@@ -85,7 +85,7 @@ Three sealing tools all take a `keys[]` filter and **error on a missing key** (a
 - `vault_export_env` — writes a `0600` dotenv/json/shell file; returns the path, not values.
 - `vault_export_env_encrypted` — commit-safe v2 `.env.encrypted` sealed to the project's current recipients.
 
-codemap derives the required key set from the call graph for the slice being shipped, then seals exactly that set. The result is the smallest合法 blob — least privilege by construction.
+codemap derives the required key set from the call graph for the slice being shipped, then seals exactly that set. The result is the smallest required blob — least privilege by construction.
 
 ```text
 # vault_seal_for_recipients(project="payments",
@@ -106,7 +106,7 @@ The integrations sit behind the same [access policy](/mcp/access-policy) as ever
 | D. Freshness | `vault_secret_history`, `vault_audit_log_since` | any `access_mode`; project + secret globs. |
 | E. Least-privilege seal | `vault_seal_for_recipients`, `vault_export_env`, `vault_export_env_encrypted` | any `access_mode` (seal/export read secrets + write a file); project + secret globs. |
 
-If the policy denies a project or key, the tool reports it as inaccessible rather than leaking metadata. `vault_status` lets the caller discover its own access without escalating.
+If the policy denies a project or key, scoped discovery tools filter or refuse it rather than leaking its metadata. `vault_status` reports vault health only; it does not reveal the loaded policy.
 
 ## Discoverability
 
@@ -124,5 +124,5 @@ The `codemap-integration` feature in the manifest lists the backing commands and
 
 - [MCP tools reference](/mcp/tools) — full per-tool inputs, returns, and policy gates for every tool above.
 - [Access policy](/mcp/access-policy) — the `mcp-policy.yaml` fields that gate each integration.
-- [For AI agents](/guide/for-ai-agents) — the value-free design principle codemap relies on.
+- [For AI agents](/guide/for-ai-agents) — the value-minimizing design principle codemap relies on.
 - [Environment groups](/guide/env-groups) — a related value-free surface (drift, promote, seal across envs).

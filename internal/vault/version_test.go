@@ -146,8 +146,9 @@ func TestListSecretVersionsNoUnlockNeeded(t *testing.T) {
 }
 
 // TestUnshareReEncryptsHistory is the regression guard for the top design
-// risk: revoking a recipient rotates the DEK, and history must be re-encrypted
-// under the new DEK or rollback to a pre-revocation version would break.
+// risk: removing a recipient rotates the live vault's DEK, and history must be
+// re-encrypted under the new DEK or rollback to a pre-removal version would
+// break. Pre-removal snapshots remain readable under the old DEK.
 func TestUnshareReEncryptsHistory(t *testing.T) {
 	v := createTestVault(t)
 	for _, val := range []string{"db-v1", "db-v2", "db-v3"} {

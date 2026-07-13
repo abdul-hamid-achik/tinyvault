@@ -1,56 +1,102 @@
 ---
-title: For AI Agents
-description: How an AI agent should discover and use TinyVault — run `tvault docs features` to learn the surface, then discover → search → use, keeping secret values out of the model context.
+title: AI Agent Workflow
+description: Discover, find, and use TinyVault secrets while minimizing plaintext in the model context.
 ---
 
-# For AI Agents
+# AI agent workflow
 
-TinyVault is built to be driven by AI agents — over [MCP](/mcp/) or as a CLI subprocess — **without secret values ever entering the model's context**. This page is the agent's starting point.
+TinyVault gives an agent ways to act on secret values without first returning a dedicated plaintext field. This is a value-minimizing workflow, not a guarantee that plaintext can never reach the model: `vault_get_secret` and `vault_set_secret` handle raw values explicitly, and a subprocess can leak what it receives through its output or side effects.
 
-## Start here: discover the surface
+Use [MCP](/mcp/) when the client supports it. Use the CLI as a subprocess when it does not.
 
-Don't guess at commands. TinyVault ships a **machine-readable manifest** of everything it can do:
+## Recommended loop
+
+### 1. Discover the surface
+
+An MCP client receives the server's tool schemas during initialization. A CLI-driven agent can inspect TinyVault's machine-readable help instead of guessing:
 
 ```bash
-tvault docs features      # JSON: every feature, its commands, and a description
-tvault docs topics        # JSON: topics with worked examples
-tvault help agent --json  # the recommended agent workflow, as JSON
+tvault docs features
+tvault docs topics
+tvault help agent --json
 ```
 
-Call `tvault docs features` **once at the start of a session**, then drill into a topic (`tvault docs interpolate`, `tvault docs mcp`, …). An agent connected over MCP is told the same thing in the server's startup instructions.
+### 2. Find a key by metadata
 
-## The loop: discover → search → use
+Use `vault_search_secrets`, `vault_list_secrets_by_prefix`, or `vault_list_secrets`. These tools return key names and metadata, not values.
 
-1. **Discover** — `tvault docs features` (CLI) once per session.
-2. **Find a key, not a value** — `vault_search_secrets` / `vault_list_secrets_by_prefix` (MCP) or `tvault search` (CLI). These return metadata only.
-3. **Use a value without reading it** — `vault_run_with_secrets` (MCP) or `tvault run -- <cmd>` (CLI): the value is injected into the subprocess environment, not the conversation.
-4. **Confirm** — `vault_audit_log_since` (MCP) or the studio Audit pane.
+For a CLI-driven agent, use:
 
-## Values stay out of the model
+```bash
+tvault list --names-only
+tvault search --name-like 'DATABASE_*'
+```
 
-Every tool returns metadata, a file path, or ciphertext — **except** `vault_get_secret`, which returns a value *with a warning*. Prefer the alternatives:
+`list --names-only` is lock-free. `search` currently unlocks the vault even though its result contains metadata only.
 
-| Need | Use | What comes back |
+### 3. Use the narrowest value path
+
+Choose the operation that keeps plaintext closest to its consumer:
+
+| Need | Preferred MCP tool | What the tool result contains |
 | --- | --- | --- |
-| Run something with a secret | `vault_run_with_secrets` | exit code + redacted output |
-| Hand a tool a `.env` | `vault_export_env` | a file path only |
-| Generate a secret | `vault_generate_secret` | `{ stored: true }` |
-| Package secrets to share/commit | `vault_seal_for_recipients` / `vault_export_env_encrypted` | ciphertext only |
+| Run a command | `vault_run_with_secrets` with `secrets` or `prefix` | Exit code and captured output; injected values are not response fields |
+| Give a local tool an environment file | `vault_export_env` with `keys` | Path, key names, and count; plaintext is written to disk |
+| Create a new random credential | `vault_generate_secret` | Storage confirmation and generation metadata |
+| Package values for recipients | `vault_seal_for_recipients` or `vault_export_env_encrypted` | Ciphertext or a path plus metadata |
+| Import values already stored in dotenv files | `vault_import_env_files` | Import metadata rather than the source values |
 
-## Two ways to connect
+For a CLI-driven agent, prefer a narrow injection:
 
-- **MCP** (recommended): point your client at `tvault mcp`. See [MCP Overview](/mcp/) for setup, the [Tools Reference](/mcp/tools) (49 tools), and the [Recipes](/mcp/recipes) cookbook.
-- **CLI subprocess**: call `tvault` directly; `tvault docs`/`tvault help --json` are the structured surfaces.
+```bash
+tvault run --only DATABASE_URL -- your-command
+tvault run --prefix STRIPE_ -- your-command
+```
 
-## Anti-patterns
+### 4. Review the result
 
-- Don't call `vault_get_secret` / `tvault get` in a loop to enumerate secrets — use the search/list tools.
-- Don't grep `tvault env` output to find a key — search for it.
-- Don't ask the model to hold a value — inject it into a subprocess with `vault_run_with_secrets`.
+Check the command's exit status and returned metadata. Use `vault_audit_log_since` when you need to review recently recorded vault activity.
 
-## See also
+## The two raw-value exceptions
 
-- [MCP Recipes](/mcp/recipes) — end-to-end workflows
-- [MCP Tools Reference](/mcp/tools) — all 49 tools, inputs, and returns
-- [Access Policy](/mcp/access-policy) — scope what an agent may do
-- [Security & Threat Model](/reference/security) — what redaction does and doesn't protect
+`vault_get_secret` returns `{key, value, warning}`. The plaintext value becomes part of the MCP response and can enter conversation history, logs, or traces. Reserve it for a task that genuinely requires the model to inspect the value.
+
+`vault_set_secret` accepts the plaintext value as a tool argument. That value may already be present in the prompt or tool-call transcript. If the value does not need to be chosen by the model, prefer `vault_generate_secret` or import it from a file the server can read.
+
+The CLI has the same distinction: `tvault get` and rendered `tvault env` output expose values, while `tvault run` can pass them directly to a process.
+
+## Output redaction has a narrow scope
+
+When `redact_output` is enabled, `vault_run_with_secrets` replaces literal injected values longer than three characters in the captured stdout and stderr it returns.
+
+Redaction does not:
+
+- detect encoded, split, hashed, reversed, or otherwise transformed values;
+- cover values of three characters or fewer;
+- inspect files, child-process logs, or traffic sent over the network; or
+- constrain a hostile command that deliberately exfiltrates its environment.
+
+Treat redaction as protection against accidental literal output. Restrict the policy and approve only commands you trust with the selected keys.
+
+## Policy limits matter
+
+If `~/.tvault/mcp-policy.yaml` is absent, the production `tvault mcp` command uses a fail-closed default: project and status metadata remain available, but secret keys, writes, and command execution are denied.
+
+An explicit policy can scope projects, key patterns, writes, command execution, and the number of `vault_get_secret` reads. The current policy cannot allow a key for `vault_run_with_secrets` while categorically denying `vault_get_secret` for that same key. Tool choice and client approval remain part of the safety boundary.
+
+See [MCP access policy](/mcp/access-policy) before granting an agent access.
+
+## Avoid these patterns
+
+- Do not enumerate values with repeated `vault_get_secret` or `tvault get` calls.
+- Do not render every secret when one key or prefix is sufficient.
+- Do not ask a subprocess to print its environment to confirm injection.
+- Do not treat a redacted response as proof that no other channel received the value.
+- Do not leave plaintext files created by `vault_export_env` longer than the consumer needs them.
+
+## Next steps
+
+- [MCP setup and security model](/mcp/)
+- [MCP tools reference](/mcp/tools)
+- [MCP recipes](/mcp/recipes)
+- [Security and threat model](/reference/security)

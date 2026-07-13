@@ -73,7 +73,7 @@ func (s *VaultMCPServer) handleInjectSecretsPrompt(_ context.Context, req *sdkmc
 
 1. First, use vault_list_secrets to check what secrets are available in %s
 2. Run the command %q using vault_run_with_secrets, injecting the project secrets
-3. Check the output and report any issues (note: secret values will be redacted in the output)`, projectClause, projectClause, command),
+3. Check the output and report any issues. Do not reproduce secret-looking output. Literal-value redaction applies only when policy enables it and can miss short or transformed values.`, projectClause, projectClause, command),
 				},
 			},
 		},

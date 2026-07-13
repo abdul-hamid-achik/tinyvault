@@ -194,7 +194,7 @@ func checkPolicy(dir string) doctorCheck {
 
 func checkEnvironment() []doctorCheck {
 	var checks []doctorCheck
-	for _, e := range []string{"TVAULT_DIR", "TVAULT_PROJECT", "TVAULT_CONFIG"} {
+	for _, e := range []string{"TVAULT_DIR"} {
 		if val := os.Getenv(e); val != "" {
 			checks = append(checks, doctorCheck{Name: e, Status: statusInfo, Detail: val})
 		}

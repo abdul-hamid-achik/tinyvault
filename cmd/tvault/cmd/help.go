@@ -200,20 +200,19 @@ func helpContent() HelpContent {
 			{
 				Step:    "6. Back up",
 				Command: "tvault backup ~/backups/vault.db.bak",
-				Why: "The backup is a direct copy of the encrypted vault.db. The passphrase is required to " +
-					"restore it. Passphrase rotation invalidates the backup only if the old passphrase " +
-					"is forgotten -- a fresh backup is always safe.",
+				Why: "The backup is a direct database copy; sensitive payloads remain encrypted. Restore itself only copies the file. " +
+					"Decrypting the restored owner view requires the passphrase that matched the snapshot; a matching recipient identity may still read projects shared to it.",
 			},
 		},
 
 		Conventions: HelpRules{
 			Flags: []string{
 				"--vault <dir>   override ~/.tvault (or set TVAULT_DIR)",
-				"--project <name>  override the current project (or set TVAULT_PROJECT)",
+				"--project <name>  override the current project for this invocation",
 				"-p <name>        short for --project",
 				"--json          emit machine-readable JSON output",
 				"--verbose, -v   enable verbose logging on stderr",
-				"--config <file>  override the config file path (or set TVAULT_CONFIG)",
+				"--config <file>  compatibility selector for Viper input; typed studio config still uses <vault-dir>/config.yaml",
 				"--no-vault      (run only) skip vault secrets, use only --env-file values",
 				"--yes, -y       (delete/restore) skip confirmation prompt",
 			},
@@ -224,8 +223,6 @@ func helpContent() HelpContent {
 				"TVAULT_IDENTITY_KEY   a private identity (tvault-key1…) for passphrase-free decrypt in CI/ssh; a local identity file takes precedence",
 				"TVAULT_IDENTITY       default identity name for git filters / recipient reads; default 'default'",
 				"TVAULT_DIR            vault directory; default ~/.tvault",
-				"TVAULT_PROJECT        default project; default 'default'",
-				"TVAULT_CONFIG         config file path; default ~/.tvault/config.yaml",
 			},
 			ExitCodes: []string{
 				"0   success",
@@ -237,7 +234,7 @@ func helpContent() HelpContent {
 				"7   vault database is in use by another process (e.g. a running 'tvault mcp'/'tvault studio')",
 			},
 			Filesystem: []string{
-				"~/.tvault/vault.db                 encrypted bbolt vault (0600)",
+				"~/.tvault/vault.db                 bbolt vault; encrypted payloads, readable metadata (0600)",
 				"~/.tvault/config.yaml             viper config (optional)",
 				"~/.tvault/mcp-policy.yaml         MCP access policy (optional)",
 				"~/.tvault/index.db                FTS5 search index (no longer shipped; kept for compat)",
@@ -246,9 +243,8 @@ func helpContent() HelpContent {
 		},
 
 		Output: HelpOutput{
-			JSONUsage: "Most commands accept --json. The shape is the same as the type Go field names " +
-				"in internal/mcp. The TVault command itself never prints secrets to stdout, " +
-				"even with --json. Use 'tvault env' or 'tvault get' to read a value.",
+			JSONUsage: "Most commands accept --json. JSON is a representation choice, not a secrecy boundary. " +
+				"Commands including get, env, export, decrypt-env, open, k8s render, and identity export can intentionally emit plaintext values or private key material.",
 			Formats: []string{
 				"shell         export KEY=VALUE  (eval-able; default for 'tvault env')",
 				"dotenv        KEY=VALUE         (one per line; safe for .env files)",
@@ -257,10 +253,8 @@ func helpContent() HelpContent {
 				"k8s-secret    apiVersion: v1, kind: Secret, data: {KEY: base64}",
 				"pulumi-config pulumi config set --secret KEY VALUE  (optional --stack; pipe to sh)",
 			},
-			GoldenRule: "Anything that prints a secret value goes through 'tvault get' or " +
-				"'tvault env'. Everything else prints structure. If you are scripting, " +
-				"always prefer 'tvault get KEY' or 'tvault env --format=... > file' " +
-				"over trying to parse human text.",
+			GoldenRule: "Treat the output of reveal, export, decrypt, render, open, and private-identity commands as sensitive. " +
+				"When scripting, direct plaintext only to the intended process or an owner-only file and avoid logs or chat context.",
 		},
 
 		Safety: HelpSafety{
@@ -270,20 +264,21 @@ func helpContent() HelpContent {
 			KeyHierarchy: "passphrase -> Argon2id -> KEK -> AES-GCM(per-project DEK) -> AES-GCM(secret value). " +
 				"Compromising one project's DEK does not leak any other project's data. " +
 				"Compromising the KEK leaks every project's DEK but not the passphrase.",
-			Redaction: "When 'tvault run' executes a child command, its stdout and stderr are " +
-				"scanned for any secret value (longer than 3 chars) and replaced with " +
-				"'[REDACTED:KEY]'. This is a safety net, not a guarantee -- if a subprocess " +
-				"sends the secret over the network, redaction cannot help.",
-			AgentSafety: "The MCP server is the safe interface for AI agents. Three rules: " +
+			Redaction: "The CLI 'tvault run' streams child stdout and stderr unchanged. Over MCP, " +
+				"vault_run_with_secrets applies literal-value redaction only when policy enables " +
+				"redact_output, and only for values longer than 3 characters. Short, transformed, " +
+				"file, and network leaks remain possible; redaction is a safety net, not containment.",
+			AgentSafety: "The MCP server is the policy-controlled interface for AI agents. Three rules: " +
 				"(1) Never call vault_get_secret unless the value is needed; prefer vault_run_with_secrets. " +
 				"(2) For batch lookups, use vault_search_secrets and vault_list_secrets_by_prefix " +
 				"-- they return metadata, never values. " +
-				"(3) The mcp-policy.yaml file controls which projects and secrets the agent " +
-				"can access; the agent cannot modify it at runtime.",
+				"(3) The in-memory mcp-policy.yaml controls which projects and secrets the agent " +
+				"can access and has no mutation tool. Full command execution can still edit files " +
+				"the server user owns, including the policy loaded by a future restart.",
 			NeverDoThis: []string{
 				"Commit ~/.tvault/vault.db to a public repo",
 				"Print a passphrase to a log file or chat message",
-				"Disable redaction by piping to 'cat -v' (it still scans)",
+				"Assume command output is safe because redact_output is enabled",
 				"Trust redaction as a security boundary -- it is a safety net, not a control",
 				"Run 'tvault unlock' and walk away from the terminal",
 			},
@@ -361,9 +356,10 @@ func helpContent() HelpContent {
 					"tvault identity new ci          # teammate/CI: prints a tvault1… recipient",
 					"tvault projects share tvault1…  # owner: grant that recipient access",
 					"tvault env --identity ci --format dotenv   # recipient reads it, no passphrase",
-					"tvault projects unshare tvault1…           # revoke: rotates the key + re-encrypts",
+					"tvault projects unshare tvault1…           # remove from live vault: rotate + re-encrypt",
 				},
-				Description: "X25519 recipients (age-style). Revocation truly removes access, even from an old vault copy.",
+				Description: "X25519 recipients (age-style). Unshare re-keys the updated live vault; " +
+					"pre-removal snapshots and artifacts remain readable and may require credential rotation.",
 			},
 			{
 				Name: "Commit self-decrypting secrets (git filters)",
@@ -447,7 +443,7 @@ func helpContent() HelpContent {
 			PreferredOrder: []string{
 				"1. 'tvault docs features' -- discover what is available",
 				"2. 'tvault search' or 'vault_search_secrets' -- find the key you need",
-				"3. 'tvault run' or 'vault_run_with_secrets' -- use the value without seeing it",
+				"3. 'tvault run' or 'vault_run_with_secrets' -- pass the value to a trusted command without first requesting a direct read; command output can still leak it",
 				"4. 'vault_audit_log_since' (MCP) or the studio Audit pane -- confirm the action was recorded",
 			},
 			AntiPatterns: []string{
@@ -468,10 +464,10 @@ func helpContent() HelpContent {
 		Troubleshoot: []HelpItem{
 			{
 				Problem: "I forgot the passphrase.",
-				Solution: "There is no recovery. The vault cannot be decrypted. This is intentional " +
-					"(local-first, no escrow, no social recovery). You will need to re-init and " +
-					"re-add every secret. If you have a recent backup that was created with the " +
-					"same passphrase, you can restore it; otherwise the data is gone.",
+				Solution: "There is no recovery for the owner KEK (no escrow or social recovery). " +
+					"A backup still needs the passphrase that matched its snapshot for the complete owner view. " +
+					"A private recipient identity provisioned beforehand may recover only projects shared to it; " +
+					"otherwise you must re-init and re-add the secrets.",
 			},
 			{
 				Problem: "'vault not found' error on any command.",

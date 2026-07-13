@@ -58,13 +58,13 @@ func TestProjectShareReadUnshareCLI(t *testing.T) {
 		t.Errorf("recipients: %v", err)
 	}
 
-	// Unshare → the recipient can no longer read.
+	// Unshare → the recipient can no longer read the updated live vault.
 	if err := runProjectUnshare(nil, []string{recipient}); err != nil {
 		t.Fatalf("unshare: %v", err)
 	}
 	envIdentity = "alice"
 	if _, err := envSecrets(); err == nil {
-		t.Error("revoked recipient should no longer read")
+		t.Error("removed recipient should not read the updated live vault")
 	}
 	envIdentity = ""
 

@@ -8,7 +8,7 @@ description: Run a local tvault agent on Linux or macOS to hold your vault unloc
 The `tvault agent` holds your vault unlocked in memory and serves secret reads over a private unix socket, so your daily `get`, `env`, and `run` calls skip the passphrase prompt and the ~200ms Argon2id key derivation. It is opt-in, off by default, and unix-only.
 
 ::: info Unix only
-The agent runs on Linux and macOS. On Windows the command reports that it is unsupported — use direct unlocks (which prompt for your passphrase) instead.
+The agent runs on Linux and macOS. On Windows the command reports that it is unsupported — use commands that unlock directly with your passphrase instead.
 :::
 
 ## Why an agent
@@ -36,7 +36,7 @@ Once it is running, `get`, `env`, and `run` automatically route through it:
 
 ```bash
 tvault get DATABASE_URL     # no prompt, no Argon2id
-tvault env -- ./server      # same
+tvault env --format shell   # same
 tvault run -- npm start     # same
 ```
 
@@ -101,6 +101,12 @@ tvault agent stop          # stop it and zero the cached key
 
 `agent stop` zeroes the cached key in memory. The key is also zeroed on idle auto-lock, on any termination signal, and on a recovered panic — every exit path.
 
+`tvault unlock` and `tvault lock` do not control this process. Each command opens the vault in its own short-lived process: `unlock` validates the passphrase for that invocation, and `lock` clears only that invocation's in-memory key. Neither persists an unlocked state, and `tvault lock` does not stop a running agent. Use `tvault agent start` for a persistent unlock and `tvault agent stop` (or a termination signal) to clear it.
+
+::: info Stopping a token-required agent
+In `--require-token` mode, every socket operation requires a token. The operator should stop the foreground process with **Ctrl-C** or send it a termination signal; the plain `tvault agent stop` command does not attach `TVAULT_AGENT_TOKEN`.
+:::
+
 ## Idle auto-lock
 
 The agent holds your key in memory, so it auto-locks after a period of inactivity and forgets the key:
@@ -118,7 +124,7 @@ To force a direct unlock even when an agent is running:
 
 ```bash
 tvault get DATABASE_URL --no-agent
-TVAULT_NO_AGENT=1 tvault env -- ./server
+TVAULT_NO_AGENT=1 tvault env --format shell
 ```
 
 Both `--no-agent` and `TVAULT_NO_AGENT` skip the socket and unlock directly (prompting for the passphrase). `--no-agent` is a global flag, so it works on any command.
@@ -146,9 +152,11 @@ The agent is designed so that turning it on does not widen your trust boundary b
 The key lives in the memory of a running, unlocked process. A `SIGKILL` (or memory forensics of the live process) cannot trigger the zeroing path. This is an accepted residual risk — see [Security](/reference/security).
 :::
 
-## Capability tokens (OS-confined delegates only)
+## Capability tokens (same-UID clients only)
 
-If you want a process running under a **different uid** — a container, a sandbox, an OS-confined helper — to reach the agent, run it with `--require-token` and hand the delegate a scoped token.
+The socket's peer-credential check always runs first. A client whose uid differs from the agent's uid is rejected before the request or its token is read, so a token cannot grant cross-uid access.
+
+For same-uid clients, `--require-token` adds a bearer-token check after the peer check. Tokens can be unrestricted or scoped to one project, which is useful for cooperating clients or a same-uid process that is OS-confined from the other tokens.
 
 ```bash
 # token-file: one token[:project] line per token, 0600
@@ -165,10 +173,10 @@ TVAULT_AGENT_TOKEN=tokenBBBB tvault get DATABASE_URL
 
 Tokens are stored only as their SHA-256, the audit log records an 8-character hash prefix (never the token itself), and the agent reloads the token file on `SIGHUP` — so you revoke a token by removing its line and sending `SIGHUP`.
 
-::: danger Tokens are privilege separation, not same-uid defense
-Capability tokens are a privilege-separation gate for an **OS-confined, different-uid** delegate only. They are **not** a defense against a malicious **same-uid** process: anything running as your user can read the token file or dial the socket directly. The same-uid boundary is the agent's trust boundary, by design.
+::: danger Tokens do not expand or replace the peer boundary
+`--require-token` is an additional gate **within** the mandatory same-uid boundary. It does not let a different uid connect. It is also not a strong boundary against a malicious same-uid process that can read the token file, inspect another client's environment, or otherwise obtain a bearer token.
 
-For untrusted delegation — CI, another machine, a teammate, an AI agent you don't fully trust — use a **scoped identity** instead. Identities are cryptographic and atomically revocable (`tvault projects unshare` rotates the project DEK and re-encrypts every value): see [Sharing](/guide/sharing) and [Committable secrets](/guide/committable-secrets). For CI specifically, `TVAULT_IDENTITY_KEY` gives a context a passphrase-free decrypt key — see [CI/CD](/guide/ci-cd).
+For untrusted delegation — CI, another machine, a teammate, an AI agent you don't fully trust — use a **scoped identity** instead. Removing an identity with `tvault projects unshare` atomically re-keys the updated live vault, but pre-removal snapshots and artifacts remain readable; rotate underlying credentials after a compromise. See [Sharing](/guide/sharing) and [Committable secrets](/guide/committable-secrets). For CI specifically, `TVAULT_IDENTITY_KEY` gives a context a passphrase-free decrypt key — see [CI/CD](/guide/ci-cd).
 :::
 
 ## See also

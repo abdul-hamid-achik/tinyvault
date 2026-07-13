@@ -47,7 +47,7 @@ tvault1exampleRecipientCluster
 `seal` reads this file automatically when you don't pass `--recipient`. It refuses to run with no recipients at all — there must be at least one in the file or on the flag.
 
 ::: tip Adding and removing readers
-Adding a recipient is a one-line edit plus a re-seal. **Removing** one is different: editing the file does not retroactively lock anyone out of ciphertext they already cloned. For true revocation of vault access, use `tvault projects unshare`, which rotates the project's DEK and re-encrypts every value and its history — then re-seal any committed files. See [Sharing Secrets](/guide/sharing).
+Adding a recipient is a one-line edit plus a re-seal. **Removing** one is different: editing the file does not retroactively lock anyone out of ciphertext they already cloned. Use `tvault projects unshare` to re-key the updated live vault, then rotate the underlying credentials and re-seal any committed files without that recipient. Pre-removal snapshots and sealed artifacts remain readable. See [Sharing Secrets](/guide/sharing).
 :::
 
 ## Approach 1: Standalone encrypted files
@@ -201,12 +201,12 @@ See the full walkthrough — install, track, status, checkout, and the idempoten
 | Files that look like plaintext locally, encrypted in history | [Git Filter](/guide/git-filter) |
 
 ::: info Where MCP fits
-An AI agent can produce the same v2 blob over MCP with the `vault_seal_for_recipients` tool, which returns **ciphertext only** — never plaintext. The MCP server never returns a raw secret value except `vault_get_secret` (which warns), and its output redaction is a safety net, not a control (it only masks literal values and can be evaded by transforming one). See [MCP Tools](/mcp/tools) and [Access Policy](/mcp/access-policy).
+An AI agent can produce the same v2 blob over MCP with the `vault_seal_for_recipients` tool, whose own result is **ciphertext only**. Elsewhere, `vault_get_secret` deliberately returns plaintext and `vault_run_with_secrets` can carry values through child output. Optional literal-value redaction is a safety net, not a control. See [MCP Tools](/mcp/tools) and [Access Policy](/mcp/access-policy).
 :::
 
 ## See also
 
-- [Sharing Secrets](/guide/sharing) — the X25519 recipient/identity model and true revocation with `projects unshare`.
+- [Sharing Secrets](/guide/sharing) — the X25519 recipient/identity model, live-vault re-keying, and retained-data limits.
 - [Git Filter](/guide/git-filter) — transparent clean/smudge encryption for tracked files.
 - [CI/CD](/guide/ci-cd) — passphrase-free pipelines with `TVAULT_IDENTITY_KEY` and `ci init`.
 - [Environment Variables](/reference/environment-variables) — `TVAULT_IDENTITY`, `TVAULT_IDENTITY_KEY`, and friends.

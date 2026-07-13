@@ -9,7 +9,7 @@ Dead-simple local secrets management for developers and AI agents.
 
 TinyVault is a single-binary CLI tool and [MCP server](https://modelcontextprotocol.io), written in Go, that stores secrets locally with strong encryption and works with any stack — `tvault run` injects secrets as env vars into Node, Python, Ruby, Rust, Go, or anything. No accounts, no servers, no cloud -- just a passphrase-protected vault on your machine.
 
-> **See [SPEC.md](SPEC.md) for the full design doc** -- architecture, threat model, MCP security story, comparison with 1Password CLI / `pass` / Vault / Doppler, and roadmap.
+> **Read the design and security model:** [Architecture](https://tinyvault.dev/reference/architecture), [Security](https://tinyvault.dev/reference/security), [What is TinyVault?](https://tinyvault.dev/guide/what-is-tinyvault), and [Roadmap](ROADMAP.md).
 
 ## Documentation
 
@@ -17,24 +17,24 @@ TinyVault is a single-binary CLI tool and [MCP server](https://modelcontextproto
 
 ## For AI agents
 
-TinyVault is built to be driven by agents without secret values ever entering the model's context. **Run `tvault docs features`** for a machine-readable JSON manifest of every capability, then follow the discover → search → use loop (`tvault help agent --json` documents it). Connect an MCP client to `tvault mcp` (36 tools). Start at the [For AI Agents](https://tinyvault.dev/guide/for-ai-agents) guide.
+TinyVault is built around value-minimizing agent workflows: search metadata, inject selected values into a subprocess, or write an export and return only its path. Raw values can still cross the model boundary through explicit tools such as `vault_get_secret` and `vault_set_secret`, so policy remains important. **Run `tvault docs features`** for a machine-readable JSON manifest of every capability, then follow the discover → search → use loop (`tvault help agent --json` documents it). Connect an MCP client to `tvault mcp` (49 tools). Start at the [For AI Agents](https://tinyvault.dev/guide/for-ai-agents) guide.
 
 ## Features
 
 - **AES-256-GCM Encryption** -- Two-tier key hierarchy with per-project data encryption keys
 - **Argon2id Key Derivation** -- Memory-hard passphrase hashing resistant to GPU/ASIC attacks
 - **Single Binary, Any Stack** -- One `tvault` binary (written in Go) for CLI use and MCP server mode. Language-agnostic: inject secrets as env vars into any process.
-- **MCP Server** -- 49 tools: AI agents can manage secrets via the Model Context Protocol (stdio) without the values ever entering the model context
+- **MCP Server** -- 49 tools: AI agents can discover and use secrets through value-minimizing Model Context Protocol (stdio) workflows, with explicit raw-value tools gated by policy
 - **Multi-Project** -- Organize secrets into projects with independent encryption keys
 - **.env Ecosystem** -- Safe dotenv parser (no shell expansion), `tvault://` placeholder interpolation, two-way sync (pull/push/mirror), and `.env.encrypted` files (Rails credentials pattern, safe to commit)
-- **Share & commit secrets** -- X25519 recipients (age-style): share a project without the passphrase, commit self-decrypting secrets via `git-filter` (transparent clean/smudge) or v2 `.env.encrypted`, and seal for recipients over MCP. Revocation rotates the key and re-encrypts.
+- **Share & commit secrets** -- X25519 recipients (age-style): share a project without the passphrase, commit self-decrypting secrets via `git-filter` (transparent clean/smudge) or v2 `.env.encrypted`, and seal for recipients over MCP. Removing a recipient re-keys the updated live vault; previously copied vaults and sealed artifacts are not retroactively revoked.
 - **Versioned secrets** -- every overwrite archives the prior value; `tvault history`, `tvault get --version N`, and `tvault rollback --to N` (also over MCP) let you inspect and restore past values. History survives key rotation.
 - **Local agent (unix)** -- `tvault agent` holds the vault unlocked over a private 0600 socket so daily `get/env/run` skip the passphrase prompt and Argon2id; `tvault hook` wires it into bash/zsh/fish/direnv. Auto-locks when idle.
 - **Relational Search** -- `tvault search` and `vault_search_secrets` for prefix, name glob, time-range, version, and cross-project queries
 - **Interactive Studio** -- `tvault studio` (aliases: `browse`, `ui`): a full-screen terminal UI (Bubble Tea v2) to browse status, projects, secrets, and audit — with a live filter and reveal-on-demand (`r` shows a value, `esc` re-masks). Read-only by default; `--rw` enables audited in-app new/edit/delete
-- **Output Redaction** -- MCP server automatically redacts secret values from command output
+- **Output Redaction** -- MCP execution can replace literal secret values in captured output when `redact_output` is enabled; transformed values can bypass it
 - **Access Policy** -- YAML-based allow/deny patterns control what AI agents can access
-- **Zero External Dependencies at Runtime** -- No database servers, no Docker, no network -- just a local bbolt file
+- **Zero External Services Required** -- No database server, Docker daemon, account, or hosted control plane -- just a local bbolt file
 - **Cross-Platform** -- Linux, macOS, Windows (amd64 and arm64)
 
 ## Install
@@ -191,8 +191,11 @@ bind-mounted, a sandbox) you can run the agent with `--require-token
 a `token[:project]` line scopes a token to one project (set `TVAULT_AGENT_TOKEN`
 in the delegate). This is privilege separation, **not** a defense against a
 same-uid process — for untrusted/CI/container delegation, prefer a scoped
-**identity** (`tvault identity new` + `projects share`), which is cryptographic
-and atomically revocable. See `tvault docs agent` and SPEC §5.5.
+**identity** (`tvault identity new` + `projects share`), whose access to the
+updated live vault can be removed with an atomic DEK re-key. Previously copied
+vaults and artifacts remain readable, so rotate underlying credentials after a
+compromise. See `tvault docs agent`, the [agent guide](docs/guide/agent.md), and
+[token honesty](https://tinyvault.dev/reference/security#token-honesty).
 
 ## Secret history & rollback
 
@@ -208,9 +211,10 @@ tvault rollback API_KEY --to 1    # restore v1 as a new v4 (non-destructive)
 
 Rollback is non-destructive: the value it replaces is itself archived, and
 version numbers are never reused. History is encrypted with the project key, so
-it survives passphrase rotation and recipient revocation (the key rotates and
-every version is re-encrypted). Agents get the same via the `vault_secret_history`
-and `vault_rollback_secret` MCP tools — neither ever returns a value.
+it survives passphrase rotation and live-vault recipient removal (the key
+rotates and every version in the updated vault is re-encrypted). Agents get the
+same via the `vault_secret_history` and `vault_rollback_secret` MCP tools —
+neither ever returns a value.
 
 ## Sharing secrets (without sharing the passphrase)
 
@@ -228,10 +232,15 @@ tvault projects recipients        # see who has access
 # The recipient reads the project with their identity — no passphrase:
 tvault env --identity ci --format dotenv
 
-# Revoke: rotates the project key and re-encrypts every value, so the
-# removed recipient loses access even from an old copy of the vault.
+# Remove access to the updated live vault: rotate the project key and
+# re-encrypt every current value and archived version.
 tvault projects unshare tvault1…
 ```
+
+`unshare` cannot rewrite a vault snapshot copied before the operation, or an
+already exported, sealed, or decrypted artifact. A removed recipient can still
+read data they retained under the old key. Rotate the underlying credentials
+and re-seal or redeploy distributed artifacts when that risk matters.
 
 The data key is wrapped per-recipient (X25519 → HKDF-SHA256 →
 ChaCha20-Poly1305); secret values stay encrypted under the project key.
@@ -331,7 +340,7 @@ Add to `.claude/settings.local.json`:
 | `vault_set_secret` | Create or update a secret |
 | `vault_delete_secret` | Delete a secret |
 | `vault_generate_secret` | Generate a random secret and store it (value never returned) |
-| `vault_run_with_secrets` | Run a command with secrets as env vars (output redacted) |
+| `vault_run_with_secrets` | Run a command with secrets as env vars (returns stdout/stderr; optional literal-value redaction) |
 | `vault_export_env` | Write a .env file and return the path (values never sent to AI) |
 | `vault_list_env_files` | Discover safe dotenv files without returning any values |
 | `vault_preview_env_import` | Preview a dotenv import with key names, counts, and diagnostics only |
@@ -350,7 +359,7 @@ Add to `.claude/settings.local.json`:
 | `vault_list_secrets_detailed` | List keys with their real version and created/updated timestamps |
 | `vault_list_secrets_global` | Cross-project secret discovery by prefix, name, time, or version |
 | `vault_share_project` | Grant an X25519 recipient (`tvault1…`) read access (wraps the DEK) |
-| `vault_unshare_project` | Revoke a recipient (rotates the DEK and re-encrypts every value + version) |
+| `vault_unshare_project` | Remove a recipient from the updated live vault (rotates the DEK and re-encrypts every value + version) |
 | `vault_project_recipients` | List the public recipients a project is shared with |
 | `vault_diff_env` | Drift between a `.env` file and the project (verdicts only, never values) |
 | `vault_sync_env` | Reconcile a `.env` with the project: pull / push / mirror |
@@ -363,8 +372,10 @@ The recommended pattern for an agent is to discover the surface once via
 (`vault_search_secrets`, `vault_list_secrets_by_prefix`) to find keys
 without ever asking the model to enumerate values. Use
 `vault_run_with_secrets` whenever the agent needs to *use* a value;
-the value goes into the subprocess environment and never appears in
-the model's context.
+the value goes into the subprocess environment instead of a dedicated
+tool-result field. The command's stdout and stderr still return to the
+client, so use a trusted command and treat optional literal-value redaction
+as a guardrail rather than a security boundary.
 
 ### Safe Dotenv Imports
 
@@ -470,7 +481,7 @@ tvault restore ~/.tvault-backup/vault.db
 - **Key Hierarchy**: Passphrase -> KEK (Key Encryption Key) -> per-project DEKs (Data Encryption Keys)
 - **Storage**: Single bbolt file at `~/.tvault/vault.db` with 0600 permissions
 - **Memory Safety**: Keys zeroed from memory after use
-- **MCP Redaction**: Secret values automatically replaced with `[REDACTED:KEY]` in command output
+- **MCP Redaction**: When `redact_output` is enabled, literal secret values longer than three characters are replaced with `[REDACTED:KEY]` in captured command output; this is a safety net, not containment
 
 ## Architecture
 

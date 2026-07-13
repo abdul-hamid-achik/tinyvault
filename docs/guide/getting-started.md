@@ -1,241 +1,113 @@
 ---
 title: Getting Started
-description: Install TinyVault, create your first encrypted vault, and learn the core set/get/run/env loop in a few minutes.
+description: Install TinyVault, create a local vault, store a value through standard input, list its key without unlocking, and inject it into a process.
 ---
 
-# Getting Started
+# Getting started
 
-TinyVault is a single binary (`tvault`, written in Go) that stores secrets locally in one encrypted file and works with any stack — `tvault run` injects secrets as env vars into Node, Python, Ruby, Rust, PHP, Go, or anything that reads them. This page takes you from zero to a working vault: install the binary, initialize a vault, store and read a secret, and inject secrets into a process.
+This quickstart takes you from a new install to a child process using a vault secret. It uses a deliberately non-sensitive demo value and never prints that value back to the terminal.
 
-## Install
+## 1. Install TinyVault
 
-Pick whichever fits your setup. All three give you the same `tvault` binary.
+Install the prebuilt binary with Homebrew:
 
 ```bash
-# Homebrew (macOS / Linux)
 brew install abdul-hamid-achik/tap/tvault
-
-# Go toolchain (Go 1.22+)
-go install github.com/abdul-hamid-achik/tinyvault/cmd/tvault@latest
-
-# Or download a prebuilt release binary and put it on your PATH:
-# https://github.com/abdul-hamid-achik/tinyvault/releases
 ```
 
-Verify the install:
+You can instead download a binary from [GitHub Releases](https://github.com/abdul-hamid-achik/tinyvault/releases), or install from source with Go 1.26 or later:
+
+```bash
+go install github.com/abdul-hamid-achik/tinyvault/cmd/tvault@latest
+```
+
+Confirm that `tvault` is on your `PATH`:
 
 ```bash
 tvault --version
 ```
 
-::: info
-`--version` is a root-only flag; there is no `tvault version` subcommand. `--help` (and `-h`) works on every command, and `tvault help` opens the long-form manual.
-:::
-
-## Initialize your vault
-
-`tvault init` creates the vault file and a `default` project, then prompts you to set a passphrase. This passphrase is the only thing that can unlock your vault, so choose a strong one and store it somewhere safe.
+## 2. Create a vault
 
 ```bash
 tvault init
 ```
 
-This writes `~/.tvault/vault.db` — a single encrypted [bbolt](https://github.com/etcd-io/bbolt) file, mode `0600` — inside `~/.tvault/` (mode `0700`). Your secrets, their version history, project metadata, the audit log, and the key-derivation salt all live in that one file.
+TinyVault asks you to create and confirm a passphrase, creates the `default` project, and writes the vault database to `~/.tvault/vault.db`.
 
-::: warning
-There is no passphrase recovery. The passphrase feeds Argon2id to derive the key that protects everything in the vault. If you lose it, the data is unrecoverable by design. Keep a [backup](/guide/key-management) of the vault file and the passphrase.
+Secret values and key material in the database are encrypted. Names and operational metadata, including project names and secret key names, are not confidential.
+
+::: danger Keep the passphrase
+TinyVault has no hosted recovery service or recovery key. Keep the passphrase separately from a backup of the vault database. Losing either one removes the complete owner view; recipient identities configured later can recover only projects explicitly shared to them.
 :::
 
-For non-interactive use (CI, scripts), set `TVAULT_PASSPHRASE` and `init` uses it instead of prompting:
+## 3. Store a value through standard input
+
+When a value arrives on standard input, TinyVault cannot use that same stream to prompt for the vault passphrase. In Bash or zsh, read the passphrase without echo, export it for this operation, and remove it immediately afterward:
 
 ```bash
-export TVAULT_PASSPHRASE='your-strong-passphrase'
-tvault init
+printf 'Vault passphrase: ' >&2
+read -rs TVAULT_PASSPHRASE
+printf '\n' >&2
+export TVAULT_PASSPHRASE
+
+printf '%s' 'quickstart-demo-value' | tvault set API_TOKEN --stdin
+unset TVAULT_PASSPHRASE
 ```
 
-::: tip
-Exporting `TVAULT_PASSPHRASE` into your shell history or a CI log is risky. For pipelines, prefer the passphrase-free, identity-based flow in [CI/CD](/guide/ci-cd) and [Committable secrets](/guide/committable-secrets).
+The value above is deliberately non-sensitive. For a real credential, pipe it from your password manager, credential generator, or another trusted source. Avoid putting it directly after the key because command arguments can be retained in shell history or exposed to other local tooling.
+
+`set` reads the passphrase from `TVAULT_PASSPHRASE`, unlocks the vault for this command, stores the encrypted value, and closes the vault again.
+
+## 4. List the key without decrypting values
+
+```bash
+tvault list --names-only
+```
+
+The output includes:
+
+```text
+API_TOKEN
+```
+
+`--names-only` does not ask for the passphrase and never decrypts a value. This works because key names are readable metadata in the database. The default `tvault list` path does unlock the vault; use `--names-only` when names are all you need.
+
+## 5. Inject the value into a child process
+
+Run a command with only `API_TOKEN` added to its environment:
+
+```bash
+tvault run --only API_TOKEN -- sh -c 'test -n "$API_TOKEN" && echo "API_TOKEN is available to the child process"'
+```
+
+TinyVault prompts for the passphrase, decrypts the selected value, and passes it to `sh`. The command confirms that the variable exists without printing it.
+
+The `--only` flag narrows injection to an explicit key. The `--` separator is optional when there is no flag conflict, but using it consistently makes clear where TinyVault options end and the child command begins.
+
+::: warning Trust the child command
+The CLI does not redact a child process's terminal output or prevent it from writing files, logs, or network traffic. Run only commands you trust with the selected secrets.
 :::
 
-## The core loop: set, get, list
-
-Store a secret with `tvault set <key> [value]`. Keys are uppercase, environment-style names by convention.
+Use the same pattern with your application:
 
 ```bash
-tvault set DATABASE_URL "postgres://user:pass@localhost/app"
-tvault set API_KEY "sk-xxxx"
+tvault run --only DATABASE_URL -- npm start
+tvault run --prefix APP_ -- python manage.py runserver
 ```
 
-Read it back with `tvault get <key>`:
+## How unlocking works
 
-```bash
-tvault get DATABASE_URL
-```
+TinyVault does not remain unlocked after a normal CLI command. Commands that need plaintext prompt for the passphrase, use the derived key for that invocation, and clear it when the command exits.
 
-List the keys in the current project with `tvault list` — metadata only, it never prints values:
+If repeated prompts interrupt your local workflow, the optional [local agent](/guide/agent) can hold the unlock key for a limited time on Unix.
 
-```bash
-tvault list
-tvault list --prefix STRIPE_   # only keys starting with STRIPE_
-```
+## Choose your next step
 
-A few things worth knowing about `set`:
-
-| Flag | What it does |
-| --- | --- |
-| `--stdin` | Read the value from standard input (no value on the command line). |
-| `-f`, `--from-file <path>` | Read the value from a file (whole-file contents). |
-| `--from-env <path>` | Read the value for this key out of a dotenv file. |
-| `--key <name>` | Override the key name (useful with the file/stdin sources). |
-
-```bash
-# Avoid putting the value in your shell history:
-printf 'sk-xxxx' | tvault set API_KEY --stdin
-
-# Pull a multi-line secret (a private key, a cert) from a file:
-tvault set TLS_CERT --from-file ./server.pem
-```
-
-An empty value is rejected. Every overwrite archives the prior value first, so you keep a version history — see [Versioning](/guide/versioning). To remove a key and purge its history:
-
-```bash
-tvault delete API_KEY        # prompts for confirmation
-tvault delete API_KEY -y     # skip the prompt
-```
-
-## Run a command with secrets injected
-
-`tvault run` decrypts the current project's secrets, exports them as environment variables for a child process, and runs it. Everything after `--` is the command and its arguments — the `--` separator is required.
-
-```bash
-tvault run -- npm start
-tvault run -- python manage.py migrate
-```
-
-`run` forwards `SIGINT`/`SIGTERM` to the child and exits with the child's exit code, so it composes cleanly in scripts and supervisors.
-
-| Flag | What it does |
-| --- | --- |
-| `-e`, `--env-file <path>` | Also load a `.env` file (supports `tvault://` placeholders). |
-| `--no-vault` | Do not inject vault secrets; load only the `--env-file` values. |
-
-```bash
-# Run with a commit-safe .env template that references vault keys:
-tvault run --env-file .env -- npm start
-```
-
-See [Run & env](/guide/run-and-env) for the full process model and [Dotenv](/guide/dotenv) for the `tvault://` placeholder syntax.
-
-## Export secrets as environment variables
-
-`tvault env` prints secrets in a chosen format. The default is shell, with `export` prefixes, so you can `eval` it into your current shell.
-
-```bash
-eval "$(tvault env)"               # load into the current shell
-tvault env --format dotenv         # .env style
-tvault env --format json
-tvault env --format yaml
-tvault env --format k8s-secret --name app-secrets
-```
-
-| Flag | What it does |
-| --- | --- |
-| `-f`, `--format <shell\|dotenv\|json\|yaml\|k8s-secret>` | Output format (default `shell`). |
-| `-e`, `--export` | Add `export` prefixes in shell output (default on). |
-| `--name`, `--namespace` | Metadata for the `k8s-secret` format. |
-| `--identity <name>` | Read a **shared** project with an X25519 identity, no passphrase. |
-
-::: warning
-`tvault env` and `tvault export` write plaintext secret values to stdout. Pipe them, never commit them. For Kubernetes specifically, `tvault env --format k8s-secret` (and `tvault k8s render`) produces a plaintext `Secret` manifest — pipe it to `kubectl apply -f -` and do not check it in.
-:::
-
-## Working with projects
-
-A vault holds multiple projects, each with its own encryption key. `init` creates a `default` project. Create more, and switch between them.
-
-```bash
-tvault projects create webapp -d "Web frontend secrets"
-tvault projects list
-
-# Set the active project for subsequent commands:
-tvault use webapp                  # shorthand for: tvault projects use webapp
-```
-
-The active project is sticky — it is stored in the vault and used until you switch again. You can also target a single command without switching, using the global `-p`/`--project` flag:
-
-```bash
-tvault -p webapp set API_KEY "sk-xxxx"
-tvault -p webapp list
-```
-
-Project precedence is `--project` > the stored current project > `default`. See [Projects](/guide/projects) for sharing, deletion, and recipients.
-
-::: danger
-`tvault projects unshare <recipient>` is **true** revocation, not a flag flip: it rotates the project's data encryption key and re-encrypts every value and its history under the new key. That is the point — a removed recipient cannot decrypt anything going forward, even copies of old ciphertext.
-:::
-
-## Where your data lives and the lock model
-
-Everything TinyVault owns is under `~/.tvault/` (mode `0700`):
-
-| Path | What it is |
-| --- | --- |
-| `~/.tvault/vault.db` | The encrypted vault (secrets, version history, project metadata, audit log, salt). Mode `0600`. |
-| `~/.tvault/config.yaml` | Optional config (see [Configuration](/reference/configuration)). |
-| `~/.tvault/identities/<name>.key` | Optional X25519 identities for sharing. Mode `0600`. |
-
-You can move the vault directory with `--vault <dir>` or the `TVAULT_DIR` environment variable. Precedence is `--vault` > `TVAULT_DIR` > `~/.tvault`.
-
-The vault is locked at rest. A command that needs plaintext (like `get`, `env`, or `run`) unlocks the vault for the duration of that command by deriving the key from your passphrase — it does not stay unlocked between commands. Operations that only touch metadata (`list`, `search`, `history`, `projects recipients`, `diff` without `--values`) never decrypt and never need the passphrase.
-
-```bash
-tvault status     # is a vault present? which project is active?
-tvault doctor     # read-only diagnostics; non-zero exit if a check fails
-tvault unlock     # cache an unlock (where supported)
-tvault lock       # clear any cached unlock
-```
-
-::: tip
-On Unix, the optional [agent](/guide/agent) (`tvault agent start`) holds the vault unlocked over a private `0600` socket so daily `get`/`env`/`run` skip the prompt and Argon2id. It is opt-in and auto-locks when idle.
-:::
-
-## Global flags and exit codes
-
-These six persistent flags work on **every** command:
-
-| Flag | Effect |
-| --- | --- |
-| `--config <file>` | Use a specific config file. |
-| `--vault <dir>` | Use a specific vault directory. |
-| `-p`, `--project <name>` | Target a specific project for this command. |
-| `--json` | Emit machine-readable JSON where supported. |
-| `-v`, `--verbose` | Verbose logging. |
-| `--no-agent` | Bypass the local agent and unlock directly. |
-
-Exit codes let scripts branch on the failure mode:
-
-| Code | Meaning |
-| --- | --- |
-| `0` | Success. |
-| `1` | Generic error. |
-| `3` | Vault is locked. |
-| `4` | Secret or project not found. |
-| `5` | Vault not initialized (run `tvault init`). |
-| `6` | Wrong passphrase. |
-
-## A note for AI agents
-
-The same binary is the [MCP server](/mcp/) (via the `mcp` subcommand) and an interactive terminal [studio](/guide/studio). Two honesty caveats to internalize early:
-
-::: warning
-MCP **output redaction** is a safety net, not a security control. It only replaces literal secret values longer than three characters in tool output and can be evaded by transforming a value before printing it. Treat it as defense-in-depth, never as the boundary. The MCP server never returns a raw secret value **except** `vault_get_secret`, which warns when it does.
-:::
-
-Secret **generation** is available only over MCP (`vault_generate_secret`) — there is no `tvault generate` CLI command. Auditing is internal: it surfaces over MCP (`vault_audit_log`) and in the studio, not as a CLI subcommand.
-
-## See also
-
-- [What is TinyVault](/guide/what-is-tinyvault) — the design and threat model in one page.
-- [Run & env](/guide/run-and-env) — inject secrets into processes the right way.
-- [CLI reference](/cli/) — every command and flag.
-- [Security model](/reference/security) — what TinyVault does and does not defend against.
+- [Run and env](/guide/run-and-env) — select keys, combine a `.env` template, or render environment output.
+- [Projects](/guide/projects) — separate applications and environments.
+- [Dotenv workflows](/guide/dotenv) — import, diff, sync, and interpolate existing `.env` files.
+- [Studio](/guide/studio) — browse the vault interactively.
+- [MCP server](/mcp/) — connect an AI agent with a fail-closed policy.
+- [Security and threat model](/reference/security) — understand metadata exposure and trust boundaries.
+- [CLI reference](/cli/) — look up every command and flag.

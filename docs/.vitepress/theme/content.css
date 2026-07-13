@@ -1,0 +1,398 @@
+html {
+  font-family: var(--tv-font-sans);
+  font-optical-sizing: auto;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background: var(--tv-paper);
+  color: var(--tv-ink);
+}
+
+::selection {
+  background: var(--tv-accent-soft);
+  color: var(--tv-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--tv-accent);
+  outline-offset: 3px;
+}
+
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* Navigation ---------------------------------------------------------- */
+
+.VPNav {
+  border-bottom: 1px solid transparent;
+}
+
+.VPNavBar {
+  background: color-mix(in srgb, var(--tv-paper) 88%, transparent) !important;
+  border-bottom-color: var(--tv-line) !important;
+  backdrop-filter: blur(18px) saturate(120%);
+}
+
+.VPNavBar.has-sidebar .content-body {
+  background: transparent !important;
+}
+
+.VPNavBarTitle .title {
+  gap: 9px;
+  font-size: 15px;
+  font-weight: 680;
+  letter-spacing: -0.02em;
+}
+
+.VPNavBarTitle .logo {
+  width: 25px;
+  height: 25px;
+}
+
+.VPNavBarMenuLink,
+.VPNavBarMenuGroup .button {
+  font-size: 13px;
+  font-weight: 520;
+  letter-spacing: -0.01em;
+}
+
+.VPNavBarMenuLink:hover,
+.VPNavBarMenuLink.active,
+.VPNavBarMenuGroup .button:hover {
+  color: var(--tv-accent) !important;
+}
+
+.VPNavBarSearch .DocSearch-Button,
+.VPNavBarSearch button {
+  border: 1px solid var(--tv-line) !important;
+  border-radius: var(--tv-radius-sm) !important;
+  background: var(--tv-paper-soft) !important;
+}
+
+.VPSocialLink:hover,
+.VPNavBarAppearance .VPSwitchAppearance:hover {
+  color: var(--tv-accent) !important;
+}
+
+.VPNav a[aria-current='page'],
+.VPNavScreen a[aria-current='page'] {
+  color: var(--tv-accent) !important;
+}
+
+/* VitePress switches to its desktop nav at 768px. With this site's six
+   destinations, that is a little too early, so retain the accessible nav
+   screen through the narrow-tablet range. */
+@media (min-width: 768px) and (max-width: 839px) {
+  .VPNavBarMenu,
+  .VPNavBarExtra {
+    display: none !important;
+  }
+
+  .VPNavBarHamburger {
+    display: flex !important;
+  }
+
+  .VPNavScreen {
+    display: block !important;
+  }
+}
+
+/* Sidebar ------------------------------------------------------------- */
+
+.VPSidebar {
+  background: var(--tv-paper) !important;
+  border-right: 1px solid var(--tv-line);
+}
+
+.VPSidebarItem.level-0 > .item > .text {
+  color: var(--tv-ink);
+  font-size: 11px;
+  font-weight: 680;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.VPSidebarItem.level-1 .text {
+  font-size: 13px;
+  font-weight: 450;
+}
+
+.VPSidebarItem.level-1.is-active > .item .link > .text {
+  color: var(--tv-accent);
+  font-weight: 620;
+}
+
+.VPSidebarItem .indicator {
+  background: var(--tv-accent) !important;
+  width: 2px !important;
+  border-radius: 2px;
+}
+
+.VPSidebarItem .item:hover .text {
+  color: var(--tv-accent);
+}
+
+/* Documentation typography ------------------------------------------ */
+
+.VPDoc .content-container {
+  max-width: 780px !important;
+}
+
+.vp-doc {
+  color: var(--tv-ink);
+  font-size: 16px;
+  line-height: 1.75;
+}
+
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3,
+.vp-doc h4 {
+  color: var(--tv-ink);
+  font-family: var(--tv-font-sans);
+  font-weight: 650;
+  letter-spacing: -0.035em;
+}
+
+.vp-doc h1 {
+  max-width: 18ch;
+  margin: 18px 0 20px;
+  font-size: clamp(2.35rem, 5vw, 3.25rem);
+  line-height: 1.03;
+}
+
+.vp-doc h1 + p {
+  margin-top: 0;
+  color: var(--tv-muted);
+  font-size: 1.08rem;
+  line-height: 1.65;
+}
+
+.vp-doc h2 {
+  margin-top: 3.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--tv-line);
+  font-size: 1.65rem;
+  line-height: 1.2;
+}
+
+.vp-doc h3 {
+  margin-top: 2.2rem;
+  font-size: 1.2rem;
+  line-height: 1.3;
+}
+
+.vp-doc p,
+.vp-doc li {
+  color: var(--tv-muted);
+}
+
+.vp-doc strong {
+  color: var(--tv-ink);
+  font-weight: 620;
+}
+
+.vp-doc a {
+  color: var(--tv-accent-strong);
+  font-weight: 540;
+  text-decoration-color: var(--tv-accent-line);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.vp-doc a:hover {
+  color: var(--tv-accent);
+  text-decoration-color: currentColor;
+}
+
+.vp-doc :not(pre) > code {
+  border: 1px solid var(--tv-line);
+  border-radius: 5px;
+  background: var(--tv-paper-soft);
+  color: var(--tv-accent-strong);
+  font-size: 0.88em;
+  font-weight: 520;
+}
+
+.vp-doc div[class*='language-'] {
+  margin-top: 1.4rem;
+  margin-bottom: 1.6rem;
+  border: 1px solid var(--tv-line);
+  border-radius: 12px;
+  background: var(--tv-console) !important;
+  box-shadow: var(--tv-shadow-sm);
+}
+
+.vp-doc div[class*='language-']::before {
+  color: var(--tv-console-muted);
+}
+
+.vp-doc div[class*='language-'] pre,
+.vp-doc div[class*='language-'] code {
+  font-family: var(--tv-font-mono);
+  font-size: 13.5px;
+  line-height: 1.72;
+}
+
+.vp-doc .line-numbers-wrapper {
+  border-right-color: var(--tv-console-line);
+}
+
+.vp-doc blockquote {
+  margin: 1.5rem 0;
+  padding: 0.1rem 0 0.1rem 1.25rem;
+  border-left: 2px solid var(--tv-accent);
+}
+
+.vp-doc blockquote p {
+  color: var(--tv-muted);
+  font-size: 1rem;
+}
+
+/* Tables -------------------------------------------------------------- */
+
+.vp-doc table {
+  display: table;
+  width: 100%;
+  margin: 1.5rem 0 2rem;
+  border-collapse: separate;
+  border: 1px solid var(--tv-line);
+  border-spacing: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  font-size: 14px;
+}
+
+.vp-doc tr {
+  border: 0;
+  background: transparent;
+}
+
+.vp-doc tr:nth-child(2n) {
+  background: color-mix(in srgb, var(--tv-paper-soft) 62%, transparent);
+}
+
+.vp-doc th,
+.vp-doc td {
+  padding: 11px 13px;
+  border: 0;
+  border-right: 1px solid var(--tv-line);
+  border-bottom: 1px solid var(--tv-line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.vp-doc th:last-child,
+.vp-doc td:last-child {
+  border-right: 0;
+}
+
+.vp-doc tr:last-child td {
+  border-bottom: 0;
+}
+
+.vp-doc thead th {
+  background: var(--tv-paper-soft);
+  color: var(--tv-ink);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.025em;
+}
+
+/* Callouts ------------------------------------------------------------ */
+
+.vp-doc .custom-block {
+  margin: 1.6rem 0;
+  padding: 17px 19px;
+  border: 1px solid var(--tv-line);
+  border-left-width: 3px;
+  border-radius: 10px;
+  background: var(--tv-paper-soft);
+}
+
+.vp-doc .custom-block .custom-block-title {
+  color: var(--tv-ink);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.vp-doc .custom-block p {
+  color: var(--tv-muted);
+}
+
+.vp-doc .custom-block.info,
+.vp-doc .custom-block.tip {
+  border-left-color: var(--tv-accent);
+}
+
+.vp-doc .custom-block.warning {
+  border-left-color: #b07b37;
+}
+
+.vp-doc .custom-block.danger {
+  border-left-color: var(--tv-danger);
+}
+
+/* Right rail + footer ------------------------------------------------- */
+
+.VPDocAsideOutline .outline-title {
+  color: var(--tv-faint);
+  font-size: 10px;
+  font-weight: 680;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.VPDocAsideOutline .outline-link {
+  color: var(--tv-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.VPDocAsideOutline .outline-link:hover,
+.VPDocAsideOutline .outline-link.active {
+  color: var(--tv-accent);
+}
+
+.VPDocFooter {
+  border-top-color: var(--tv-line) !important;
+}
+
+.VPFooter {
+  border-top-color: var(--tv-line) !important;
+  background: var(--tv-paper-soft) !important;
+}
+
+@media (max-width: 767px) {
+  .vp-doc {
+    font-size: 15.5px;
+  }
+
+  .vp-doc h1 {
+    font-size: clamp(2.15rem, 11vw, 2.75rem);
+  }
+
+  .vp-doc h2 {
+    margin-top: 3rem;
+    font-size: 1.5rem;
+  }
+
+  .vp-doc table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}

@@ -19,7 +19,7 @@ These persistent flags are available on **every** command:
 
 | Flag | Description |
 | --- | --- |
-| `--config <file>` | Config file (default `~/.tvault/config.yaml`). |
+| `--config <file>` | Compatibility selector for Viper's config input. Current typed studio settings still load from `<vault-dir>/config.yaml`; use `--vault` to relocate them. |
 | `--vault <dir>` | Vault directory (default `~/.tvault`). |
 | `-p`, `--project <name>` | Project to operate on (default: the active project). |
 | `--json` | Emit machine-readable JSON instead of human text. |
@@ -244,10 +244,10 @@ Share the active project with a recipient public key (`tvault1…`), so they can
 tvault projects unshare tvault1exampleRecipient
 ```
 
-Revoke a recipient. This is **true revocation**: it rotates the project DEK and re-encrypts every value *and* its history. No command-local flags.
+Remove a recipient from the updated live vault. This rotates the project DEK and re-encrypts every current value *and* archived version. No command-local flags.
 
-::: tip Why a rotation, not just a re-wrap
-A recipient may have cached the old DEK. Re-wrapping the key alone would be security theater, so `unshare` re-encrypts everything under a fresh DEK.
+::: warning Scope of recipient removal
+A recipient may have cached the old DEK, so re-wrapping alone would leave the live vault's existing ciphertext readable. `unshare` re-encrypts the updated live state under a fresh DEK. A pre-removal snapshot or previously exported, sealed, or decrypted artifact remains readable; rotate underlying credentials when retained data is a concern.
 :::
 
 #### `projects recipients`
@@ -299,7 +299,7 @@ tvault env -f dotenv > .env
 tvault env -p shared --identity laptop
 ```
 
-Print the project's secrets as environment assignments. The default format is `shell` with `export` prefixes, ready to `eval`. Reading the vault decrypts and is audited. There is no output-file flag — redirect stdout to write to a file.
+Print the project's secrets as environment assignments. The default format is `shell` with `export` prefixes, ready to `eval`. Identity-based reads add an audit row; the direct passphrase-unlock path currently does not. There is no output-file flag — redirect stdout to write to a file.
 
 | Flag | Description |
 | --- | --- |
@@ -703,7 +703,7 @@ A passphrase rotation invalidates any v1 `.env.encrypted` files made under the *
 tvault backup ./tvault-backup.db
 ```
 
-Write an encrypted backup of the vault to `<path>`. No command-local flags.
+Write a byte-for-byte database backup to `<path>`. Secret payloads and key material remain encrypted, while operational metadata remains readable. No command-local flags.
 
 ### `restore`
 
@@ -791,7 +791,7 @@ tvault mcp
 Start the MCP server over stdio. Loads `~/.tvault/mcp-policy.yaml` and serves the agent-facing tools, resources, and prompts. Your MCP host (Claude Code, Claude Desktop, or any MCP client) usually launches this for you rather than you running it by hand. It unlocks the vault from `TVAULT_PASSPHRASE` (there is no prompt over stdio). Alias: `mcp-server`. No command-local flags.
 
 ::: warning MCP output redaction is a safety net, not a control
-Redaction only replaces literal values longer than three characters and can be evaded by transforming a value (e.g. base64). It is a last line of defense, not access control. The MCP server never returns a raw secret value **except** `vault_get_secret`, which warns when it does.
+When policy enables `redact_output`, redaction replaces literal values longer than three characters and can be evaded by shortening or transforming a value (e.g. base64). It is a last line of defense, not access control. `vault_get_secret` deliberately returns plaintext, and `vault_run_with_secrets` can carry plaintext through arbitrary child output.
 :::
 
 ### Internal commands

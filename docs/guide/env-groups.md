@@ -121,7 +121,7 @@ STRIPE_SECRET     ✓           ✓        ✓       same
 API_TOKEN         ✓           ✗        ✓       drift
 ```
 
-`--values` upgrades the verdict from presence-only to `same` / `different` by decrypting each value, but **values are never printed** — only the verdict. Each decryption with `--values` is audited, just like a `get`.
+`--values` upgrades the verdict from presence-only to `same` / `different` by decrypting each value, but **values are never printed** — only the verdict. This CLI comparison is not recorded as a series of secret reads in the audit log.
 
 ### Exit codes
 

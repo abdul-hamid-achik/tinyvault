@@ -43,7 +43,7 @@ By default the vault lives at `~/.tvault/vault.db` (override with `--vault` or `
 
 The MCP server (`tvault mcp`) speaks JSON-RPC over stdio and **unlocks the vault at startup** — there is no prompt over a pipe.
 
-- **"Connection closed" right away** → the server couldn't unlock. The host must pass `TVAULT_PASSPHRASE` in the server's `env`. The cleanest fix is a small launcher that loads it from one place — see [MCP Overview → Keeping the passphrase out of every config](/mcp/#keeping-the-passphrase-out-of-every-config).
+- **"Connection closed" right away** → the server couldn't unlock. The host must pass `TVAULT_PASSPHRASE` in the server's `env`. Use the host's environment controls or a credential-store launcher — see [MCP Overview → Before you connect](/mcp/#before-you-connect).
 - **After changing the passphrase** the cached key is stale → **restart your MCP/agent sessions** so they reconnect with the new one.
 - **Tools appear but calls are denied** → the [Access Policy](/mcp/access-policy) is gating them (`access_mode`, `allow_exec`, project/secret globs). Check `~/.tvault/mcp-policy.yaml`.
 
@@ -87,17 +87,17 @@ tvault identity export ci --force | gh secret set TVAULT_IDENTITY_KEY
 
 ## FAQ
 
-**Where is my data?** One encrypted file at `~/.tvault/vault.db` (`0600`), in a `0700` directory. Identities, optional config, and the MCP policy live beside it. See [Configuration](/reference/configuration).
+**Where is my data?** One local bbolt database at `~/.tvault/vault.db` (`0600`), in a `0700` directory. Secret payloads and key material are encrypted; names, timestamps, versions, audit entries, and other operational metadata remain readable to someone who can read the file. Identities, optional config, and the MCP policy live beside it. See [Configuration](/reference/configuration).
 
 **I forgot my passphrase — can I recover it?** No. There is no escrow or recovery key by design (local-first). Keep a backup of the passphrase (e.g. in a password manager). You *can* still share/recover *projects* via [identities](/guide/sharing) if you set them up beforehand.
 
-**Can an AI agent read my secret values?** Not unless you let it. Every MCP tool returns metadata or ciphertext except `vault_get_secret`, which returns a value *with a warning*. Prefer `vault_run_with_secrets`. See the [MCP safety model](/mcp/) and [Security](/reference/security).
+**Can an AI agent read my secret values?** Yes, if its policy permits the explicit `vault_get_secret` tool; `vault_set_secret` can also receive a plaintext value from the client. Prefer metadata search plus `vault_run_with_secrets` when the value does not need to enter the conversation, and remember that subprocess output redaction is only a safety net. See the [MCP safety model](/mcp/) and [Security](/reference/security).
 
 **Is it safe to commit `.env.encrypted` / `.tvault-recipients`?** Yes — `.env.encrypted` is ciphertext and `.tvault-recipients` holds only public keys. Never commit `~/.tvault/`, `*.key` identity files, or a plaintext `.env`.
 
 **Does it work on Windows?** The CLI and MCP server: yes (amd64/arm64). The unlock-once agent: no (unix only).
 
-**How do I back up the vault?** `tvault backup <path>` copies the still-encrypted `vault.db`; the passphrase is still required to use it. See [Key Management](/guide/key-management).
+**How do I back up the vault?** `tvault backup <path>` copies `vault.db` without decrypting its records. The matching passphrase restores the complete owner view; a pre-provisioned recipient identity can read only projects shared to it. Operational metadata remains readable, so treat the backup as sensitive. See [Key Management](/guide/key-management).
 
 ## See also
 

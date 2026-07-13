@@ -7,11 +7,11 @@ description: Complete reference for all 49 TinyVault MCP tools, 3 resources, and
 
 This is the full reference for the TinyVault MCP surface: **49 tools, 3 resources, and 2 prompts**, served over stdio by the `tvault mcp` subcommand (the older `mcp-server` name still works as an alias) and built on the [modelcontextprotocol go-sdk](https://github.com/modelcontextprotocol/go-sdk). For setup — wiring `tvault` into Claude Code and other clients — see the [MCP overview](/mcp/). For the policy file that gates these tools, see [Access Policy](/mcp/access-policy).
 
-The single most important fact: **only `vault_get_secret` returns a raw plaintext value.** Every other tool returns metadata, a path, a count, or ciphertext. That is the whole design — agents should *use* secrets without ever pulling them into the model's context.
+The single most important fact: **only `vault_get_secret` deliberately returns a stored secret as a plaintext field.** Most other tools return metadata, a path, a count, or ciphertext. `vault_set_secret` accepts plaintext from the client, and `vault_run_with_secrets` returns arbitrary child-process stdout/stderr, so neither surface is magically value-free.
 
 ## Tool summary
 
-| Tool | Returns value? | Purpose |
+| Tool | Direct stored value? | Purpose |
 | --- | :---: | --- |
 | `vault_list_projects` | No | List projects with descriptions and secret counts. |
 | `vault_create_project` | No | Create a new project. |
@@ -42,7 +42,7 @@ The single most important fact: **only `vault_get_secret` returns a raw plaintex
 | `vault_list_secrets_detailed` | No | List keys with real version + timestamps. |
 | `vault_list_secrets_global` | No | Cross-project secret discovery by metadata. |
 | `vault_share_project` | No | Grant a recipient read access (wraps the DEK). |
-| `vault_unshare_project` | No | Revoke a recipient (rotates the DEK, re-encrypts). |
+| `vault_unshare_project` | No | Remove a recipient from the updated live vault (rotates the DEK, re-encrypts). |
 | `vault_project_recipients` | No | List the recipients a project is shared with. |
 | `vault_diff_env` | No | Drift between a `.env` file and the project. |
 | `vault_sync_env` | No | Reconcile a `.env` with the project (pull/push/mirror). |
@@ -64,7 +64,7 @@ The single most important fact: **only `vault_get_secret` returns a raw plaintex
 | `vault_env_seal` | No | Seal every environment into one recipient-sealed v2 blob. |
 
 ::: tip The recommended agent pattern
-Discover the surface once with `tvault docs features`. Then use the relational tools — `vault_search_secrets` and `vault_list_secrets_by_prefix` — to find keys *without* enumerating values, and use `vault_run_with_secrets` when you actually need to *use* a value. That keeps secrets out of the model context, which is exactly what `vault_get_secret` cannot guarantee.
+Discover the surface once with `tvault docs features`. Then use the relational tools — `vault_search_secrets` and `vault_list_secrets_by_prefix` — to find keys *without* enumerating values, and use `vault_run_with_secrets` when a trusted command can consume a value without first returning it as a direct field. Child stdout/stderr can still leak plaintext, so execution and optional redaction remain separate policy decisions.
 :::
 
 ## How the policy gate works
@@ -76,7 +76,9 @@ Every tool is checked against the [access policy](/mcp/access-policy) at `~/.tva
 - **`CanExec`** — `allow_exec` **and** `access_mode == full`. Both must be true for `vault_run_with_secrets`.
 - **Project / secret globs** — `projects_allow`/`projects_deny` and `secrets_allow`/`secrets_deny` filter what a tool can see or touch. Deny is checked before allow.
 
-If `~/.tvault/mcp-policy.yaml` is absent, the server runs a permissive default (`access_mode: full`, all globs `*`, `allow_exec: true`, `redact_output: true`). The model cannot edit the policy at runtime — it is loaded from disk at server start. The model can call `vault_status` to discover its own access, but it cannot escalate.
+If `~/.tvault/mcp-policy.yaml` is absent, production `tvault mcp` uses `SafeDefaultPolicy`: project/status metadata is available, while all secret keys, writes, and command execution are denied. A policy file is loaded once at startup; there is no MCP policy-edit or reload tool, and editing the file does not change the in-memory policy for that process.
+
+`vault_run_with_secrets` is still arbitrary `sh -c` execution as the server user. If you enable it, a command can modify files the server user can write — including the on-disk policy for a future restart. Treat `allow_exec` as delegation to the launched command, not as a sandbox boundary.
 
 ---
 
@@ -119,7 +121,7 @@ Deletes a project and everything in it.
 Lists the keys in a project — names and metadata only, never values.
 
 - **Inputs:** `project` (optional; falls back to the configured default project).
-- **Returns:** key names plus metadata (version, timestamps) for keys allowed by `secrets_allow`/`secrets_deny`.
+- **Returns:** `{ secrets: [{ key, version }] }` for keys allowed by `secrets_allow`/`secrets_deny`. This legacy listing currently reports `version: 1`; use `vault_list_secrets_detailed` for the stored version and timestamps.
 - **Policy gate:** any `access_mode`; project and per-key secret globs applied.
 
 ### `vault_get_secret`
@@ -143,7 +145,7 @@ Once `vault_get_secret` returns, the plaintext is in the model context — it ca
 Stores or updates a secret, encrypted at rest. Overwriting archives the prior value into version history first.
 
 - **Inputs:** `project` (optional), `key` (required), `value` (required).
-- **Returns:** confirmation metadata (new version number) — not the value.
+- **Returns:** `{ key }` — not the value.
 - **Policy gate:** `CanWrite`; project and secret globs.
 
 ### `vault_delete_secret`
@@ -159,7 +161,7 @@ Removes a key and **purges its version history**.
 Generates a cryptographically random secret and stores it directly — the value is **never returned**.
 
 - **Inputs:** `project` (optional), `key` (required), `length` (optional, default `32`, max `256`), `charset` (optional: `alphanumeric` | `hex` | `base64` | `ascii`).
-- **Returns:** `{ stored: true }`. The generated value stays in the vault.
+- **Returns:** `{ key, length, charset, stored: true }`. The generated value stays in the vault.
 - **Policy gate:** `CanWrite`; project and secret globs.
 
 ::: info Generation is MCP-only
@@ -256,7 +258,9 @@ Cross-project secret discovery: search key metadata across every accessible proj
 
 ### `vault_run_with_secrets`
 
-Runs a command in a subprocess with the requested secrets injected as environment variables. The values are decrypted only inside the child process, so they never enter the model context.
+Runs a command in a subprocess with the requested secrets injected as environment variables. The server decrypts the selected values and places them in the child environment; the tool does not intentionally return those raw values to the model.
+
+The returned stdout and stderr are scanned for literal secret values when `redact_output` is enabled. That redaction can miss transformed values, and the child can still write values to files or the network, so execution policy is the real boundary.
 
 - **Inputs:** `project` (optional), `command` (required), `secrets` (optional list; the keys to inject), `timeout_seconds` (optional, default `300`).
 - **Returns:** `{ exit_code, stdout, stderr }`, with secret values redacted from the output when `redact_output` is on.
@@ -264,7 +268,8 @@ Runs a command in a subprocess with the requested secrets injected as environmen
 
 ```bash
 # What the agent effectively orchestrates: secrets land in the child env,
-# the migration runs, and only the redacted exit/stdout/stderr come back.
+# the migration runs, and captured exit/stdout/stderr come back. Literal
+# redaction applies only when enabled and can miss short or transformed values.
 # vault_run_with_secrets(project="api", command="npm run migrate",
 #                        secrets=["DATABASE_URL"])
 ```
@@ -321,7 +326,7 @@ Imports the `.env` values into the vault without exposing them in the response.
 
 ### `vault_status`
 
-Reports the server's view of the vault — also how an agent discovers its own access without escalating.
+Reports the server's view of the vault. It does not return the loaded policy or summarize the caller's effective project/key access.
 
 - **Inputs:** none.
 - **Returns:** lock state, project count, vault id, and creation time.
@@ -408,14 +413,14 @@ Grants a recipient read access to a project by wrapping that project's DEK to th
 
 ### `vault_unshare_project`
 
-Revokes a recipient. This is **true revocation**: it rotates the project DEK and re-encrypts every value *and* its version history under the fresh key, re-wrapping only to the remaining recipients.
+Removes a recipient from the updated live vault. It rotates the project DEK and re-encrypts every current value *and* archived version under the fresh key, re-wrapping only to the remaining recipients.
 
 - **Inputs:** `recipient` (required, a `tvault1…` public key), `project` (optional).
 - **Returns:** confirmation metadata. No values.
 - **Policy gate:** `CanWrite`; project globs.
 
-::: tip Why a rotation, not just a re-wrap
-A removed recipient may have cached the old DEK, so merely dropping their stanza would be security theater. `vault_unshare_project` re-encrypts everything under a new DEK so an old copy of the vault becomes useless to them.
+::: warning What the rotation does not revoke
+A removed recipient may have cached the old DEK, so merely dropping their stanza would leave the live vault's existing ciphertext readable. `vault_unshare_project` therefore re-encrypts the updated live state under a new DEK. It cannot rewrite a pre-removal vault snapshot or previously exported, sealed, or decrypted data; rotate underlying credentials and re-seal distributed artifacts when needed.
 :::
 
 ### `vault_project_recipients`
@@ -438,7 +443,7 @@ Compares a `.env` file on disk against the project and reports the drift.
 
 - **Inputs:** `file` (required), `project` (optional), `compare_values` (optional).
 - **Returns:** the key sets `only_in_vault`, `only_in_file`, and `in_both`; with `compare_values`, each shared key also gets a `same` / `differs` verdict. **Never the values themselves.**
-- **Policy gate:** any `access_mode` (value comparison audits each read); project and per-key secret globs.
+- **Policy gate:** any `access_mode`; project and per-key secret globs. When value comparison runs, the tool writes one aggregate `secret.read` audit row for the comparison rather than one row per key.
 
 ### `vault_sync_env`
 
@@ -538,7 +543,7 @@ Compares key sets across all environments in a group. Reports missing/extra keys
 
 - **Inputs:** `group` (required), `values` (optional; compare values, default `false`).
 - **Returns:** `{ group, status: "ok"|"drift", keys: [{ key, environments: [{ env, present, status }] }] }`. The `status` mirrors the CLI exit verdict.
-- **Policy gate:** any `access_mode` (value comparison audits each read); project globs.
+- **Policy gate:** any `access_mode`; project globs. This comparison does not add a dedicated audit row.
 
 ### `vault_env_promote`
 

@@ -1,0 +1,107 @@
+:root {
+  --tv-font-sans: "Geist Variable", "Geist", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --tv-font-mono: "SFMono-Regular", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+
+  --tv-accent: #a95f27;
+  --tv-accent-strong: #87471d;
+  --tv-accent-soft: rgba(169, 95, 39, 0.12);
+  --tv-accent-line: rgba(169, 95, 39, 0.34);
+  --tv-ink: #1b1c18;
+  --tv-muted: #66675f;
+  --tv-faint: #6c6d65;
+  --tv-paper: #fbfaf6;
+  --tv-paper-raised: #ffffff;
+  --tv-paper-soft: #f2efe7;
+  --tv-paper-deep: #e9e4d8;
+  --tv-line: rgba(27, 28, 24, 0.13);
+  --tv-line-strong: rgba(27, 28, 24, 0.22);
+  --tv-console: #171814;
+  --tv-console-raised: #1f211b;
+  --tv-console-line: rgba(255, 255, 255, 0.11);
+  --tv-console-text: #e6e5dd;
+  --tv-console-muted: #aaa99f;
+  --tv-success: #6f8a62;
+  --tv-danger: #a94d43;
+
+  --tv-radius-sm: 8px;
+  --tv-radius-md: 14px;
+  --tv-radius-lg: 22px;
+  --tv-shadow-sm: 0 1px 2px rgba(25, 22, 17, 0.04), 0 10px 30px rgba(25, 22, 17, 0.05);
+  --tv-shadow-lg: 0 30px 80px rgba(25, 22, 17, 0.13);
+
+  --vp-font-family-base: var(--tv-font-sans);
+  --vp-font-family-mono: var(--tv-font-mono);
+
+  --vp-c-bg: var(--tv-paper);
+  --vp-c-bg-alt: var(--tv-paper-soft);
+  --vp-c-bg-elv: var(--tv-paper-raised);
+  --vp-c-bg-soft: var(--tv-paper-soft);
+  --vp-c-divider: var(--tv-line);
+  --vp-c-gutter: var(--tv-line);
+  --vp-c-text-1: var(--tv-ink);
+  --vp-c-text-2: var(--tv-muted);
+  --vp-c-text-3: var(--tv-faint);
+
+  --vp-c-brand-1: var(--tv-accent-strong);
+  --vp-c-brand-2: var(--tv-accent);
+  --vp-c-brand-3: #c37a40;
+  --vp-c-brand-soft: var(--tv-accent-soft);
+
+  --vp-button-brand-border: transparent;
+  --vp-button-brand-text: #fffaf2;
+  --vp-button-brand-bg: var(--tv-accent);
+  --vp-button-brand-hover-border: transparent;
+  --vp-button-brand-hover-text: #ffffff;
+  --vp-button-brand-hover-bg: var(--tv-accent-strong);
+  --vp-button-brand-active-border: transparent;
+  --vp-button-brand-active-text: #ffffff;
+  --vp-button-brand-active-bg: var(--tv-accent-strong);
+}
+
+.dark {
+  --tv-accent: #d18e54;
+  --tv-accent-strong: #e1a66f;
+  --tv-accent-soft: rgba(209, 142, 84, 0.13);
+  --tv-accent-line: rgba(209, 142, 84, 0.35);
+  --tv-ink: #eeede6;
+  --tv-muted: #b4b3aa;
+  --tv-faint: #85867e;
+  --tv-paper: #11120f;
+  --tv-paper-raised: #171813;
+  --tv-paper-soft: #1b1c17;
+  --tv-paper-deep: #23241e;
+  --tv-line: rgba(238, 237, 230, 0.11);
+  --tv-line-strong: rgba(238, 237, 230, 0.2);
+  --tv-console: #0d0e0c;
+  --tv-console-raised: #151612;
+  --tv-console-line: rgba(255, 255, 255, 0.1);
+  --tv-console-text: #e9e8e0;
+  --tv-console-muted: #aaa99f;
+  --tv-success: #9ab48b;
+  --tv-danger: #d67b71;
+  --tv-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2), 0 10px 30px rgba(0, 0, 0, 0.18);
+  --tv-shadow-lg: 0 30px 90px rgba(0, 0, 0, 0.34);
+
+  --vp-c-brand-1: var(--tv-accent-strong);
+  --vp-c-brand-2: var(--tv-accent);
+  --vp-c-brand-3: #b8733e;
+  --vp-c-brand-soft: var(--tv-accent-soft);
+
+  --vp-button-brand-text: #18130f;
+  --vp-button-brand-bg: var(--tv-accent);
+  --vp-button-brand-hover-text: #18130f;
+  --vp-button-brand-hover-bg: var(--tv-accent-strong);
+  --vp-button-brand-active-text: #18130f;
+  --vp-button-brand-active-bg: var(--tv-accent-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

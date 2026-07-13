@@ -1,17 +1,17 @@
 ---
 title: Core Concepts
-description: The mental model behind TinyVault — the encrypted vault, lock/unlock and the in-memory KEK, per-project DEK isolation, identities and recipients, the audit log, and the three interfaces.
+description: The mental model behind TinyVault — the local vault database, per-command unlocking, per-project DEK isolation, identities and recipients, the audit log, and the three interfaces.
 ---
 
 # Core Concepts
 
 This page is the mental model for TinyVault. It is a concept map, not a command reference — each idea links to the page that covers it in depth. Read it once and the rest of the docs will click into place.
 
-TinyVault is a single binary, `tvault`, written in Go. The same binary is your CLI, an interactive terminal studio, and (via the `mcp` subcommand) an MCP server for AI agents. It is language-agnostic — secrets are injected as env vars into any process — and all three surfaces sit on one local, encrypted file. There are no servers, no accounts, and no network calls.
+TinyVault is a single binary, `tvault`, written in Go. The same binary is your CLI, an interactive terminal studio, and (via the `mcp` subcommand) an MCP server for AI agents. It is language-agnostic—secrets can be injected as environment variables into any process—and all three surfaces use one local bbolt database. Normal vault operations need no account or hosted backend.
 
 ## The vault
 
-The vault is one encrypted [bbolt](https://github.com/etcd-io/bbolt) file at `~/.tvault/vault.db` (mode `0600`, inside a `0700` directory). Everything lives there: your encrypted secret values, their version history, project metadata, the wrapped per-project keys, the audit log, and the verifier used to check your passphrase.
+The vault is one [bbolt](https://github.com/etcd-io/bbolt) file at `~/.tvault/vault.db` (mode `0600`, inside a `0700` directory). Secret values, version payloads, wrapped project keys, and the passphrase verifier are encrypted. Project names, key names, timestamps, version numbers, configuration, and audit metadata are readable and should not be treated as confidential.
 
 ```bash
 tvault init                 # create the vault and set your passphrase
@@ -25,20 +25,19 @@ The CLI, the [studio TUI](/guide/studio), and the [MCP server](/mcp/) all talk t
 
 ## Lock and unlock
 
-The vault is encrypted at rest and only readable while it is **unlocked**.
+Normal CLI commands unlock per process. You supply the passphrase, TinyVault runs it through Argon2id to derive a **KEK** (key-encryption key), performs the operation, zeros key material, and exits. A verifier confirms the passphrase without decrypting a secret value.
 
-- **Unlock.** You supply your passphrase. TinyVault runs it through Argon2id to derive a **KEK** (key-encryption key) that exists only in RAM for the duration of the operation. A small built-in *verifier* lets unlock confirm the passphrase is correct **without decrypting any secret**.
-- **Lock.** The KEK (and every key derived from it) is zeroed in memory. Locked means locked: nothing in the vault is readable.
+The standalone commands do not create shared state:
 
 ```bash
-tvault unlock               # derive the KEK and confirm the passphrase
-tvault lock                 # zero the KEK in memory
+tvault unlock               # validate the passphrase in this process, then exit
+tvault lock                 # clear key material in this process, then exit
 ```
 
-Read a secret while the vault is locked and the command exits with code `3` (see [Exit codes](#exit-codes)). A wrong passphrase exits with code `6`.
+`tvault unlock` does not cache an unlock for the next command, and `tvault lock` does not stop a running local agent. Use [`tvault agent start`](/guide/agent) on Unix when you intentionally want a KEK held in memory between reads; stop that agent to remove the cached key. In a non-interactive process without the agent or `TVAULT_PASSPHRASE`, an unlock-requiring command exits with code `3`. A wrong passphrase exits with code `6`.
 
 ::: tip The passphrase never unlocks a value directly
-Your passphrase decrypts the KEK. The KEK unwraps a project's DEK. The DEK decrypts the value. This two-step indirection is what makes [passphrase rotation](/guide/key-management) cheap — see the key hierarchy below.
+Argon2id derives the KEK from your passphrase. The KEK unwraps a project's DEK. The DEK decrypts the value. This indirection is what makes [passphrase rotation](/guide/key-management) cheap—see the key hierarchy below.
 :::
 
 ## Projects and the current project
@@ -51,7 +50,7 @@ tvault projects use api          # set the current (active) project
 tvault projects list
 ```
 
-Most commands operate on the **current project**. Override it per command with the global `-p`/`--project` flag, or set a default with `TVAULT_PROJECT`. The resolution order is `--project` > the stored current project > `default`.
+Most commands operate on the **current project**. Override it per command with the global `-p`/`--project` flag. The resolution order is `--project` > the stored current project > `default`.
 
 ```bash
 tvault get DATABASE_URL                 # uses the current project
@@ -60,7 +59,7 @@ tvault get DATABASE_URL -p worker       # one-off override
 
 ### Project isolation
 
-Isolation is cryptographic, not just organizational. **Each project has its own DEK** (data-encryption key). A project's values — and its full version history — are encrypted under that project's DEK and nothing else. This is the unit of sharing and of revocation: when you [share](/guide/sharing) or [unshare](/guide/projects) a project, you are operating on one project's DEK.
+Isolation is cryptographic, not just organizational. **Each project has its own DEK** (data-encryption key). A project's values — and its full version history — are encrypted under that project's DEK and nothing else. This is the unit of sharing and live-vault recipient removal: when you [share](/guide/sharing) or [unshare](/guide/projects) a project, you are operating on one project's DEK.
 
 ## The key hierarchy
 
@@ -103,14 +102,14 @@ Sharing rewraps the project's DEK to each recipient's public key, so a recipient
 ::: danger Two security facts to keep straight
 **`tvault identity export` prints a PRIVATE key** (`tvault-key1...`). It is TTY-guarded for that reason. Treat its output like a password and never commit it.
 
-**`tvault projects unshare` is true revocation.** It does not merely drop a name from a list — it rotates the project's DEK and re-encrypts every value *and* the full history under the new DEK, rewrapping only to the remaining recipients. A removed recipient cannot read the project even with an old copy of the vault file.
+**`tvault projects unshare` re-keys the updated live vault.** It does not merely drop a name from a list — it rotates the project's DEK and re-encrypts every current value *and* the full history under the new DEK, rewrapping only to the remaining recipients. A removed identity cannot read that updated state or future writes. A pre-removal vault copy remains readable, as do previously exported, sealed, or decrypted artifacts; rotate underlying credentials when retained data is a concern.
 :::
 
 See [Sharing](/guide/sharing) for the full workflow.
 
 ## The audit log
 
-Every privileged action — unlocking, revealing a value, setting or deleting a secret, sharing, rotating keys — is recorded in an append-only audit log stored inside the vault.
+TinyVault records many explicit secret and project operations in an audit bucket, including MCP reads, writes, deletes, generation, execution, exports, and project mutations. It is an operational trail, not exhaustive process telemetry: unlocking, passphrase rotation, direct passphrase-based `tvault env`, and some value-comparison paths are not recorded.
 
 You read the audit log in two places:
 
@@ -130,7 +129,7 @@ The same vault is reachable three ways. Pick the one that fits the caller.
 The default interface for humans and scripts: `tvault <command>` with the global flags below.
 
 ```bash
-tvault set API_KEY                       # prompts for the value (never echoed)
+tvault set API_KEY --from-env .env       # import without putting the value in argv
 tvault run -- ./server                   # inject secrets as env for one process
 ```
 
@@ -148,47 +147,25 @@ See the [Studio guide](/guide/studio).
 
 ### MCP server
 
-A [Model Context Protocol](/mcp/) server on stdio for AI agents, started by the `mcp` subcommand (your agent host launches it for you). The design goal is that **secret values never enter the model context**: prefer tools like `vault_run_with_secrets` and `vault_export_env` that act on secrets without returning them.
+A [Model Context Protocol](/mcp/) server on stdio for AI agents, started by the `mcp` subcommand (your agent host launches it for you). The recommended workflow minimizes plaintext in model context: prefer tools that generate, export, or pass values to a trusted destination without first returning a dedicated plaintext field. Command stdout/stderr remains an explicit leak path.
 
 ::: danger Two MCP security facts to keep straight
-**The MCP server never returns a raw secret value — except `vault_get_secret`, which warns.** Every other tool is designed to keep values out of the model's context.
+**`vault_get_secret` deliberately returns a stored secret in a plaintext field.** Most other tools are value-minimizing, but `vault_run_with_secrets` returns arbitrary child-process output and can carry raw, short, or transformed values back to the client.
 
-**MCP output redaction is a safety net, not a control.** It only replaces literal value strings longer than three characters, and it is trivially evaded by a model that transforms a value before emitting it (encoding, slicing, reordering). Do not rely on redaction as a security boundary — design your agent flows so the value is never needed in the first place.
+**MCP output redaction is optional and is a safety net, not a control.** When policy enables it, it replaces literal value strings longer than three characters; short or transformed values (encoding, slicing, reordering) bypass it. Do not rely on redaction as a security boundary — design your agent flows so the value is not returned whenever possible.
 :::
 
 See the [MCP overview](/mcp/), the [tool reference](/mcp/tools), and the [access policy](/mcp/access-policy).
 
-## Global flags
+## CLI conventions
 
-These six persistent flags work on **every** command:
-
-| Flag | Effect |
-| --- | --- |
-| `--config <file>` | Use an alternate config file (default `~/.tvault/config.yaml`) |
-| `--vault <dir>` | Use an alternate vault directory |
-| `-p`, `--project <name>` | Operate on a specific project for this command |
-| `--json` | Emit machine-readable JSON |
-| `-v`, `--verbose` | Verbose output |
-| `--no-agent` | Bypass the [local agent](/guide/agent); unlock directly |
-
-`-h`/`--help` is available everywhere. `--version` is root-only — run `tvault --version`; there is no `version` subcommand.
-
-## Exit codes
-
-Scripts and CI can branch on the exit code:
-
-| Code | Meaning |
-| --- | --- |
-| `0` | Success |
-| `1` | Generic error |
-| `3` | Vault is locked |
-| `4` | Secret or project not found |
-| `5` | Vault not initialized |
-| `6` | Wrong passphrase |
+Global flags, aliases, machine-readable output, and exit codes live in the
+[CLI reference](/cli/). Keeping them there avoids duplicating volatile command
+details in this conceptual guide.
 
 ## See also
 
 - [Architecture](/reference/architecture) — the crypto design and key hierarchy in depth
 - [Security](/reference/security) — threat model and the honest limits of each control
 - [Working with secrets](/guide/secrets) — set, get, list, and reveal values
-- [Projects](/guide/projects) — create, switch, share, and revoke projects
+- [Projects](/guide/projects) — create, switch, share, and remove recipients from live projects

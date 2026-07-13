@@ -34,7 +34,7 @@ func (s *VaultMCPServer) registerGenerateTools() {
 	sdkmcp.AddTool(s.server, &sdkmcp.Tool{
 		Name: "vault_generate_secret",
 		Description: "Generate a cryptographically secure random secret and store it in the vault. " +
-			"The generated value is NOT returned to the AI -- only confirmation that it was stored.",
+			"The generated value is NOT returned to the AI -- only the key, requested generation metadata, and storage confirmation.",
 	}, s.handleGenerateSecret)
 }
 

@@ -1,11 +1,11 @@
 ---
 title: Sharing Secrets
-description: Share a TinyVault project with a teammate, CI runner, or AI agent using X25519 recipients — no shared passphrase, with true cryptographic revocation.
+description: Share a TinyVault project with a teammate, CI runner, or AI agent using X25519 recipients — no shared passphrase, with atomic live-vault re-keying when a recipient is removed.
 ---
 
 # Sharing Secrets
 
-Give someone access to a project without ever sharing your passphrase. Each recipient holds their own keypair; you wrap the project's key to their public half, and they read with their private half. Revoking is real revocation — TinyVault rotates the key and re-encrypts every value.
+Give someone access to a project without ever sharing your passphrase. Each recipient holds their own keypair; you wrap the project's key to their public half, and they read with their private half. Removing a recipient rotates the live project's key and re-encrypts every current value and archived version.
 
 This is the asymmetric layer on top of the [passphrase hierarchy](/guide/key-management). Your passphrase still protects your own vault on disk; recipients never touch it.
 
@@ -16,7 +16,7 @@ A TinyVault identity is an X25519 keypair, independent of any passphrase:
 - A **public recipient** string, `tvault1…` — shareable and safe to commit.
 - A **private key** string, `tvault-key1…` — secret, stored `0600`, never commit it.
 
-When you share a project, TinyVault wraps that project's data-encryption key (DEK) to the recipient's public half. The recipient unwraps it with their private key and reads the project — no passphrase, no unlock prompt. Revoking with `unshare` rotates the DEK and re-encrypts the whole project, so an old copy of the vault is useless to the removed recipient.
+When you share a project, TinyVault wraps that project's data-encryption key (DEK) to the recipient's public half. The recipient unwraps it with their private key and reads the project — no passphrase, no unlock prompt. Removing them with `unshare` rotates the DEK and re-encrypts the updated live project, so their old key cannot open that new state. A vault copy made before removal remains readable.
 
 ::: info Two ways to share
 This page covers sharing a **live project** inside a vault (a teammate or CI runner reads it directly). To put ciphertext *in a git repo* — `.env.encrypted` files or a transparent git filter — see [Committable Secrets](/guide/committable-secrets) and [Git Filter](/guide/git-filter). Both use the same `tvault1…` recipients.
@@ -36,7 +36,7 @@ Created identity 'alice'
   key file:  ~/.tvault/identities/alice.key  (0600)
 ```
 
-The name is optional and defaults to `default`. The private key stays in `~/.tvault/identities/<name>.key` and never leaves their machine. They send you only the `tvault1…` recipient string — over Slack, email, or a commit; it is not sensitive.
+The name is optional and defaults to `default`. By default, the private key stays in `~/.tvault/identities/<name>.key`; it leaves that machine only if its owner deliberately exports or copies it. They send you only the `tvault1…` recipient string — over Slack, email, or a commit; it is not sensitive.
 
 List local identities at any time:
 
@@ -87,7 +87,7 @@ eval "$(tvault env --identity alice -p webapp)"
 If you don't want to pass `--identity` on every call, set `TVAULT_IDENTITY_KEY` instead (next section). The recipient path also backs `tvault open` (sealed files) and the git smudge filter, so a CI runner with one identity reads everything it is entitled to.
 :::
 
-## Step 4 — revoke access (true revocation)
+## Step 4 — remove access from the live vault
 
 When someone should lose access, `unshare` them. This is not a metadata flip:
 
@@ -96,13 +96,13 @@ tvault projects unshare tvault1exampleRecipient -p webapp
 ```
 
 ```
-Revoked tvault1exampleRecipient from project 'webapp' (key rotated, secrets re-encrypted)
+Removed tvault1exampleRecipient from project 'webapp' (live vault re-keyed, secrets re-encrypted)
 ```
 
-Under the hood `unshare` **rotates the project DEK**: it generates a fresh key, re-encrypts every current value *and the full version history*, and re-wraps the new key to the **remaining** recipients only. The removed recipient cannot decrypt anything afterward — not even from an old, copied vault file.
+Under the hood `unshare` **rotates the project DEK**: it generates a fresh key, re-encrypts every current value *and the full version history* in the live vault, and re-wraps the new key to the **remaining** recipients only. The removed identity cannot decrypt that updated state or future writes under the new DEK.
 
-::: warning Revocation is the whole point
-TinyVault deliberately does **not** "revoke" by just dropping a wrapped key — that would be security theater, since anyone with a stale vault copy keeps the old DEK. Because `unshare` rewrites the data, it is heavier than sharing, and it touches history too. That is intentional: it is what makes removal real. See [Versioning & Rollback](/guide/versioning) for how history is re-encrypted in the same atomic step.
+::: warning Removal cannot rewrite retained copies
+A pre-removal vault snapshot still contains the old ciphertext and the removed recipient's DEK wrap, so it remains readable. The same is true of previously exported, sealed, or decrypted data. Because `unshare` rewrites only the live vault, rotate the underlying credentials and re-seal or redeploy distributed artifacts when retained data is a concern. See [Versioning & Rollback](/guide/versioning) for how the live history is re-encrypted in the same atomic step.
 :::
 
 ## Identities for CI, ssh, and agents
@@ -136,7 +136,7 @@ tvault identity export ci --force | gh secret set TVAULT_IDENTITY_KEY
 - **Never commit it.** Only the `tvault1…` (public) half is commit-safe.
 - Store it in a real secret manager (GitHub Actions secrets, GitLab CI variables, your OS keychain) — not in a dotfile, not in shell history.
 - The `--force` flag exists so you can pipe into a secret store; it is **not** permission to drop the key into a log or an artifact.
-- Use a **distinct identity per context** (one for CI, one per teammate). Then revoking one runner with `tvault projects unshare` does not affect anyone else.
+- Use a **distinct identity per context** (one for CI, one per teammate). Then removing one runner from the live vault with `tvault projects unshare` does not affect the remaining recipients. Rotate underlying credentials if the removed runner may have retained a snapshot or plaintext.
 :::
 
 For a ready-made workflow file that wires an identity into your pipeline, run `tvault ci init --provider github-actions --mode identity` (or `--provider gitlab`) and see [CI/CD](/guide/ci-cd).
@@ -162,10 +162,10 @@ For the exact wire format, the AAD, and the full key hierarchy, see [Architectur
 | `tvault identity export [name]` | recipient | Print the **private** `tvault-key1…` key (TTY-guarded; `--force` off a tty). |
 | `tvault projects share <recipient>` | owner | Wrap the project DEK to a `tvault1…` recipient. `-p` to choose a project. |
 | `tvault projects recipients` | owner | List a project's recipients (metadata, no unlock). `-p` to choose a project. |
-| `tvault projects unshare <recipient>` | owner | Revoke: **rotate the DEK and re-encrypt every value + history**. |
+| `tvault projects unshare <recipient>` | owner | Remove from the updated live vault: **rotate the DEK and re-encrypt every value + history**. |
 | `tvault env --identity <name>` | recipient | Read a shared project with an identity — no passphrase. |
 
-Global flags such as `-p/--project`, `--json`, `--vault`, `--config`, `-v/--verbose`, and `--no-agent` work on these commands as they do everywhere; see the [CLI reference](/cli/).
+Global flags such as `-p/--project`, `--json`, `--vault`, `--config`, `-v/--verbose`, and `--no-agent` are accepted on these commands; see the [CLI reference](/cli/) for their current behavior.
 
 ## See also
 

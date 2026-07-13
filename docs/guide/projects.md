@@ -11,7 +11,7 @@ A project is a named namespace for secrets. Every project has its own data encry
 
 Each project's secrets are encrypted under a per-project DEK. Those DEKs are wrapped by your vault key (KEK) and never stored in the clear. Because the keys are separate, exposing or rotating one project does not affect another.
 
-This isolation is what makes [sharing](/guide/sharing) and revocation precise: you grant or revoke access at the project level, and revocation rotates only that project's DEK. See [Concepts](/guide/concepts) for how the KEK, DEKs, and wrapping fit together.
+This isolation makes [sharing](/guide/sharing) and live-vault recipient removal project-scoped: removing a recipient rotates only that project's DEK. Pre-removal snapshots remain readable. See [Concepts](/guide/concepts) for how the KEK, DEKs, and wrapping fit together.
 
 A fresh vault already has one project named `default`, created by `tvault init`.
 
@@ -118,7 +118,7 @@ tvault projects delete staging -y
 
 ## Sharing a project
 
-Projects are the unit of sharing. You grant a recipient (an X25519 public key, a `tvault1…` string) access to a project, list who has access, and revoke it:
+Projects are the unit of sharing. You grant a recipient (an X25519 public key, a `tvault1…` string) access to a project, list who has access, and remove it from the updated live vault:
 
 ```bash
 tvault projects share tvault1exampleRecipient -p prod
@@ -126,8 +126,8 @@ tvault projects recipients -p prod        # metadata only, no unlock
 tvault projects unshare tvault1exampleRecipient -p prod
 ```
 
-::: warning Unshare is true revocation
-`projects unshare` does not merely drop a wrapped key. It rotates the project's DEK and re-encrypts every value, and every version of its history, under the new key. Re-wrapping alone would be security theater — a revoked recipient who kept the old DEK could still read old ciphertext. Rotation costs a full re-encrypt but actually removes access.
+::: warning Unshare re-keys the updated live vault
+`projects unshare` does not merely drop a wrapped key. It rotates the project's DEK and re-encrypts every current value and archived version in the updated vault. The removed identity cannot decrypt that new state or future writes under the new DEK. A pre-removal vault snapshot remains readable with the old key material, so rotate underlying credentials if the recipient may have retained data.
 :::
 
 The recipient model and identities are covered in depth on the [Sharing](/guide/sharing) page; for committing encrypted values to a repo, see [Committable secrets](/guide/committable-secrets).
@@ -151,5 +151,5 @@ A missing project — for example, `use` on a name that does not exist — retur
 
 - [Concepts](/guide/concepts) — KEK, per-project DEKs, and key wrapping.
 - [Secrets](/guide/secrets) — set, get, list, and delete within a project.
-- [Sharing](/guide/sharing) — grant and revoke project access with recipients and identities.
+- [Sharing](/guide/sharing) — grant access, remove recipients from the live vault, and handle retained data.
 - [CLI reference](/cli/) — every command and flag.

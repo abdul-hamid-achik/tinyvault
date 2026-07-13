@@ -5,7 +5,7 @@ description: Practical end-to-end recipes for AI agents using the TinyVault MCP 
 
 # MCP Recipes
 
-Concrete, copy-the-shape workflows for an agent connected to the TinyVault [MCP server](/mcp/). Every recipe keeps secret **values** out of the model context — the whole point of the surface. Tool details live in the [Tools Reference](/mcp/tools); what's allowed is set by the [Access Policy](/mcp/access-policy).
+Concrete, copy-the-shape workflows for an agent connected to the TinyVault [MCP server](/mcp/). These recipes minimize raw values in tool results; they are patterns, not a sandbox. Tool details live in the [Tools Reference](/mcp/tools); what's allowed is set by the [Access Policy](/mcp/access-policy).
 
 ::: tip Orient first
 At the start of a session, call `vault_status` and `vault_get_current_project` to learn the lock state and the default project, and `tvault docs features` (CLI) for the machine-readable catalog. Then work relationally — never enumerate values.
@@ -13,18 +13,22 @@ At the start of a session, call `vault_status` and `vault_get_current_project` t
 
 ## Use a secret without reading it
 
-The single most important pattern: **find the key, then use it in a subprocess** — the value never enters the conversation.
+The single most important pattern: **find the key, then use it in a subprocess**. The tool does not intentionally return the value to the conversation.
 
 1. Find the key — `vault_search_secrets` (by prefix / name pattern / time) or `vault_list_secrets_by_prefix`. Both return metadata only.
-2. Run the command — `vault_run_with_secrets` with `command` and (optionally) `secrets: ["DATABASE_URL", …]`. The values are injected as env vars into the subprocess; stdout/stderr come back **redacted**.
+2. Run the command — `vault_run_with_secrets` with `command` and (optionally) `secrets: ["DATABASE_URL", …]`. The values are injected as env vars into the subprocess. Its stdout/stderr are returned; when policy enables `redact_output`, TinyVault first scans them for literal values longer than three characters.
 
 ```text
 vault_search_secrets   { "prefix": "DATABASE_" }      → ["DATABASE_URL", …] (names only)
 vault_run_with_secrets { "command": "npm run migrate", "secrets": ["DATABASE_URL"] }
-                       → { exit_code, stdout, stderr }  (values redacted)
+                       → { exit_code, stdout, stderr }  (command output; optional literal redaction)
 ```
 
 If you genuinely must see a value, `vault_get_secret` is the one tool that returns it — and it includes a warning that the value is now in context. Prefer the pattern above.
+
+::: warning Redaction is not containment
+The child process can transform a value, write it to a file, or send it over the network. When enabled, literal-value redaction reduces accidental stdout/stderr leaks; it cannot make an untrusted command safe.
+:::
 
 ## Write secrets to disk for a tool that needs a file
 
@@ -41,7 +45,7 @@ No passphrase changes hands — sharing is by X25519 recipient.
 1. The **recipient** creates an identity and gives you their public string: `vault_identity_new { "name": "ci" }` → `{ recipient: "tvault1…" }` (the private key stays on their machine and is never returned).
 2. **You** grant access: `vault_share_project { "recipient": "tvault1…", "project": "webapp" }`.
 3. Audit who has access anytime: `vault_project_recipients { "project": "webapp" }`.
-4. Revoke later: `vault_unshare_project { "recipient": "tvault1…" }` — this **rotates the project key and re-encrypts every value + version**, so an old copy of the vault is useless to the removed recipient.
+4. Remove future live-vault access: `vault_unshare_project { "recipient": "tvault1…" }` — this **rotates the project key and re-encrypts every current value + archived version** in the updated vault. Pre-removal snapshots and already distributed artifacts remain readable, so rotate underlying credentials and re-seal them when needed.
 
 ## Ship commit-safe secrets
 
@@ -70,7 +74,8 @@ vault_sync_env { "direction": "push", "path": ".env", "overwrite": true }   # fi
 
 ```text
 vault_generate_secret { "key": "SESSION_SECRET", "length": 48, "charset": "base64" }
-   → { stored: true }   # the generated value is stored, not returned
+   → { key: "SESSION_SECRET", length: 48, charset: "base64", stored: true }
+     # generation metadata is returned; the generated value is not
 ```
 
 ## See what changed
