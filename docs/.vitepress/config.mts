@@ -5,9 +5,14 @@ import { defineConfig } from 'vitepress'
 const SITE_URL = 'https://www.tinyvault.dev'
 const SITE_TITLE = 'TinyVault'
 const SITE_TAGLINE = 'Local-first secrets for developers & AI agents'
+// SEO: keyword-targeted description. Covers the high-intent terms a developer
+// or AI engineer searches for ("secrets manager", "MCP server", "local secrets",
+// "secrets CLI", ".env", "AI agent secrets") while staying a natural sentence.
 const SITE_DESC =
-  'TinyVault is a single-binary, local-first secrets manager (tvault) and MCP server. ' +
-  'AES-256-GCM + Argon2id, .env tooling, X25519 sharing, versioned secrets — no servers, no accounts, no cloud.'
+  'TinyVault is a local-first secrets manager and MCP server for developers and AI agents. ' +
+  'A single Go binary (tvault) stores secrets encrypted with AES-256-GCM + Argon2id, ' +
+  'ships a full .env toolkit, X25519 sharing, versioned secrets, and a 49-tool MCP server — ' +
+  'no servers, no accounts, no cloud.'
 
 const GH = 'https://github.com/abdul-hamid-achik/tinyvault'
 
@@ -42,10 +47,63 @@ export default defineConfig({
     ['meta', { property: 'og:description', content: SITE_DESC }],
     ['meta', { property: 'og:url', content: SITE_URL }],
     ['meta', { property: 'og:image', content: `${SITE_URL}/og.png` }],
+    ['meta', { property: 'og:locale', content: 'en_US' }],
+    ['meta', { property: 'og:image:width', content: '1200' }],
+    ['meta', { property: 'og:image:height', content: '630' }],
+    ['meta', { property: 'og:image:alt', content: 'TinyVault — local-first secrets for developers and AI agents' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
     ['meta', { name: 'twitter:title', content: `${SITE_TITLE} — ${SITE_TAGLINE}` }],
     ['meta', { name: 'twitter:description', content: SITE_DESC }],
     ['meta', { name: 'twitter:image', content: `${SITE_URL}/og.png` }],
+    ['meta', { name: 'twitter:image:alt', content: 'TinyVault — local-first secrets for developers and AI agents' }],
+    // Structured data: helps Google classify this as a developer tool and
+    // powers rich results (software application, organization, website).
+    ['script', { type: 'application/ld+json' }, JSON.stringify({
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'SoftwareApplication',
+          name: 'TinyVault',
+          applicationCategory: 'DeveloperApplication',
+          operatingSystem: 'Linux, macOS, Windows (amd64, arm64)',
+          url: SITE_URL,
+          downloadUrl: `${GH}/releases`,
+          softwareVersion: '0.17.0',
+          datePublished: '2026-05-01',
+          dateModified: '2026-07-11',
+          description: SITE_DESC,
+          offers: {
+            '@type': 'Offer',
+            price: '0',
+            priceCurrency: 'USD',
+            availability: 'https://schema.org/InStock',
+          },
+          featureList: [
+            'AES-256-GCM encryption with two-tier key hierarchy',
+            'Argon2id passphrase key derivation',
+            '49-tool MCP server for AI agents (value-free by default)',
+            'Full .env toolkit: parser, sync, drift diff, encrypted .env',
+            'X25519 recipient sharing with revocation',
+            'Transparent git filters for commit-safe secrets',
+            'Versioned secrets with rollback',
+            'Interactive terminal studio (TUI)',
+          ],
+        },
+        {
+          '@type': 'Organization',
+          name: 'TinyVault',
+          url: SITE_URL,
+          logo: `${SITE_URL}/logo.svg`,
+        },
+        {
+          '@type': 'WebSite',
+          name: 'TinyVault',
+          url: SITE_URL,
+          inLanguage: 'en-US',
+          publisher: { '@type': 'Organization', name: 'TinyVault' },
+        },
+      ],
+    })],
   ],
 
   // Per-page <link rel="canonical"> — head config alone can't be page-aware.

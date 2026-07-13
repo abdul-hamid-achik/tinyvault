@@ -1,0 +1,9 @@
+# TinyVault — https://www.tinyvault.dev
+# Local-first secrets CLI + MCP server
+
+User-agent: *
+Allow: /
+
+# No user-generated content to gate; the whole site is docs.
+# Sitemaps are clean-URL (no trailing slash, no .html).
+Sitemap: https://www.tinyvault.dev/sitemap.xml
