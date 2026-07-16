@@ -60,6 +60,9 @@ func runMCPServer(cmd *cobra.Command, _ []string) error {
 		policy = tvmcp.SafeDefaultPolicy()
 	}
 
+	// Report the real build version (goreleaser ldflags) in the MCP handshake
+	// instead of the package default.
+	tvmcp.SetBuildVersion(Version())
 	srv := tvmcp.NewReopeningVaultMCPServer(getVaultDir(), kek, policy)
 	defer srv.Close()
 	return srv.Run(cmd.Context())

@@ -374,6 +374,22 @@ Add to `.claude/settings.local.json`:
 | `vault_export_env_encrypted` | Write a commit-safe `.env.encrypted` (v2) sealed to the project's current recipients (ciphertext only) |
 | `vault_identity_new` | Create an X25519 identity; returns the public recipient only (never the private key) |
 | `vault_identity_list` | List local identities and their public recipients |
+| `vault_env_group_create` | Create an environment group linking projects |
+| `vault_env_group_list` | List environment groups and their linked projects |
+| `vault_env_group_show` | Group details: environments, drift status, inheritance |
+| `vault_env_group_add` | Add an environment to an existing group |
+| `vault_env_group_remove` | Remove an environment from a group (project untouched) |
+| `vault_env_group_delete` | Delete a group entirely (projects untouched) |
+| `vault_env_diff` | Drift across environments in a group (key sets; values never printed) |
+| `vault_env_promote` | Copy a value between environments; returns version numbers only |
+| `vault_env_inherit` | Point a child env at a base for read-time key inheritance |
+| `vault_env_inherited` | Show which keys are inherited vs. local (pinned) |
+| `vault_env_pin` | Pin a key: write the resolved value into the child (breaks inheritance) |
+| `vault_env_unpin` | Unpin a key: delete the pinned value, restoring inheritance |
+| `vault_env_seal` | Seal every environment into one recipient-sealed v2 blob |
+
+See [docs/mcp/tools.md](docs/mcp/tools.md) for the canonical full reference
+for every tool (arguments, value exposure, and examples).
 
 The recommended pattern for an agent is to discover the surface once via
 `tvault docs features`, then use the relational tools

@@ -62,16 +62,62 @@ If `tvault` was installed from the retired formula, migrate once with
 
 **Added**
 
+- **Lock-free, value-free enumeration + a deterministic "vault locked" signal** — lets a non-interactive agent enumerate and probe the vault without a passphrase and without ever seeing sensitive free text: `tvault projects list --json --names-only` and `tvault list -p PROJECT --json --names-only` work on a locked vault; `tvault status --json` adds `locked` and `agent_running`; and unlock-requiring commands run non-interactively fail fast with exit code `3` and `{"error":"vault_locked","locked":true}` under `--json` instead of prompting.
+
+**Changed**
+
+- Homebrew distribution migrated from the retired formula to a cask, and raw versionless binaries are published for direct download.
+
+## 0.15.0 — 2026-06-26
+
+**Added**
+
+- **Environment groups in studio** — env-name annotations (`·production`, `·preview`) for grouped projects, `g` cycles between environments in a group, inherited (`←`) and pinned (`◈`) markers with inheritance-aware reveal/copy, `D` opens a key-set drift overlay across environments (no decryption needed), and `G` opens a groups list overlay. All read-only (work without `--rw`) and metadata-only (work when locked). See [Studio](/guide/studio).
+
+## 0.14.0 — 2026-06-25
+
+**Added**
+
 - **Environment groups / profiles** — link projects as named environments (production, preview, staging) of the same application. Pure metadata; each environment keeps its own DEK. See [Environment groups](/guide/env-groups).
   - `tvault env group create/list/show/add/remove/delete` for group membership.
   - `tvault env diff` — key-set (and optional value) drift across environments.
   - `tvault env promote` — copy a value between environments, versioned and audited (`secret.promote`).
   - `tvault env inherit` / `pin` / `unpin` / `inherited` — metadata-only read-time key inheritance from a base, with per-key pinning.
   - `tvault env seal` — pack every environment into one recipient-sealed v2 blob (decrypt in CI with `decrypt-env --section <env>`).
-  - Studio bindings for grouped projects (`g`, `D`, `G`) with inherited (`←`) and pinned (`◈`) markers.
+  - Group/environment resolution (`--group`/`--env`) on the `get`, `run`, and `env` commands.
   - 13 new MCP tools (`vault_env_group_*`, `vault_env_diff`, `vault_env_promote`, `vault_env_inherit`, `vault_env_inherited`, `vault_env_pin`, `vault_env_unpin`, `vault_env_seal`) — all metadata- or ciphertext-only. Tool count: 36 → 49. See [MCP tools reference](/mcp/tools).
-- **`tvault self-update`** (alias `upgrade`) — checksum-verified in-place binary update from the official GitHub releases. `--check` reports availability without installing; `--version vX.Y.Z` pins/downgrades. Replaces the removed `install.sh`. See [CLI reference](/cli/).
+
+## 0.13.1 — 2026-06-25
+
+- **Changed:** documentation housekeeping for the codemap integration — recorded the shipped integration-plan slices and the least-privilege required-keys seal scope; removed the superseded FEATURE.md in favor of SPEC.md.
+
+## 0.13.0 — 2026-06-24
+
+**Added**
+
 - **Codemap integration** — a documented, metadata-first MCP surface for codemap (a local code-graph indexer): rotation blast radius, private-registry LSP creds, env-var audit, credential freshness, and least-privilege seal scope. Most results are metadata, paths, or ciphertext; the private-registry recipe deliberately injects selected credentials into the launched indexer process. See [Codemap integration](/guide/codemap).
+
+**Fixed**
+
+- Portable run-with-secrets shell tests (POSIX `printenv` per key, fixing macOS flakiness).
+
+## 0.12.0 — 2026-06-21
+
+**Added**
+
+- **`tvault self-update`** (alias `upgrade`) — checksum-verified in-place binary update from the official GitHub releases. `--check` reports availability without installing; `--version vX.Y.Z` pins/downgrades. Replaces the removed `install.sh`. See [CLI reference](/cli/).
+- `tvault run --only` / `--prefix` — least-privilege secret injection: expose only the named or prefixed keys to the child process.
+- `pulumi-config` env export format plus a Pulumi/IaC guide.
+- Server install script and a DigitalOcean/SSH server-secrets guide.
+
+**Fixed**
+
+- `tvault mcp` now coexists with the CLI: the server reopens the vault per request instead of holding bbolt's exclusive lock for its lifetime, so `tvault set/get/run/import` keep working while the MCP server runs.
+
+## 0.11.1 — 2026-06-20
+
+- **Added:** documentation site pages — "For AI Agents" (with `llms.txt`), Troubleshooting & FAQ, this Changelog page, and [MCP Recipes](/mcp/recipes); plus the repo's CHANGELOG.md through v0.11.0.
+- **Fixed:** agent-facing manifest drift and the homepage tool count.
 
 ## 0.11.0 — 2026-06-20
 

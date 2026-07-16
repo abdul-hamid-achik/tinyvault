@@ -58,6 +58,20 @@ func (s *VaultMCPServer) consumeValueRead() bool {
 	}
 }
 
+// handshakeVersion is the version reported in the MCP initialize handshake.
+// It defaults to "dev" (the same default as the CLI's build metadata) and is
+// overridden at startup via SetBuildVersion with the goreleaser-injected
+// build version.
+var handshakeVersion = "dev"
+
+// SetBuildVersion sets the version reported in the MCP handshake. Empty
+// values are ignored so callers without build metadata keep the default.
+func SetBuildVersion(v string) {
+	if v != "" {
+		handshakeVersion = v
+	}
+}
+
 // NewVaultMCPServer creates a held-open MCP server backed by the given unlocked
 // vault and policy. The vault stays open for the server's lifetime.
 func NewVaultMCPServer(v *vault.Vault, policy *AccessPolicy) *VaultMCPServer {
@@ -95,7 +109,7 @@ func newVaultMCPServer(policy *AccessPolicy) *VaultMCPServer {
 	s.server = sdkmcp.NewServer(
 		&sdkmcp.Implementation{
 			Name:    "tinyvault",
-			Version: "0.17.2",
+			Version: handshakeVersion,
 		},
 		&sdkmcp.ServerOptions{
 			Instructions: "TinyVault provides secure local secret management. " +

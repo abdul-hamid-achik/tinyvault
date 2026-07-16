@@ -1141,6 +1141,57 @@ func TestMCPServerIntegration(t *testing.T) {
 	})
 }
 
+// TestHandshakeVersion verifies the version reported in the MCP initialize
+// handshake: "dev" by default, overridable via SetBuildVersion, and empty
+// values are ignored.
+func TestHandshakeVersion(t *testing.T) {
+	original := handshakeVersion
+	t.Cleanup(func() { handshakeVersion = original })
+
+	// handshakeServerVersion builds a fresh server over a temp vault and
+	// returns the ServerInfo version the client sees after initialize.
+	handshakeServerVersion := func(t *testing.T) string {
+		t.Helper()
+		dir := t.TempDir()
+		v, err := vault.Create(dir, "test-passphrase")
+		if err != nil {
+			t.Fatalf("create vault: %v", err)
+		}
+		defer v.Close()
+
+		srv := NewVaultMCPServer(v, DefaultPolicy())
+		ctx := context.Background()
+		t1, t2 := sdkmcp.NewInMemoryTransports()
+		if _, err := srv.server.Connect(ctx, t1, nil); err != nil {
+			t.Fatalf("server connect: %v", err)
+		}
+		client := sdkmcp.NewClient(&sdkmcp.Implementation{Name: "test-client", Version: "v0.0.1"}, nil)
+		cs, err := client.Connect(ctx, t2, nil)
+		if err != nil {
+			t.Fatalf("client connect: %v", err)
+		}
+		defer cs.Close()
+		return cs.InitializeResult().ServerInfo.Version
+	}
+
+	if handshakeVersion != "dev" {
+		t.Fatalf("default handshakeVersion = %q, want %q", handshakeVersion, "dev")
+	}
+	if got := handshakeServerVersion(t); got != "dev" {
+		t.Errorf("default handshake version = %q, want %q", got, "dev")
+	}
+
+	SetBuildVersion("9.9.9")
+	if got := handshakeServerVersion(t); got != "9.9.9" {
+		t.Errorf("handshake version after SetBuildVersion = %q, want %q", got, "9.9.9")
+	}
+
+	SetBuildVersion("")
+	if handshakeVersion != "9.9.9" {
+		t.Errorf("SetBuildVersion(\"\") changed version to %q, want no-op", handshakeVersion)
+	}
+}
+
 // uniqueSuffix returns a short, test-unique suffix based on the
 // current nanosecond timestamp. Used by the relational-query tests
 // to avoid name collisions with other subtests in the same
