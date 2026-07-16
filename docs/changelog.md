@@ -22,6 +22,17 @@ If `tvault` was installed from the retired formula, migrate once with
 
 ## Unreleased
 
+## 0.18.0 — 2026-07-16
+
+- The MCP initialize handshake now reports the real build version instead of a
+  hand-edited literal that had shipped stale in at least two prior releases.
+- README's MCP tools table covers all 49 tools, anchored to the canonical
+  [tools reference](/mcp/tools).
+- CI and release workflows pin GitHub Actions to verified commit SHAs (the
+  release workflow produces the checksums `tvault self-update` trusts).
+- Changelog sections backfilled for v0.11.1 through v0.15.0, with retro-bundled
+  0.16.0 bullets moved to the releases that actually shipped them.
+
 ## 0.17.2 — 2026-07-13
 
 **Fixed**
