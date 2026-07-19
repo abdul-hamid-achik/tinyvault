@@ -17,4 +17,8 @@ func TestStubFailsClosed(t *testing.T) {
 	if _, err := Dial("/x", time.Second); err != ErrUnsupportedPlatform {
 		t.Errorf("Dial = %v, want ErrUnsupportedPlatform", err)
 	}
+	c := &Client{}
+	if _, err := c.StatusForProject("default"); err != ErrUnsupportedPlatform {
+		t.Errorf("StatusForProject = %v, want ErrUnsupportedPlatform", err)
+	}
 }

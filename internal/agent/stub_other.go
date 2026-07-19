@@ -30,4 +30,7 @@ func (c *Client) GetAll(_ string) (map[string]string, string, error) {
 	return nil, "", ErrUnsupportedPlatform
 }
 func (c *Client) Status() (*StatusInfo, error) { return nil, ErrUnsupportedPlatform }
-func (c *Client) Stop() error                  { return ErrUnsupportedPlatform }
+func (c *Client) StatusForProject(_ string) (*StatusInfo, error) {
+	return nil, ErrUnsupportedPlatform
+}
+func (c *Client) Stop() error { return ErrUnsupportedPlatform }

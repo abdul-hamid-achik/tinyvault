@@ -72,8 +72,13 @@ jobs:
         run: govulncheck ./...
 
   build:
-    name: Build
+    name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
 
@@ -84,4 +89,8 @@ jobs:
           cache: true
 
       - name: Build binary
-        run: CGO_ENABLED=0 go build -o tvault ./cmd/tvault
+        run: go build ./cmd/tvault
+        env:
+          CGO_ENABLED: 0
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}

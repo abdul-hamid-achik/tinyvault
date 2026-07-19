@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.18.2] - 2026-07-19
+
+### Fixed
+
+- Restored Windows release builds by implementing the project-scoped agent
+  status probe in the non-Unix fail-closed client stub.
+
+### Maintenance
+
+- CI now compiles every Linux, macOS, and Windows architecture shipped by
+  GoReleaser, preventing platform-specific interface drift from reaching a
+  release tag.
+
 ## [0.18.1] - 2026-07-19
 
 ### Added

@@ -22,6 +22,14 @@ If `tvault` was installed from the retired formula, migrate once with
 
 ## Unreleased
 
+## 0.18.2 — 2026-07-19
+
+- Windows builds work again: the non-Unix agent client now includes the
+  project-scoped status probe and continues to fail closed with
+  `ErrUnsupportedPlatform`.
+- CI compiles all six Linux, macOS, and Windows targets that GoReleaser ships,
+  so platform-only API drift is caught before tagging.
+
 ## 0.18.1 — 2026-07-19
 
 - `tvault status --json` adds `agent_accessible`, separating “the local socket
