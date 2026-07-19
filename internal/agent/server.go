@@ -84,6 +84,13 @@ func (a *agentState) dispatch(req Request, uid uint32, pid int, scope tokenScope
 		return Response{V: ProtocolVersion, OK: true}
 
 	case OpStatus:
+		// A status request may name the project whose prompt-free read
+		// availability the client is checking. Validate a scoped token here,
+		// without opening the vault or reading a secret. Empty preserves the
+		// historical metadata-only status behavior.
+		if req.Project != "" && !scope.allows(req.Project) {
+			return errResp(errScope(req.Project).Error())
+		}
 		return Response{V: ProtocolVersion, OK: true, Status: &StatusInfo{
 			PID:                  os.Getpid(),
 			Socket:               socketPath(a.opts.Dir),

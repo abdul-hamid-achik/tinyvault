@@ -54,6 +54,24 @@ func agentReachable() bool {
 	return true
 }
 
+// agentAccessible reports whether this process can use the agent to read
+// project. This differs from agentReachable for a --require-token agent: the
+// socket can be live while this process has no valid token, or only a token
+// scoped to a different project. Status must use this value when reporting
+// whether the vault is effectively unlocked, or it would promise prompt-free
+// reads that will immediately be denied.
+func agentAccessible(project string) bool {
+	c, err := agent.Dial(getVaultDir(), time.Second)
+	if err != nil {
+		return false
+	}
+	if tok := strings.TrimSpace(os.Getenv("TVAULT_AGENT_TOKEN")); tok != "" {
+		c = c.WithToken(tok)
+	}
+	_, err = c.StatusForProject(project)
+	return err == nil
+}
+
 // agentGetSecret tries to fetch one secret via the agent. The second return
 // is false when the caller should fall back to a direct unlock (no agent, or
 // the agent could not serve it).

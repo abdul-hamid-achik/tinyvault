@@ -104,7 +104,14 @@ func (c *Client) GetAll(project string) (map[string]string, string, error) {
 
 // Status queries the running agent.
 func (c *Client) Status() (*StatusInfo, error) {
-	resp, err := c.roundTrip(Request{Op: OpStatus})
+	return c.StatusForProject("")
+}
+
+// StatusForProject queries the running agent and verifies that this client is
+// authorized to read project when the agent requires scoped tokens. It returns
+// metadata only and never opens the vault or reads a secret.
+func (c *Client) StatusForProject(project string) (*StatusInfo, error) {
+	resp, err := c.roundTrip(Request{Op: OpStatus, Project: project})
 	if err != nil {
 		return nil, err
 	}

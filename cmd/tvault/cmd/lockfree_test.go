@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/abdul-hamid-achik/tinyvault/internal/agent"
 	ivault "github.com/abdul-hamid-achik/tinyvault/internal/vault"
 )
 
@@ -53,11 +56,20 @@ func withNonInteractiveStdin(t *testing.T) {
 	})
 }
 
-// setupLockedVault creates a vault in t.TempDir, sets vaultDir, and ensures
-// TVAULT_PASSPHRASE is empty so the vault is locked at rest for the caller.
+// setupLockedVault creates a vault in a short private temp dir, sets vaultDir,
+// and ensures TVAULT_PASSPHRASE is empty so the vault is locked at rest for
+// the caller. The short path keeps unix-domain socket tests below macOS's
+// conservative sun_path limit.
 func setupLockedVault(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
+	dir, err := os.MkdirTemp("", "tvl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	v, err := ivault.Create(dir, "test-passphrase")
 	if err != nil {
 		t.Fatalf("create vault: %v", err)
@@ -225,9 +237,105 @@ func TestRunStatusJSONLockAgentFields(t *testing.T) {
 	if doc["agent_running"] != false {
 		t.Errorf("agent_running = %v, want false", doc["agent_running"])
 	}
+	if doc["agent_accessible"] != false {
+		t.Errorf("agent_accessible = %v, want false", doc["agent_accessible"])
+	}
 	if _, ok := doc["project_count"]; !ok {
 		t.Errorf("project_count missing from %s", out)
 	}
+}
+
+func TestRunStatusDistinguishesTokenProtectedAgentAccess(t *testing.T) {
+	dir := setupLockedVault(t)
+	const (
+		adminToken   = "test-admin-token"
+		defaultToken = "test-default-token"
+		stagingToken = "test-staging-token"
+	)
+	tokenFile := filepath.Join(t.TempDir(), "agent-tokens")
+	if err := os.WriteFile(tokenFile, []byte(adminToken+"\n"+defaultToken+":default\n"+stagingToken+":staging\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	v, err := ivault.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := v.Unlock("test-passphrase"); err != nil {
+		_ = v.Close()
+		t.Fatal(err)
+	}
+	if _, err := v.CreateProject("staging", ""); err != nil {
+		_ = v.Close()
+		t.Fatal(err)
+	}
+	if err := v.SetCurrentProject("staging"); err != nil {
+		_ = v.Close()
+		t.Fatal(err)
+	}
+	kek, err := v.KEK()
+	_ = v.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ready := make(chan struct{})
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- agent.Start(agent.Options{
+			Dir: dir, KEK: kek, Idle: 0, RequireToken: true, TokenFile: tokenFile,
+			OnReady: func(string, int) { close(ready) },
+		})
+	}()
+	select {
+	case <-ready:
+	case startErr := <-errCh:
+		t.Fatalf("start token agent: %v", startErr)
+	case <-time.After(3 * time.Second):
+		t.Fatal("token agent did not become ready")
+	}
+	t.Cleanup(func() {
+		if c, dialErr := agent.Dial(dir, time.Second); dialErr == nil {
+			_ = c.WithToken(adminToken).Stop()
+		}
+		<-errCh
+	})
+
+	status := func() map[string]any {
+		t.Helper()
+		jsonOutput = true
+		out := captureStdout(t, func() {
+			if statusErr := runStatus(nil, nil); statusErr != nil {
+				t.Fatalf("runStatus: %v", statusErr)
+			}
+		})
+		var doc map[string]any
+		if err := json.Unmarshal(out, &doc); err != nil {
+			t.Fatalf("unmarshal status: %v\\n%s", err, out)
+		}
+		return doc
+	}
+
+	assertStatus := func(name, token, project string, accessible, locked bool) {
+		t.Helper()
+		t.Setenv("TVAULT_AGENT_TOKEN", token)
+		projectName = project
+		doc := status()
+		if doc["agent_running"] != true || doc["agent_accessible"] != accessible || doc["locked"] != locked {
+			t.Fatalf("%s status = %v, want running=true accessible=%t locked=%t", name, doc, accessible, locked)
+		}
+	}
+
+	// No token and an invalid token cannot use the current staging project.
+	assertStatus("token-less current", "", "", false, true)
+	assertStatus("invalid current", "not-a-token", "", false, true)
+	// The staging-scoped token works for the stored current project, but not
+	// for the default project selected explicitly.
+	assertStatus("staging-scoped current", stagingToken, "", true, false)
+	assertStatus("staging-scoped default", stagingToken, "default", false, true)
+	// The default-scoped token has the inverse behavior and proves the explicit
+	// default fallback is checked without reading a secret.
+	assertStatus("default-scoped current", defaultToken, "", false, true)
+	assertStatus("default-scoped default", defaultToken, "default", true, false)
 }
 
 func TestNonInteractiveLockedSignalJSON(t *testing.T) {

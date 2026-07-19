@@ -22,6 +22,16 @@ If `tvault` was installed from the retired formula, migrate once with
 
 ## Unreleased
 
+## 0.18.1 — 2026-07-19
+
+- `tvault status --json` adds `agent_accessible`, separating “the local socket
+  exists” from “this process can use it for the selected project with its
+  current token.”
+- `locked` now stays true when a token-required agent is running but the token
+  is absent, invalid, or scoped to another project. The check remains
+  lock-free and never reads a secret.
+- The release workflow is pinned to GoReleaser v2.17.0.
+
 ## 0.18.0 — 2026-07-16
 
 - The MCP initialize handshake now reports the real build version instead of a

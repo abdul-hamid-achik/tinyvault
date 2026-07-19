@@ -85,6 +85,8 @@ tvault get --project api STRIPE_KEY
 
 When an agent is started with `--require-token`, clients must present a capability token. `TVAULT_AGENT_TOKEN` carries that token to the agent.
 
+`tvault status --json` reports this distinction without reading a secret: `agent_running` means the socket exists, while `agent_accessible` means the current process can use it for the selected project (explicit `--project`, then the stored current project, then `default`) with the token it has. The command reports `locked: true` when the agent is running but this process lacks a valid token for that project, because a value read would still need another unlock path.
+
 The agent first verifies that the connecting process has the **same uid** as the agent. Only after that check succeeds does it parse the request and validate `TVAULT_AGENT_TOKEN`. A token therefore cannot grant access to a different uid; it is an additional, optionally project-scoped bearer gate among same-uid clients.
 
 ::: warning Tokens do not replace the same-uid boundary

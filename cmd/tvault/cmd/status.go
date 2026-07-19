@@ -18,8 +18,9 @@ project, and number of projects.
 
 Status is lock-free: it opens the vault without unlocking, so it is safe to
 run any time and never prompts for a passphrase. Under --json it reports
-locked and agent_running so a non-interactive caller (e.g. Cortex) can
-distinguish "vault reachable but locked" from "tvault broken/unreachable".`,
+locked, agent_running, and agent_accessible for the selected project so a non-interactive caller
+can distinguish "vault reachable but locked", "agent present but unavailable",
+and "tvault broken/unreachable".`,
 	RunE: runStatus,
 }
 
@@ -46,27 +47,39 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	defer v.Close()
 
 	st := v.Status()
-	// agentReachable observes the system (ignores --no-agent); a running
-	// agent means value reads can be served without a passphrase prompt,
-	// so the vault is effectively usable even though this handle is locked.
-	agentRunning := agentReachable()
-	// locked is "would a value read require a passphrase right now?": true
-	// when this handle is not unlocked AND no agent is holding it unlocked.
-	locked := !st.IsUnlocked && !agentRunning
-
 	currentProject, _ := v.GetCurrentProject() //nolint:errcheck // empty string is fine as default
 	projects, _ := v.ListProjects()            //nolint:errcheck // nil slice is fine as default
+	// Match regular read routing: an explicit project wins, then the stored
+	// current project, then the default project. The authorization probe below
+	// is metadata-only and keeps status lock-free.
+	effectiveProject := projectName
+	if effectiveProject == "" {
+		effectiveProject = currentProject
+	}
+	if effectiveProject == "" {
+		effectiveProject = "default"
+	}
+	// agentReachable observes the system (ignores --no-agent). A live socket
+	// does not necessarily mean this process can read through it: a
+	// --require-token agent rejects clients without a valid token. Keep those
+	// states separate so `locked` remains an honest answer for this process.
+	agentRunning := agentReachable()
+	canUseAgent := agentAccessible(effectiveProject)
+	// locked is "would a value read require a passphrase right now?": true
+	// when this handle is not unlocked AND no agent can serve this process.
+	locked := !st.IsUnlocked && !canUseAgent
 
 	if jsonOutput {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(map[string]any{
-			"initialized":     true,
-			"locked":          locked,
-			"agent_running":   agentRunning,
-			"vault_dir":       dir,
-			"current_project": currentProject,
-			"project_count":   len(projects),
+			"initialized":      true,
+			"locked":           locked,
+			"agent_running":    agentRunning,
+			"agent_accessible": canUseAgent,
+			"vault_dir":        dir,
+			"current_project":  currentProject,
+			"project_count":    len(projects),
 		})
 	}
 
@@ -80,6 +93,9 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	agentState := "not running"
 	if agentRunning {
 		agentState = "running"
+		if !canUseAgent {
+			agentState += " (access unavailable)"
+		}
 	}
 	PrintKeyValue("Agent", agentState)
 	PrintKeyValue("Current project", currentProject)

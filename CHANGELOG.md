@@ -6,7 +6,40 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-07-19
+
+### Added
+
+- `tvault status --json` now reports `agent_accessible` separately from
+  `agent_running`, using the effective project (`--project`, current project,
+  then `default`) and the caller's current capability token.
+
+### Fixed
+
+- A reachable token-protected agent no longer makes status report
+  `locked: false` when the caller has no token, an invalid token, or a token
+  scoped to a different project. The authorization probe is lock-free,
+  metadata-only, and never reads a secret.
+
+### Maintenance
+
+- Pinned the release workflow to GoReleaser v2.17.0 for reproducible tags.
+
 ## [0.18.0] - 2026-07-16
+
+### Fixed
+
+- The MCP initialize handshake reports the actual build version instead of a
+  hand-maintained literal.
+
+### Documentation
+
+- Completed the MCP tools index, aligned README links with the canonical
+  reference, and backfilled release notes for v0.11.1 through v0.15.0.
+
+### Maintenance
+
+- Pinned CI and release actions to verified commit SHAs.
 
 ## [0.17.2] - 2026-07-13
 
@@ -238,7 +271,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 See the [GitHub releases](https://github.com/abdul-hamid-achik/tinyvault/releases)
 for v0.8.0 and earlier.
 
-[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.17.2...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.18.1...HEAD
+[0.18.1]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.18.0...v0.18.1
+[0.18.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.17.2...v0.18.0
 [0.17.2]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.17.1...v0.17.2
 [0.17.1]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.16.0...v0.17.0
