@@ -157,6 +157,15 @@ func TestTokenScopeEnforced(t *testing.T) {
 	if _, _, gerr := c3.WithToken("stgtok").GetAll("default"); gerr == nil {
 		t.Error("out-of-scope getall must be denied")
 	}
+	// Selected reads must preserve the same project scope as get/getall.
+	cSelected, _ := Dial(dir, time.Second)
+	if _, _, _, gerr := cSelected.WithToken("stgtok").GetSelected("default", []string{"DB_URL"}, ""); gerr == nil {
+		t.Error("out-of-scope getselected must be denied")
+	}
+	cInScope, _ := Dial(dir, time.Second)
+	if selected, missing, _, gerr := cInScope.WithToken("stgtok").GetSelected("staging", []string{"STG"}, ""); gerr != nil || len(missing) != 0 || selected["STG"] != "s" {
+		t.Errorf("in-scope getselected failed (missing=%d, err=%v)", len(missing), gerr)
+	}
 	// A scoped token must not be able to stop the agent (operator-only control).
 	c4, _ := Dial(dir, time.Second)
 	if serr := c4.WithToken("stgtok").Stop(); serr == nil {

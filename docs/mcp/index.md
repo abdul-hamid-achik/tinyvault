@@ -65,14 +65,21 @@ A narrowly scoped read-only policy might be:
 access_mode: read-only
 projects_allow:
   - myapp
+projects_deny: []
 secrets_allow:
   - DATABASE_URL
+secrets_deny: []
 allow_exec: false
 redact_output: true
 max_reads_per_session: 1
 ```
 
 `read-only` prevents mutations; it does not mean value-free. This example still permits one `vault_get_secret` response for `DATABASE_URL` during the session.
+
+Explicit policy files are complete documents: omitting a security field,
+using an unknown field, or providing an invalid glob makes startup fail.
+Empty allowlists deny access, and `max_reads_per_session: 0` denies direct
+plaintext reads.
 
 To enable `vault_run_with_secrets`, set both:
 

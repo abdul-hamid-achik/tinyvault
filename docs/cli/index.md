@@ -277,7 +277,9 @@ tvault run -- node server.js
 tvault run -e .env.local -- ./start.sh
 tvault run --no-vault -- env
 tvault run --only DATABASE_URL,API_TOKEN -- pulumi up
+tvault run --strict --only DATABASE_URL,API_TOKEN -- pulumi up
 tvault run --group liftclub --env preview -- ./deploy.sh
+tvault run --identity deploy --strict --only DIGITALOCEAN_TOKEN -- pulumi up
 ```
 
 Run a command with the project's secrets injected into its environment. Use `--` to separate `tvault` flags from the child command. Forwards `SIGINT`/`SIGTERM` to the child and propagates its exit code.
@@ -288,6 +290,8 @@ Run a command with the project's secrets injected into its environment. Use `--`
 | `--no-vault` | Do not inject vault secrets (use only `--env-file` / inherited env). |
 | `--only <k1,k2>` | Inject only these secret keys (comma-separated allowlist). |
 | `--prefix <p>` | Inject only secret keys with this prefix. |
+| `--strict` | Fail before starting the child when an explicit `--only` key is missing. |
+| `--identity <name>` | Read shared project values with an X25519 identity instead of the vault passphrase. It also works with `--group`/`--env` when the identity has access to every participating project; cannot combine with `--no-vault`. |
 | `--group <name>` | Resolve secrets through an [environment group](/guide/env-groups)'s inheritance chain. |
 | `--env <name>` | Environment within the group (requires `--group`). |
 
@@ -296,6 +300,8 @@ Run a command with the project's secrets injected into its environment. Use `--`
 ```bash
 eval "$(tvault env)"
 tvault env -f dotenv > .env
+tvault env --only DATABASE_URL,MIGRATIONS_DATABASE_URL -f dotenv
+tvault env --prefix CHALUPA_ -f dotenv
 tvault env -p shared --identity laptop
 ```
 
@@ -308,6 +314,8 @@ Print the project's secrets as environment assignments. The default format is `s
 | `--name <str>` | Secret name (for `k8s-secret`). |
 | `--namespace <str>` | Namespace (for `k8s-secret`). |
 | `--identity <name>` | Read a **shared** project with an X25519 identity — no passphrase needed. |
+| `--only <k1,k2>` | Emit only these keys; missing explicit keys fail closed. |
+| `--prefix <p>` | Emit only keys with this prefix; combines with `--only` as a union. |
 
 ### `env group`
 

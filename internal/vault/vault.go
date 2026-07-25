@@ -21,6 +21,37 @@ const (
 	verifyText = "tinyvault-verify-v1"
 )
 
+// secureVaultPaths normalizes the owner-only permissions TinyVault promises
+// before an existing vault is opened. It also rejects non-regular database
+// paths so a symlink or device cannot be substituted for vault.db.
+func secureVaultPaths(dir, dbPath string, requireDB bool) error {
+	dirInfo, err := os.Lstat(dir)
+	if err != nil {
+		return fmt.Errorf("inspect vault directory: %w", err)
+	}
+	if !dirInfo.IsDir() {
+		return fmt.Errorf("vault path %q is not a directory", dir)
+	}
+	if chmodErr := os.Chmod(dir, 0o700); chmodErr != nil { //nolint:gosec // directories require owner execute permission
+		return fmt.Errorf("secure vault directory: %w", chmodErr)
+	}
+
+	dbInfo, err := os.Lstat(dbPath)
+	if err != nil {
+		if os.IsNotExist(err) && !requireDB {
+			return nil
+		}
+		return fmt.Errorf("inspect vault database: %w", err)
+	}
+	if !dbInfo.Mode().IsRegular() {
+		return fmt.Errorf("vault database %q is not a regular file", dbPath)
+	}
+	if err := os.Chmod(dbPath, 0o600); err != nil {
+		return fmt.Errorf("secure vault database: %w", err)
+	}
+	return nil
+}
+
 // Vault orchestrates crypto and store operations.
 type Vault struct {
 	store store.Store
@@ -35,6 +66,10 @@ type Vault struct {
 func Create(dir, passphrase string) (*Vault, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("create vault directory: %w", err)
+	}
+	dbPath := filepath.Join(dir, dbFilename)
+	if err := secureVaultPaths(dir, dbPath, false); err != nil {
+		return nil, err
 	}
 
 	salt, err := crypto.GenerateSalt()
@@ -53,7 +88,6 @@ func Create(dir, passphrase string) (*Vault, error) {
 		return nil, fmt.Errorf("create verifier: %w", err)
 	}
 
-	dbPath := filepath.Join(dir, dbFilename)
 	s, err := store.NewBoltStore(dbPath)
 	if err != nil {
 		crypto.ZeroBytes(kek)
@@ -102,6 +136,9 @@ func Open(dir string) (*Vault, error) {
 	dbPath := filepath.Join(dir, dbFilename)
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		return nil, ErrNotInitialized
+	}
+	if err := secureVaultPaths(dir, dbPath, true); err != nil {
+		return nil, err
 	}
 
 	s, err := store.NewBoltStore(dbPath)

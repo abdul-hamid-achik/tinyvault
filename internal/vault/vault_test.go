@@ -2,7 +2,9 @@ package vault
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -109,6 +111,64 @@ func TestOpen_NonExistentDir(t *testing.T) {
 	}
 }
 
+func TestOpen_NormalizesExistingVaultPermissions(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "vault")
+	v, err := Create(dir, testPassphrase)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := v.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	dbPath := filepath.Join(dir, dbFilename)
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatalf("chmod vault directory: %v", err)
+	}
+	if err := os.Chmod(dbPath, 0o644); err != nil {
+		t.Fatalf("chmod vault database: %v", err)
+	}
+
+	reopened, err := Open(dir)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer reopened.Close()
+
+	dirInfo, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("stat vault directory: %v", err)
+	}
+	if got := dirInfo.Mode().Perm(); got != 0o700 {
+		t.Errorf("vault directory mode = %#o, want 0700", got)
+	}
+	dbInfo, err := os.Stat(dbPath)
+	if err != nil {
+		t.Fatalf("stat vault database: %v", err)
+	}
+	if got := dbInfo.Mode().Perm(); got != 0o600 {
+		t.Errorf("vault database mode = %#o, want 0600", got)
+	}
+}
+
+func TestOpen_RejectsSymlinkedVaultDatabase(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "vault")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatalf("mkdir vault directory: %v", err)
+	}
+	target := filepath.Join(t.TempDir(), dbFilename)
+	if err := os.WriteFile(target, []byte("not a vault"), 0o600); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+	if err := os.Symlink(target, filepath.Join(dir, dbFilename)); err != nil {
+		t.Fatalf("symlink vault database: %v", err)
+	}
+
+	if _, err := Open(dir); err == nil || !strings.Contains(err.Error(), "not a regular file") {
+		t.Fatalf("Open() error = %v, want non-regular-file rejection", err)
+	}
+}
+
 func TestUnlock_CorrectPassphrase(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "vault")
 	v, err := Create(dir, testPassphrase)
@@ -173,6 +233,43 @@ func TestLock_ClearsKey(t *testing.T) {
 	_, err := v.CreateProject("test", "")
 	if !errors.Is(err, ErrLocked) {
 		t.Fatalf("expected ErrLocked, got %v", err)
+	}
+}
+
+func TestGetSelectedSecretsUsesOnlyAndPrefixUnion(t *testing.T) {
+	v := createTestVault(t)
+	for key, value := range map[string]string{
+		"CHALUPA_DATABASE_URL": "postgres://db",
+		"CHALUPA_INGEST_KEY":   "ingest",
+		"DIGITALOCEAN_TOKEN":   "token",
+	} {
+		if err := v.SetSecret("default", key, value); err != nil {
+			t.Fatalf("SetSecret(%s): %v", key, err)
+		}
+	}
+
+	selected, missing, err := v.GetSelectedSecrets(
+		"default",
+		[]string{"DIGITALOCEAN_TOKEN", "MISSING"},
+		"CHALUPA_",
+	)
+	if err != nil {
+		t.Fatalf("GetSelectedSecrets: %v", err)
+	}
+	if len(missing) != 1 || missing[0] != "MISSING" {
+		t.Fatalf("missing = %v, want [MISSING]", missing)
+	}
+	if len(selected) != 3 {
+		t.Fatalf("selected count = %d, want 3", len(selected))
+	}
+	for key, want := range map[string]string{
+		"CHALUPA_DATABASE_URL": "postgres://db",
+		"CHALUPA_INGEST_KEY":   "ingest",
+		"DIGITALOCEAN_TOKEN":   "token",
+	} {
+		if got := selected[key]; got != want {
+			t.Errorf("%s = %q, want %q", key, got, want)
+		}
 	}
 }
 

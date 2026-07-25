@@ -17,7 +17,7 @@ There is no generic environment-variable mapping for command flags. Use only the
 | `TVAULT_DIR` | every command | Vault directory override. Default `~/.tvault`. |
 | `TVAULT_NO_AGENT` | `get`, `env`, `run` | If set, bypass a running agent and unlock directly (same as `--no-agent`). |
 | `TVAULT_AGENT_TOKEN` | agent-routed `get`, `env`, `run` | Bearer token sent to a `--require-token` agent after the mandatory same-uid check. |
-| `TVAULT_IDENTITY_KEY` | `open`, `decrypt-env`, identity-mode `env`, `k8s render`, git filters | A **private** identity string (`tvault-key1...`) for passphrase-free decryption when the selected key file is absent. |
+| `TVAULT_IDENTITY_KEY` | `open`, `decrypt-env`, identity-mode `env` and `run`, `k8s render`, git filters | A **private** identity string (`tvault-key1...`) for passphrase-free decryption when the selected key file is absent. |
 | `TVAULT_IDENTITY` | `open`, git filters | Default identity **name** (not the key). |
 | `TVAULT_NO_ANIM` | `studio` | Disable studio animations. |
 
@@ -99,7 +99,7 @@ TinyVault's [sharing layer](/guide/sharing) uses X25519 keypairs called *identit
 
 ### `TVAULT_IDENTITY_KEY`
 
-A **private** identity string (`tvault-key1...`) used to decrypt recipient-encrypted material when there is no key file on disk — the canonical case being CI, ssh sessions, and agents. It is read by `open`, `decrypt-env`, `env --identity`, and the git clean/smudge filters.
+A **private** identity string (`tvault-key1...`) used to decrypt recipient-encrypted material when there is no key file on disk — the canonical case being CI, ssh sessions, and agents. It is read by `open`, `decrypt-env`, `env --identity`, `run --identity`, and the git clean/smudge filters.
 
 ```bash
 # CI: decrypt a committed .env.encrypted with no key file present

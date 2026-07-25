@@ -22,6 +22,26 @@ If `tvault` was installed from the retired formula, migrate once with
 
 ## Unreleased
 
+## 0.19.0 — 2026-07-24
+
+- Recipient identities can now resolve `env --group/--env` and
+  `run --group/--env`. The identity must be shared to every participating
+  project; selector reads still decrypt only the requested values, `--strict`
+  still fails before a child starts, and `TVAULT_*` controls remain stripped
+  from child environments.
+- Added `tvault run --identity <name>` for recipient-backed, passphrase-free
+  command injection. `run --only` / `--prefix` now decrypt only selected values
+  across direct, inherited-group, recipient-identity, and local-agent reads;
+  `--strict` remains fail-closed for missing exact keys.
+- The local agent now has a validated `getselected` read operation, and child
+  processes receive no `TVAULT_*` controls before selected values are injected.
+- MCP policy loading and environment inheritance now fail closed: explicit
+  policies must be complete, empty allowlists and zero read caps deny access,
+  inherited base projects are checked, and plaintext export requires write
+  permission.
+- Existing vault permissions are normalized on open, non-regular database
+  paths are rejected, and `golang.org/x/text` is updated to `v0.39.0`.
+
 ## 0.18.2 — 2026-07-19
 
 - Windows builds work again: the non-Unix agent client now includes the

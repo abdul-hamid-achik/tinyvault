@@ -413,13 +413,13 @@ func fullCatalog() docsCatalog {
 			{
 				Slug:        "run",
 				Title:       "tvault run",
-				Description: "Runs a command with project secrets injected as environment variables. Optionally merges a .env file with the vault, vault winning on conflict. Values containing ${tvault://...} references in the .env file are resolved against the vault at run time. Use --only KEY1,KEY2 or --prefix PREFIX to inject only a subset (least privilege); a key matching either selector is injected, and explicit ${tvault://...} references still resolve against the full project.",
-				Example:     "  tvault run --env-file .env -- npm start\n  tvault run --only DIGITALOCEAN_TOKEN,NUXT_DATABASE_URL -- pulumi up\n  tvault run --prefix NUXT_ -- bun run dev\n  tvault run --no-vault -- npm test    # use only .env values",
+				Description: "Runs a command with project secrets injected as environment variables. Optionally merges a .env file with the vault, vault winning on conflict. ${tvault://PROJECT/KEY} references resolve the named project; unqualified references use the active project. Use --only KEY1,KEY2 or --prefix PREFIX to decrypt and inject only a subset (least privilege), and --strict in CI to fail before execution when an explicit key is missing. --identity reads a shared project without the owner passphrase and can resolve a group when that identity is shared to every participating project; it cannot combine with --no-vault.",
+				Example:     "  tvault run --env-file .env -- npm start\n  tvault run --strict --only DIGITALOCEAN_TOKEN,NUXT_DATABASE_URL -- pulumi up\n  tvault run --identity deploy --group app --env preview --strict --only DIGITALOCEAN_TOKEN -- pulumi up\n  tvault run --prefix NUXT_ -- bun run dev\n  tvault run --no-vault -- npm test    # use only .env values",
 			},
 			{
 				Slug:        "mcp",
 				Title:       "MCP server",
-				Description: "Starts a Model Context Protocol server on stdio. Add to your MCP host config with command=tvault args=[mcp] env={TVAULT_PASSPHRASE:...}. The server exposes 49 tools, 2 prompts, and 3 resources. Prefer value-minimizing workflows such as vault_run_with_secrets and vault_export_env over the deliberately plaintext-returning vault_get_secret; vault_set_secret likewise accepts plaintext from the client. vault_secret_history and vault_rollback_secret manage version history without returning a value.",
+				Description: "Starts a Model Context Protocol server on stdio. Add to your MCP host config with command=tvault args=[mcp] env={TVAULT_PASSPHRASE:...}. Explicit access policies must contain every security field; empty allowlists and a zero read cap deny access. Prefer value-minimizing workflows such as vault_run_with_secrets and the write-gated vault_export_env over the deliberately plaintext-returning vault_get_secret. Environment inheritance checks both child and base project policy.",
 			},
 			{
 				Slug:        "self-update",

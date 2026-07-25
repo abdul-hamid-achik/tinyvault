@@ -4,6 +4,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/abdul-hamid-achik/tinyvault/internal/crypto"
+	ivault "github.com/abdul-hamid-achik/tinyvault/internal/vault"
 )
 
 func TestRunOnlyPrefixConflictWithNoVault(t *testing.T) {
@@ -47,36 +50,65 @@ func TestRunGroupConflictWithNoVault(t *testing.T) {
 	}
 }
 
-func TestEnvRejectsIdentityWithGroupBeforeReading(t *testing.T) {
-	oldGroup, oldEnv, oldIdentity := envGroupFlag, envEnvFlag, envIdentity
+func TestEnvIdentityGroupSelectedReadFromEnvironmentKey(t *testing.T) {
+	oldGroup, oldEnv, oldIdentity, oldOnly, oldPrefix := envGroupFlag, envEnvFlag, envIdentity, envOnly, envPrefix
 	t.Cleanup(func() {
-		envGroupFlag, envEnvFlag, envIdentity = oldGroup, oldEnv, oldIdentity
-	})
-	envGroupFlag, envEnvFlag = "webapp", "preview"
-
-	t.Run("identity flag", func(t *testing.T) {
-		envIdentity = "ci"
-		t.Setenv(envIdentityKey, "")
-		secrets, err := envSecrets()
-		if err == nil || !strings.Contains(err.Error(), "cannot be combined with --identity") {
-			t.Fatalf("unexpected validation result: %v", err)
-		}
-		if secrets != nil {
-			t.Fatal("conflicting identity and group flags returned secrets")
-		}
+		envGroupFlag, envEnvFlag, envIdentity, envOnly, envPrefix = oldGroup, oldEnv, oldIdentity, oldOnly, oldPrefix
 	})
 
-	t.Run("identity environment", func(t *testing.T) {
-		envIdentity = ""
-		t.Setenv(envIdentityKey, "synthetic-identity")
-		secrets, err := envSecrets()
-		if err == nil || !strings.Contains(err.Error(), envIdentityKey) {
-			t.Fatalf("unexpected validation result: %v", err)
+	vaultPath, restore := setupVaultForCommandTest(t)
+	defer restore()
+	v := openTestVault(t, vaultPath)
+	if _, err := v.CreateProject("base", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := v.CreateProject("preview", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.SetSecret("base", "DATABASE_URL", "inherited-identity"); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.SetSecret("base", "UNRELATED_SECRET", "must-not-decrypt"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := v.CreateEnvGroup("webapp", "", []ivault.EnvGroupEntry{
+		{Name: "base", Project: "base"},
+		{Name: "preview", Project: "preview"},
+	}, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := v.SetInheritance("webapp", "preview", "base"); err != nil {
+		t.Fatal(err)
+	}
+	id, err := crypto.GenerateIdentity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, project := range []string{"base", "preview"} {
+		if err := v.ShareProject(project, id.Recipient()); err != nil {
+			t.Fatal(err)
 		}
-		if secrets != nil {
-			t.Fatal("conflicting identity environment and group flags returned secrets")
-		}
-	})
+	}
+	if err := v.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	envGroupFlag, envEnvFlag, envIdentity, envOnly = "webapp", "preview", "", []string{"DATABASE_URL"}
+	t.Setenv(envIdentityKey, crypto.EncodeIdentity(id))
+	t.Setenv("TVAULT_PASSPHRASE", "")
+	secrets, missing, err := envSecretsSelected(envOnly, envPrefix)
+	if err != nil {
+		t.Fatalf("identity group selection: %v", err)
+	}
+	if len(missing) != 0 {
+		t.Fatalf("unexpected missing keys: %v", missing)
+	}
+	if got := secrets["DATABASE_URL"]; got != "inherited-identity" {
+		t.Fatalf("DATABASE_URL = %q", got)
+	}
+	if len(secrets) != 1 {
+		t.Fatalf("identity group selection returned %d secrets, want 1", len(secrets))
+	}
 }
 
 func TestSelectSecrets(t *testing.T) {

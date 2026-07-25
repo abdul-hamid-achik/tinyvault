@@ -1,6 +1,8 @@
 package mcp
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -58,9 +60,51 @@ func LoadPolicy(path string) (*AccessPolicy, error) {
 		return nil, err
 	}
 
+	var fields map[string]any
+	if err := yaml.Unmarshal(data, &fields); err != nil {
+		return nil, fmt.Errorf("decode MCP policy: %w", err)
+	}
+	required := []string{
+		"access_mode",
+		"projects_allow",
+		"projects_deny",
+		"secrets_allow",
+		"secrets_deny",
+		"allow_exec",
+		"max_reads_per_session",
+		"redact_output",
+	}
+	for _, field := range required {
+		if _, ok := fields[field]; !ok {
+			return nil, fmt.Errorf("MCP policy is incomplete: required field %q is missing", field)
+		}
+	}
+
 	var policy AccessPolicy
-	if err := yaml.Unmarshal(data, &policy); err != nil {
-		return nil, err
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&policy); err != nil {
+		return nil, fmt.Errorf("decode MCP policy: %w", err)
+	}
+	switch policy.AccessMode {
+	case "read-only", "read-write", "full":
+	default:
+		return nil, fmt.Errorf("invalid MCP policy access_mode %q (use read-only, read-write, or full)", policy.AccessMode)
+	}
+	if policy.MaxReadsPerSession < 0 {
+		return nil, fmt.Errorf("invalid MCP policy max_reads_per_session %d (use 0 to deny plaintext reads or a positive cap)", policy.MaxReadsPerSession)
+	}
+	for field, patterns := range map[string][]string{
+		"projects_allow": policy.ProjectsAllow,
+		"projects_deny":  policy.ProjectsDeny,
+		"secrets_allow":  policy.SecretsAllow,
+		"secrets_deny":   policy.SecretsDeny,
+	} {
+		for _, pattern := range patterns {
+			if _, err := filepath.Match(pattern, "policy-validation"); err != nil {
+				return nil, fmt.Errorf("invalid glob in MCP policy %s: %q: %w", field, pattern, err)
+			}
+		}
 	}
 	return &policy, nil
 }
@@ -71,7 +115,7 @@ func (p *AccessPolicy) CanAccessProject(name string) bool {
 		return false
 	}
 	if len(p.ProjectsAllow) == 0 {
-		return true
+		return false
 	}
 	return matchesAny(name, p.ProjectsAllow)
 }
@@ -82,7 +126,7 @@ func (p *AccessPolicy) CanAccessSecret(key string) bool {
 		return false
 	}
 	if len(p.SecretsAllow) == 0 {
-		return true
+		return false
 	}
 	return matchesAny(key, p.SecretsAllow)
 }

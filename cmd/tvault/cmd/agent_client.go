@@ -100,3 +100,19 @@ func agentAllSecrets(project string) (secrets map[string]string, resolved string
 	}
 	return m, p, true
 }
+
+// agentSelectedSecrets fetches only the requested values through a new enough
+// local agent. An older agent returns an unknown-operation error and callers
+// safely fall back to a direct, selected vault read instead of requesting all
+// plaintext values.
+func agentSelectedSecrets(project string, only []string, prefix string) (secrets map[string]string, missing []string, resolved string, ok bool) {
+	c, dok := dialAgent()
+	if !dok {
+		return nil, nil, "", false
+	}
+	m, absent, p, err := c.GetSelected(project, only, prefix)
+	if err != nil {
+		return nil, nil, "", false
+	}
+	return m, absent, p, true
+}

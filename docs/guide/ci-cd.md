@@ -7,6 +7,12 @@ description: Run tvault non-interactively in CI/CD with a passphrase or, better,
 
 You can run `tvault` in any pipeline without an interactive prompt. There are two ways to do it: give CI the vault **passphrase**, or give CI a per-context **identity** that decrypts committed and recipient-sealed secrets with no passphrase at all. Identity mode is the better default — your master passphrase never leaves your machine.
 
+TinyVault belongs on the trusted operator workstation or ephemeral CI runner.
+Use it to inject a narrowly selected credential set into a deployment or
+migration process, then let the target platform's secret store hold runtime
+configuration. Do not copy the owner vault, passphrase, or `tvault` binary into
+an application image, VM cloud-init payload, or long-lived production runtime.
+
 ## The two modes at a glance
 
 | | Passphrase mode | Identity mode (recommended) |
@@ -15,7 +21,7 @@ You can run `tvault` in any pipeline without an interactive prompt. There are tw
 | Master passphrase exposed to CI? | Yes | No |
 | Decrypts | The full vault (read access) | Only what the identity is a recipient of |
 | Rotating the credential | Re-enters the passphrase everywhere | Rotate the identity; the passphrase is untouched |
-| Works with | `tvault env`, `tvault get`, `tvault run` | `tvault decrypt-env`, `tvault open`, `tvault git-filter checkout`, `tvault env --identity`, `tvault k8s render` |
+| Works with | `tvault env`, `tvault get`, `tvault run` | `tvault decrypt-env`, `tvault open`, `tvault git-filter checkout`, `tvault env --identity`, `tvault run --identity`, `tvault k8s render` |
 
 ::: tip
 Both modes are scaffolded by `tvault ci init`. Skip to [Scaffolding a workflow](#scaffolding-a-workflow) if you just want the file.
@@ -28,14 +34,14 @@ Set `TVAULT_PASSPHRASE` in the environment and every command that needs to unloc
 ```bash
 export TVAULT_PASSPHRASE='your vault passphrase'
 
-# Load every secret in the active project as exported shell vars
-eval "$(tvault env --format=shell)"
+# Load only the migration credentials this step needs
+eval "$(tvault env --only DATABASE_URL,MIGRATIONS_DATABASE_URL --format=shell)"
 
 # Or read a single key
 tvault get DATABASE_URL
 
-# Or wrap a command with the vault injected into its environment
-tvault run -- npm test
+# Or wrap a command with a strict, least-privilege allowlist
+tvault run --strict --only MIGRATIONS_DATABASE_URL -- bun run db:migrate
 ```
 
 In a GitHub Actions step the credential comes from a repository secret:
@@ -45,7 +51,8 @@ In a GitHub Actions step the credential comes from a repository secret:
   env:
     TVAULT_PASSPHRASE: ${{ secrets.TVAULT_PASSPHRASE }}
   run: |
-    tvault env --format=shell --export=false >> "$GITHUB_ENV"
+    tvault env --only DATABASE_URL,MIGRATIONS_DATABASE_URL \
+      --format=shell --export=false >> "$GITHUB_ENV"
 ```
 
 ::: warning
@@ -57,6 +64,13 @@ Passphrase mode gives the runner the keys to the whole vault. Anyone who can rea
 Instead of the master passphrase, you hand CI a **per-context identity** — an X25519 keypair created specifically for that pipeline. The runner uses it to decrypt only the secrets you have shared with it. The passphrase that protects your vault never travels to CI, and rotating the CI identity does not touch it.
 
 This builds on the recipient layer: see [Sharing](/guide/sharing), [Committable secrets](/guide/committable-secrets), and the [git filter](/guide/git-filter) for how secrets get sealed to a recipient in the first place.
+
+`tvault env --identity` and `tvault run --identity` read recipient-wrapped
+values from a local `vault.db`; they do not contact a remote TinyVault service.
+Use those commands only on an ephemeral runner or trusted host that already has
+a protected vault copy containing the shared project. If a pipeline should not
+receive a vault file, use a committed recipient-sealed artifact or git filter
+instead.
 
 ### 1. Create the CI identity
 

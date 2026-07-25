@@ -15,6 +15,15 @@ import (
 	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
 )
 
+func environmentProject(group *vault.EnvGroup, envName string) (string, error) {
+	for _, environment := range group.Environments {
+		if environment.Name == envName {
+			return environment.Project, nil
+		}
+	}
+	return "", fmt.Errorf("environment %q not found in group %q", envName, group.Name)
+}
+
 // resolveAllWithInheritance resolves all secrets for an environment through
 // the inheritance chain. It gets the child project's local secrets, then
 // fills in missing keys from the base environment (if inheritance is
@@ -67,6 +76,161 @@ func resolveAllWithInheritance(v *vault.Vault, groupName, envName string) (map[s
 	}
 
 	return childSecrets, childProject, nil
+}
+
+// resolveSelectedWithInheritance keeps selection inside the vault provider:
+// it queries key metadata and decrypts only exact/prefix matches from the
+// child and configured base project, then applies the normal child-wins merge.
+func resolveSelectedWithInheritance(
+	v *vault.Vault,
+	groupName, envName string,
+	only []string,
+	prefix string,
+) (map[string]string, []string, string, error) {
+	group, err := v.GetEnvGroup(groupName)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	childProject := ""
+	for _, environment := range group.Environments {
+		if environment.Name == envName {
+			childProject = environment.Project
+			break
+		}
+	}
+	if childProject == "" {
+		return nil, nil, "", fmt.Errorf("environment %q not found in group %q", envName, groupName)
+	}
+
+	child, _, err := v.GetSelectedSecrets(childProject, only, prefix)
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("get selected secrets for %s: %w", childProject, err)
+	}
+	selected := make(map[string]string, len(child))
+	if inheritance, ok := group.Inheritance[envName]; ok {
+		baseProject := ""
+		for _, environment := range group.Environments {
+			if environment.Name == inheritance.From {
+				baseProject = environment.Project
+				break
+			}
+		}
+		if baseProject == "" {
+			return nil, nil, "", fmt.Errorf("environment %q not found in group %q", inheritance.From, groupName)
+		}
+		base, _, err := v.GetSelectedSecrets(baseProject, only, prefix)
+		if err != nil {
+			return nil, nil, "", fmt.Errorf("get selected secrets for %s: %w", baseProject, err)
+		}
+		for key, value := range base {
+			selected[key] = value
+		}
+	}
+	for key, value := range child {
+		selected[key] = value
+	}
+
+	missing := make([]string, 0)
+	for _, key := range only {
+		if _, ok := selected[key]; !ok {
+			missing = append(missing, key)
+		}
+	}
+	sort.Strings(missing)
+	return selected, missing, childProject, nil
+}
+
+// resolveAllWithInheritanceIdentity is the recipient-read form of
+// resolveAllWithInheritance. Group configuration is readable metadata, but an
+// identity must be a recipient of every project whose values participate in
+// the resolution. It never falls back to the owner KEK.
+func resolveAllWithInheritanceIdentity(
+	v *vault.Vault,
+	id *crypto.Identity,
+	groupName, envName string,
+) (map[string]string, string, error) {
+	group, err := v.GetEnvGroup(groupName)
+	if err != nil {
+		return nil, "", err
+	}
+	childProject, err := environmentProject(group, envName)
+	if err != nil {
+		return nil, "", err
+	}
+
+	childSecrets, err := v.GetAllSecretsWithIdentity(childProject, id)
+	if err != nil {
+		return nil, "", fmt.Errorf("read environment %q project %q with identity: %w", envName, childProject, err)
+	}
+	if inheritance, ok := group.Inheritance[envName]; ok {
+		baseProject, resolveErr := environmentProject(group, inheritance.From)
+		if resolveErr != nil {
+			return nil, "", resolveErr
+		}
+		baseSecrets, readErr := v.GetAllSecretsWithIdentity(baseProject, id)
+		if readErr != nil {
+			return nil, "", fmt.Errorf("read inherited environment %q project %q with identity: %w", inheritance.From, baseProject, readErr)
+		}
+		for key, value := range baseSecrets {
+			if _, exists := childSecrets[key]; !exists {
+				childSecrets[key] = value
+			}
+		}
+	}
+
+	return childSecrets, childProject, nil
+}
+
+// resolveSelectedWithInheritanceIdentity mirrors
+// resolveSelectedWithInheritance, but obtains each project DEK through the
+// supplied recipient identity. The vault enumerates metadata and decrypts
+// only the selected entries; no owner passphrase or unselected value is read.
+func resolveSelectedWithInheritanceIdentity(
+	v *vault.Vault,
+	id *crypto.Identity,
+	groupName, envName string,
+	only []string,
+	prefix string,
+) (map[string]string, []string, string, error) {
+	group, err := v.GetEnvGroup(groupName)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	childProject, err := environmentProject(group, envName)
+	if err != nil {
+		return nil, nil, "", err
+	}
+
+	child, _, err := v.GetSelectedSecretsWithIdentity(childProject, id, only, prefix)
+	if err != nil {
+		return nil, nil, "", fmt.Errorf("read selected environment %q project %q with identity: %w", envName, childProject, err)
+	}
+	selected := make(map[string]string, len(child))
+	if inheritance, ok := group.Inheritance[envName]; ok {
+		baseProject, resolveErr := environmentProject(group, inheritance.From)
+		if resolveErr != nil {
+			return nil, nil, "", resolveErr
+		}
+		base, _, readErr := v.GetSelectedSecretsWithIdentity(baseProject, id, only, prefix)
+		if readErr != nil {
+			return nil, nil, "", fmt.Errorf("read selected inherited environment %q project %q with identity: %w", inheritance.From, baseProject, readErr)
+		}
+		for key, value := range base {
+			selected[key] = value
+		}
+	}
+	for key, value := range child {
+		selected[key] = value
+	}
+
+	missing := make([]string, 0)
+	for _, key := range only {
+		if _, ok := selected[key]; !ok {
+			missing = append(missing, key)
+		}
+	}
+	sort.Strings(missing)
+	return selected, missing, childProject, nil
 }
 
 // --- env group create ---

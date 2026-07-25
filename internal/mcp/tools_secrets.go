@@ -119,13 +119,8 @@ func (s *VaultMCPServer) handleGetSecret(_ context.Context, _ *sdkmcp.CallToolRe
 		if err != nil {
 			return nil, getSecretOutput{}, fmt.Errorf("group: %w", err)
 		}
-		// Policy: check the child project.
-		childProject, err := resolveEnvProject(group, input.Env)
-		if err != nil {
-			return nil, getSecretOutput{}, err
-		}
-		if !s.policy.CanAccessProject(childProject) {
-			return nil, getSecretOutput{}, fmt.Errorf("project %q is not allowed by policy", childProject)
+		if accessErr := s.requireEnvProjectAccess(group, input.Env); accessErr != nil {
+			return nil, getSecretOutput{}, accessErr
 		}
 		if !s.policy.CanAccessSecret(input.Key) {
 			return nil, getSecretOutput{}, fmt.Errorf("secret %q is not allowed by policy", input.Key)

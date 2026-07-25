@@ -85,6 +85,9 @@ func (s *VaultMCPServer) handleCreateProject(_ context.Context, _ *sdkmcp.CallTo
 	if !s.policy.CanWrite() {
 		return nil, createProjectOutput{}, fmt.Errorf("write operations are not allowed by policy (access_mode: %s)", s.policy.AccessMode)
 	}
+	if !s.policy.CanAccessProject(input.Name) {
+		return nil, createProjectOutput{}, fmt.Errorf("project %q is not allowed by policy", input.Name)
+	}
 
 	if _, err := s.vault.CreateProject(input.Name, input.Description); err != nil {
 		return nil, createProjectOutput{}, fmt.Errorf("create project: %w", err)

@@ -47,9 +47,14 @@ type Options struct {
 // per connection, then the connection closes (no pipelining).
 type Request struct {
 	V       int    `json:"v"`
-	Op      string `json:"op"` // "get" | "getall" | "status" | "stop"
+	Op      string `json:"op"` // "get" | "getall" | "getselected" | "status" | "stop"
 	Project string `json:"project,omitempty"`
 	Key     string `json:"key,omitempty"`
+	// Only and Prefix are accepted only by getselected. They intentionally
+	// describe key names, never values, so the agent can decrypt just the
+	// requested entries instead of sending a getall response to the client.
+	Only   []string `json:"only,omitempty"`
+	Prefix string   `json:"prefix,omitempty"`
 	// Token is an optional capability token (TVAULT_AGENT_TOKEN). It is ignored
 	// unless the agent runs with --require-token; the field is omitempty so a
 	// token-less client is byte-identical to before (no protocol bump needed).
@@ -62,6 +67,7 @@ type Response struct {
 	OK      bool              `json:"ok"`
 	Value   string            `json:"value,omitempty"`
 	Secrets map[string]string `json:"secrets,omitempty"`
+	Missing []string          `json:"missing,omitempty"`
 	Project string            `json:"project,omitempty"` // the resolved project (for empty-project requests)
 	Status  *StatusInfo       `json:"status,omitempty"`
 	Error   string            `json:"error,omitempty"`
@@ -78,8 +84,9 @@ type StatusInfo struct {
 
 // Op constants.
 const (
-	OpGet    = "get"
-	OpGetAll = "getall"
-	OpStatus = "status"
-	OpStop   = "stop"
+	OpGet         = "get"
+	OpGetAll      = "getall"
+	OpGetSelected = "getselected"
+	OpStatus      = "status"
+	OpStop        = "stop"
 )

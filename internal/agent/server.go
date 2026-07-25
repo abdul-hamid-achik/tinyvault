@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/store"
+	"github.com/abdul-hamid-achik/tinyvault/internal/validation"
 	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
 )
 
@@ -105,6 +106,9 @@ func (a *agentState) dispatch(req Request, uid uint32, pid int, scope tokenScope
 	case OpGetAll:
 		return a.doGetAll(req, scope, uid, pid, tokID)
 
+	case OpGetSelected:
+		return a.doGetSelected(req, scope, uid, pid, tokID)
+
 	default:
 		return errResp("unknown op: " + req.Op)
 	}
@@ -152,6 +156,54 @@ func (a *agentState) doGetAll(req Request, scope tokenScope, uid uint32, pid int
 		return errResp(err.Error())
 	}
 	return Response{V: ProtocolVersion, OK: true, Secrets: secrets, Project: resolved}
+}
+
+func (a *agentState) doGetSelected(req Request, scope tokenScope, uid uint32, pid int, tokID string) Response {
+	if req.Key != "" {
+		return errResp("getselected does not accept key")
+	}
+	if err := validateSelection(req.Only, req.Prefix); err != nil {
+		return errResp(err.Error())
+	}
+	var secrets map[string]string
+	var missing []string
+	var resolved string
+	if err := a.withVault(func(v *vault.Vault) error {
+		resolved = resolveProject(v, req.Project)
+		if !scope.allows(resolved) {
+			return errScope(resolved)
+		}
+		var readErr error
+		secrets, missing, readErr = v.GetSelectedSecrets(resolved, req.Only, req.Prefix)
+		if readErr != nil {
+			return readErr
+		}
+		auditRead(v, resolved, "", uid, pid, tokID)
+		return nil
+	}); err != nil {
+		return errResp(err.Error())
+	}
+	return Response{V: ProtocolVersion, OK: true, Secrets: secrets, Missing: missing, Project: resolved}
+}
+
+// validateSelection rejects malformed selector fields before the agent opens
+// the vault. Prefix is constrained to the same safe key alphabet: a prefix is
+// an incomplete key, not a glob or an expression language.
+func validateSelection(only []string, prefix string) error {
+	if len(only) == 0 && prefix == "" {
+		return fmt.Errorf("getselected requires only or prefix")
+	}
+	for _, key := range only {
+		if err := validation.SecretKey(key); err != nil {
+			return fmt.Errorf("invalid selected key: %w", err)
+		}
+	}
+	if prefix != "" {
+		if err := validation.SecretKey(prefix); err != nil {
+			return fmt.Errorf("invalid selected prefix: %w", err)
+		}
+	}
+	return nil
 }
 
 // allows reports whether the token scope permits reading the given project

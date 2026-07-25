@@ -6,6 +6,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-07-24
+
+### Added
+
+- Added `tvault run --identity <name>` for recipient-backed, passphrase-free
+  command injection, with the same identity resolution semantics as `tvault env`.
+- `tvault run --only` / `--prefix` now decrypt only the selected values across
+  direct, inherited-group, recipient-identity, and local-agent reads; strict
+  missing-key behavior remains fail-closed.
+- `${tvault://PROJECT/KEY}` placeholders now load the named project instead of
+  looking up the key in the active project's values.
+
+### Security
+
+- Added the backward-compatible local-agent `getselected` operation. It
+  validates exact-key and prefix selectors before opening the vault and never
+  returns an all-secrets response for a selected run.
+- Child processes launched by TinyVault now receive no `TVAULT_*` control
+  variables, including future controls, before selected application values are
+  injected.
+- Explicit MCP policies must be complete and valid; empty allowlists deny,
+  non-positive read caps deny plaintext reads, inherited base projects are
+  policy-checked, and plaintext file export requires write access.
+- Existing vault directories and database files are normalized to `0700` and
+  `0600` on open, and non-regular `vault.db` paths are rejected.
+- Updated `golang.org/x/text` to the non-vulnerable `v0.39.0` line.
+
 ## [0.18.2] - 2026-07-19
 
 ### Fixed
@@ -284,7 +311,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 See the [GitHub releases](https://github.com/abdul-hamid-achik/tinyvault/releases)
 for v0.8.0 and earlier.
 
-[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.18.1...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.18.2...v0.19.0
+[0.18.2]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.18.1...v0.18.2
 [0.18.1]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.17.2...v0.18.0
 [0.17.2]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.17.1...v0.17.2

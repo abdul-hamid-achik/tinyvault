@@ -24,7 +24,7 @@ The single most important fact: **only `vault_get_secret` deliberately returns a
 | `vault_list_secrets_by_prefix` | No | Autocomplete-style key listing. |
 | `vault_generate_secret` | No | Generate and store a random secret; value not returned. |
 | `vault_run_with_secrets` | No | Run a subprocess with secrets injected as env. |
-| `vault_export_env` | No | Write secrets to a `0600` file (dotenv/json/shell). |
+| `vault_export_env` | Yes | Write secrets to a `0600` file (dotenv/json/shell). |
 | `vault_list_env_files` | No | Discover `.env` files on disk. |
 | `vault_preview_env_import` | No | Preview a `.env` import (counts only). |
 | `vault_import_env_files` | No | Import `.env` files into a project. |
@@ -284,7 +284,7 @@ Writes selected secrets to a file on disk with `0600` permissions. The values go
 
 - **Inputs:** `project` (optional), `format` (optional: `dotenv` | `json` | `shell`), `output_path` (optional), `keys` (optional list).
 - **Returns:** `{ path, count, keys }` — the file path, how many were written, and which key names. No values.
-- **Policy gate:** any `access_mode` (it reads and writes to disk); project and per-key secret globs determine which keys are exported.
+- **Policy gate:** **`CanWrite`** (`access_mode: read-write` or `full`); project and per-key secret globs determine which keys are exported. Environment-group exports also require access to both the child project and any inherited base project.
 
 ::: warning Exported files are plaintext on disk
 The file `vault_export_env` writes contains real secret values in plaintext. It is `0600` (owner-only), but it is not encrypted. Delete it when done and never commit it. To produce something commit-safe, use `vault_seal_for_recipients` instead.

@@ -45,7 +45,7 @@ type VaultMCPServer struct {
 func (s *VaultMCPServer) consumeValueRead() bool {
 	limit := int64(s.policy.MaxReadsPerSession)
 	if limit <= 0 {
-		return true
+		return false
 	}
 	for {
 		current := s.reads.Load()
@@ -99,7 +99,7 @@ func NewReopeningVaultMCPServer(dir string, kek []byte, policy *AccessPolicy) *V
 // prompts. Both constructors share it.
 func newVaultMCPServer(policy *AccessPolicy) *VaultMCPServer {
 	if policy == nil {
-		policy = DefaultPolicy()
+		policy = SafeDefaultPolicy()
 	}
 
 	s := &VaultMCPServer{

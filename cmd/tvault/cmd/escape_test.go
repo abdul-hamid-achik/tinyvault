@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/dotenv"
@@ -183,6 +184,52 @@ func TestRunEnvDotenvRoundTrip(t *testing.T) {
 		if got := byKey[k]; got != want {
 			t.Errorf("round-trip for %q: got %q, want %q", k, got, want)
 		}
+	}
+}
+
+func TestRunEnvOnlyAndPrefixFilterBeforeOutput(t *testing.T) {
+	vaultPath, restore := setupVaultForCommandTest(t)
+	defer restore()
+
+	v := openTestVault(t, vaultPath)
+	for key, value := range map[string]string{
+		"CHALUPA_DATABASE_URL": "postgres://db",
+		"CHALUPA_INGEST_KEY":   "ingest",
+		"UNRELATED_TOKEN":      "must-not-be-emitted",
+	} {
+		if err := v.SetSecret("default", key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	v.Close()
+
+	oldFormat, oldOnly, oldPrefix := envFormat, envOnly, envPrefix
+	envFormat, envOnly, envPrefix = "dotenv", []string{"UNRELATED_TOKEN"}, "CHALUPA_"
+	defer func() { envFormat, envOnly, envPrefix = oldFormat, oldOnly, oldPrefix }()
+
+	out := captureStdout(t, func() {
+		if err := runEnv(nil, nil); err != nil {
+			t.Fatalf("runEnv: %v", err)
+		}
+	})
+	body := string(out)
+	for _, key := range []string{"CHALUPA_DATABASE_URL", "CHALUPA_INGEST_KEY", "UNRELATED_TOKEN"} {
+		if !strings.Contains(body, key+"=") {
+			t.Errorf("filtered output missing %s", key)
+		}
+	}
+}
+
+func TestRunEnvOnlyFailsWhenKeyIsMissing(t *testing.T) {
+	_, restore := setupVaultForCommandTest(t)
+	defer restore()
+
+	oldOnly, oldPrefix := envOnly, envPrefix
+	envOnly, envPrefix = []string{"MISSING"}, ""
+	defer func() { envOnly, envPrefix = oldOnly, oldPrefix }()
+
+	if err := runEnv(nil, nil); err == nil || !strings.Contains(err.Error(), "--only key(s) not found") {
+		t.Fatalf("runEnv() error = %v, want missing-key error", err)
 	}
 }
 

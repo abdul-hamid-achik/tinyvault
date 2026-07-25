@@ -50,6 +50,14 @@ func TestSafeDefaultPolicyFailsClosed(t *testing.T) {
 	}
 }
 
+func TestNilPolicyUsesSafeDefault(t *testing.T) {
+	_, v := newScratchServer(t)
+	srv := NewVaultMCPServer(v, nil)
+	if srv.policy.CanWrite() || srv.policy.CanExec() || srv.policy.CanAccessSecret("API_KEY") {
+		t.Fatal("nil policy widened access instead of using the safe default")
+	}
+}
+
 func TestValueReadLimitIsEnforced(t *testing.T) {
 	srv, _ := newScratchServer(t)
 	srv.policy.MaxReadsPerSession = 1
@@ -59,6 +67,18 @@ func TestValueReadLimitIsEnforced(t *testing.T) {
 	}
 	if _, _, err := srv.handleGetSecret(context.Background(), nil, getSecretInput{Key: "API_KEY"}); err == nil {
 		t.Fatal("second value read exceeded the session cap but succeeded")
+	}
+}
+
+func TestNonPositiveValueReadLimitDeniesPlaintextReads(t *testing.T) {
+	for _, limit := range []int{0, -1} {
+		t.Run(strconv.Itoa(limit), func(t *testing.T) {
+			srv, _ := newScratchServer(t)
+			srv.policy.MaxReadsPerSession = limit
+			if _, _, err := srv.handleGetSecret(context.Background(), nil, getSecretInput{Key: "API_KEY"}); err == nil {
+				t.Fatal("plaintext read succeeded with a non-positive session cap")
+			}
+		})
 	}
 }
 
@@ -100,10 +120,10 @@ func TestPolicyCanAccessProject_AllowDeny(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:     "empty allow list allows all",
+			name:     "empty allow list denies all",
 			policy:   AccessPolicy{ProjectsAllow: nil},
 			project:  "anything",
-			expected: true,
+			expected: false,
 		},
 		{
 			name:     "glob match",

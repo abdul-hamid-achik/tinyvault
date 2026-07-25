@@ -102,6 +102,20 @@ func (c *Client) GetAll(project string) (map[string]string, string, error) {
 	return resp.Secrets, resp.Project, nil
 }
 
+// GetSelected fetches only the exact or prefix-selected secrets through the
+// agent. The response separately identifies missing exact keys, allowing the
+// CLI to preserve its --strict behavior without a getall round trip.
+func (c *Client) GetSelected(project string, only []string, prefix string) (map[string]string, []string, string, error) {
+	resp, err := c.roundTrip(Request{Op: OpGetSelected, Project: project, Only: only, Prefix: prefix})
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if !resp.OK {
+		return nil, nil, "", errors.New(resp.Error)
+	}
+	return resp.Secrets, resp.Missing, resp.Project, nil
+}
+
 // Status queries the running agent.
 func (c *Client) Status() (*StatusInfo, error) {
 	return c.StatusForProject("")

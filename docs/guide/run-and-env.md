@@ -56,13 +56,21 @@ By default `run` injects **every** secret in the project. When you wrap a third-
 
 ```bash
 tvault run --only DIGITALOCEAN_TOKEN,NUXT_DATABASE_URL,NUXT_REDIS_URL -- pulumi up
+tvault run --strict --only DIGITALOCEAN_TOKEN,NUXT_DATABASE_URL -- pulumi up
 tvault run --prefix NUXT_ -- bun run dev
 ```
 
-- `--only` is an explicit allowlist (comma-separated). A listed key that doesn't exist prints a warning to stderr (so typos surface) but doesn't fail.
+- `--only` is an explicit allowlist (comma-separated). A listed key that doesn't exist prints a warning to stderr for backward compatibility.
+- `--strict` turns a missing `--only` key into an error before the child starts. Use it for CI, deployments, and migrations.
 - `--prefix` injects every key with that prefix.
 - Given both, a key is injected if it matches **either** (union).
-- Explicit `${tvault://...}` references in `--env-file` still resolve against the full project — the filters only narrow the bulk auto-injection.
+- Explicit `${tvault://PROJECT/KEY}` references in `--env-file` resolve the named project; `${tvault://KEY}` and `${tvault://current/KEY}` resolve the active project. The filters only narrow bulk auto-injection.
+
+The selectors are provider-side: TinyVault enumerates key metadata and decrypts
+only the selected values. This remains true for direct reads, environment-group
+inheritance, recipient identities, and a current local agent. An env-file
+placeholder decrypts only its referenced key; it does not turn a selected run
+back into an all-secrets read.
 
 `--only`/`--prefix` cannot be combined with `--no-vault` (there are no vault secrets to select).
 
@@ -76,6 +84,37 @@ tvault run --group liftclub --env preview -- ./deploy.sh
 
 This composes with `--only`/`--prefix`: the allowlist filters the merged (child + inherited) key set. Pin a key (`tvault env pin`) to give the child its own local copy and break inheritance for that key only.
 
+### Running a shared project without a passphrase
+
+`--identity <name>` gives `run` the same recipient-read behavior as `env`:
+it decrypts a project shared to that X25519 identity without unlocking the
+owner vault. This is useful for CI and remote deployment hosts.
+
+```bash
+tvault run --identity deploy --strict --only DIGITALOCEAN_TOKEN -- pulumi up
+```
+
+The identity comes from its local key file or, if no matching file exists,
+`TVAULT_IDENTITY_KEY`. It can resolve an environment group too: share every
+project whose values participate in the selected environment (the child and
+its configured base) with that identity, then use both flag sets together.
+TinyVault reads the group metadata but never falls back to the owner passphrase
+for a project that identity cannot open. Identity mode still cannot combine
+with `--no-vault`.
+
+Identity mode reads the recipient wraps and ciphertext from the local
+`vault.db`; it does not fetch a vault over the network. Use it on a trusted
+host or ephemeral runner that already has a protected vault copy containing
+the shared project. Use recipient-sealed files when a target should not receive
+a vault database.
+
+```bash
+tvault run --identity deploy --group app --env preview \
+  --strict --only DATABASE_URL -- ./deploy.sh
+tvault env --identity deploy --group app --env preview \
+  --only DATABASE_URL --format dotenv
+```
+
 ### Signal forwarding and exit codes
 
 `tvault run` forwards `SIGINT` and `SIGTERM` to the child process, so `Ctrl-C` and orderly shutdowns reach your application. When the child exits, `tvault` propagates the child's exit code as its own. This makes `tvault run` safe to use as a process wrapper in supervisors, Procfiles, and CI steps.
@@ -88,6 +127,8 @@ This composes with `--only`/`--prefix`: the allowlist filters the merged (child 
 | `--no-vault` | Skip vault secrets; use only `--env-file` values. |
 | `--only <k1,k2>` | Inject only these secret keys (comma-separated allowlist). |
 | `--prefix <p>` | Inject only secret keys with this prefix. |
+| `--strict` | Fail before execution when an explicit `--only` key is missing. |
+| `--identity <name>` | Read a shared project with an X25519 identity instead of the vault passphrase. |
 | `--group <name>` | Resolve secrets through an [environment group](/guide/env-groups)'s inheritance chain. |
 | `--env <name>` | Environment within the group (requires `--group`). |
 
@@ -120,11 +161,21 @@ Select a format with `-f`/`--format`. The default is `shell`.
 
 ```bash
 tvault env --format dotenv > .env
+tvault env --only DATABASE_URL,MIGRATIONS_DATABASE_URL --format dotenv
+tvault env --prefix CHALUPA_ --format dotenv
 tvault env --format json | jq .
 tvault env --format yaml > secrets.yaml
 tvault env --format k8s-secret --name app-secrets --namespace prod > secret.yaml
 tvault env --format pulumi-config --stack prod | sh   # push into Pulumi config
 ```
+
+`--only` and `--prefix` are provider-side selectors: TinyVault queries key
+metadata first and decrypts only the matching values, including for recipient
+identity reads, identity-backed environment groups, and passphrase-backed
+environment-group inheritance. An explicit missing
+`--only` key fails before any output is emitted. When selectors are present,
+the command uses a direct short-lived vault read instead of the agent's
+all-values operation.
 
 ::: tip Pulumi
 For Pulumi you usually want `tvault run -- pulumi up`: it injects provider credentials at deploy time without first copying them into Pulumi config or your parent shell. Your Pulumi program still determines what is persisted in state. The `pulumi-config` format is for teams who intentionally store values in Pulumi's encrypted config. See [Pulumi & IaC](/guide/pulumi).
@@ -159,6 +210,8 @@ The identity is resolved from the named key file, or — when no file exists —
 | `--name <str>` | Kubernetes `Secret` name (required for `k8s-secret`). |
 | `--namespace <str>` | Kubernetes namespace (`k8s-secret`; default `default`). |
 | `--identity <name>` | Read a shared project with an X25519 identity, no passphrase. |
+| `--only <k1,k2>` | Emit only these keys; a missing explicit key fails closed. |
+| `--prefix <p>` | Emit only keys with this prefix; combines with `--only` as a union. |
 
 ## tvault export — write a file
 

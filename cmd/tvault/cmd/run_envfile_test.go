@@ -85,3 +85,62 @@ func TestRunWithEnvFileVaultOverride(t *testing.T) {
 		t.Errorf("expected vault to win, got %q", got)
 	}
 }
+
+func TestRunWithEnvFileResolvesNamedProject(t *testing.T) {
+	vaultPath, restore := setupVaultForCommandTest(t)
+	defer restore()
+
+	v := openTestVault(t, vaultPath)
+	if err := v.SetSecret("default", "API_KEY", "wrong-project"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := v.CreateProject("deployment", "Cross-project reference target"); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.SetSecret("deployment", "API_KEY", "right-project"); err != nil {
+		t.Fatal(err)
+	}
+	v.Close()
+
+	envFile := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(envFile, []byte("REFERENCED=${tvault://deployment/API_KEY}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	oldEnvFile := runEnvFile
+	runEnvFile = envFile
+	defer func() { runEnvFile = oldEnvFile }()
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	out := captureStdout(t, func() {
+		if err := runRun(cmd, []string{"sh", "-c", "echo $REFERENCED"}); err != nil {
+			t.Fatalf("runRun: %v", err)
+		}
+	})
+	if got := strings.TrimSpace(string(out)); got != "right-project" {
+		t.Errorf("named-project reference = %q, want right-project", got)
+	}
+}
+
+func TestRunStrictRejectsMissingOnlyKey(t *testing.T) {
+	vaultPath, restore := setupVaultForCommandTest(t)
+	defer restore()
+
+	v := openTestVault(t, vaultPath)
+	if err := v.SetSecret("default", "PRESENT", "value"); err != nil {
+		t.Fatal(err)
+	}
+	v.Close()
+
+	oldOnly, oldStrict := runOnly, runStrict
+	runOnly, runStrict = []string{"PRESENT", "MISSING"}, true
+	defer func() { runOnly, runStrict = oldOnly, oldStrict }()
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	err := runRun(cmd, []string{"true"})
+	if err == nil || !strings.Contains(err.Error(), `--only key(s) not found`) {
+		t.Fatalf("runRun() error = %v, want strict missing-key error", err)
+	}
+}

@@ -64,7 +64,11 @@ When policy enables `redact_output`, the MCP server replaces literal secret valu
 
 ## File layout: `~/.tvault/`
 
-The vault directory is created with `0700` permissions (owner-only). Override its location with `--vault` or `TVAULT_DIR` (see [precedence](#path-precedence) below).
+The vault directory is created with `0700` permissions (owner-only). On every
+vault open, TinyVault normalizes the directory to `0700` and `vault.db` to
+`0600`; it rejects a symlink, device, or other non-regular database path.
+Override its location with `--vault` or `TVAULT_DIR` (see
+[precedence](#path-precedence) below).
 
 ```text
 ~/.tvault/                         0700  vault directory (owner-only)
@@ -162,7 +166,7 @@ Identity-name resolution depends on the command:
 - `tvault open`: `--identity <name>` > `TVAULT_IDENTITY` > `default`.
 - Git clean/smudge filters: `TVAULT_IDENTITY` > `git config tvault.identity` > `default`.
 - For recipient-encrypted `decrypt-env` and `k8s render`, an explicit `--identity` selects the file name; without it, the resolver checks the `default` file before falling back to `TVAULT_IDENTITY_KEY`.
-- `tvault env` enters identity mode only when `--identity` or `TVAULT_IDENTITY_KEY` is present. In that mode, the selected file (the explicit name, or `default`) takes precedence over the environment key.
+- `tvault env` and `tvault run` enter identity mode only when `--identity` or `TVAULT_IDENTITY_KEY` is present. In that mode, the selected file (the explicit name, or `default`) takes precedence over the environment key.
 
 `TVAULT_IDENTITY` is therefore not a generic environment override for every `--identity` flag.
 

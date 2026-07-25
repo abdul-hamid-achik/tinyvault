@@ -88,6 +88,8 @@ tvault run --env-file .env -- npm start
 # Export secrets
 tvault env                     # shell format (eval-able)
 tvault env --format dotenv     # .env file format
+tvault env --only DATABASE_URL,MIGRATIONS_DATABASE_URL --format dotenv
+tvault env --prefix CHALUPA_ --format dotenv
 tvault env --format json       # JSON format
 tvault env --format yaml       # YAML
 tvault env --format k8s-secret --name=my-secret  # K8s Secret manifest
@@ -430,6 +432,7 @@ Control what the AI agent can access with `~/.tvault/mcp-policy.yaml`:
 access_mode: read-write    # read-only | read-write | full
 allow_exec: false          # disable vault_run_with_secrets
 redact_output: true        # redact secret values from command output
+max_reads_per_session: 25  # 0 denies direct plaintext reads
 
 projects_allow:
   - "dev-*"

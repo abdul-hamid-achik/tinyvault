@@ -4,20 +4,16 @@ package processenv
 
 import "strings"
 
-var controlVariables = map[string]struct{}{
-	"TVAULT_PASSPHRASE":   {},
-	"TVAULT_IDENTITY_KEY": {},
-	"TVAULT_AGENT_TOKEN":  {},
-}
-
-// Sanitize removes every TinyVault control-plane credential, including
-// duplicate entries. Secret injection must add only application credentials;
-// these reserved names are never forwarded to a child process.
+// Sanitize removes every TinyVault control-plane variable, including duplicate
+// entries. A child receives only its inherited application environment plus
+// the explicitly selected vault values; it must never inherit an unlock
+// credential, identity, agent capability, routing override, or future
+// TVAULT_* control added by a newer CLI.
 func Sanitize(env []string) []string {
 	result := make([]string, 0, len(env))
 	for _, entry := range env {
 		name, _, _ := strings.Cut(entry, "=")
-		if _, sensitive := controlVariables[name]; sensitive {
+		if strings.HasPrefix(name, "TVAULT_") {
 			continue
 		}
 		result = append(result, entry)

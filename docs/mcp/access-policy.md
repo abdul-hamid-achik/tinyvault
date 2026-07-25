@@ -40,10 +40,10 @@ If `~/.tvault/mcp-policy.yaml` does not exist, the production `tvault mcp` comma
 | `secrets_deny` | `["*"]` |
 | `max_reads_per_session` | `0` |
 
-With this policy, project/status and audit metadata remain available, but key-scoped secret access and plaintext values are denied, writes are disabled, and command execution is disabled. The `0` read limit means “no numeric cap,” but it does not weaken the safe state because `secrets_deny: ["*"]` blocks every plaintext read first.
+With this policy, project/status and audit metadata remain available, but key-scoped secret access and plaintext values are denied, writes are disabled, and command execution is disabled. A `0` read limit denies every direct plaintext read.
 
-::: info An explicit file is not merged with these defaults
-Once `mcp-policy.yaml` exists, TinyVault decodes that file directly. Omitted fields take their Go zero values: empty allow lists allow all unmatched names, `false` disables booleans, and a non-positive `max_reads_per_session` means unlimited plaintext reads. Include every security-relevant field explicitly, as in the example below.
+::: danger Explicit policy files must be complete
+TinyVault rejects a policy file that omits any security-relevant field. It also rejects unknown fields, invalid glob syntax, invalid access modes, and negative read caps. This prevents a typo or partial policy from widening access through a zero value. Include every field shown in the example below; `tvault doctor` validates the file before you start the MCP server.
 :::
 
 ## A complete example
@@ -60,7 +60,7 @@ allow_exec: true           # master switch for vault_run_with_secrets
 redact_output: true        # scrub values from subprocess stdout/stderr
 
 # Glob patterns (filepath.Match) over PROJECT names.
-# Deny is evaluated before allow. Empty allow = allow all.
+# Deny is evaluated before allow. An empty allowlist denies all access.
 projects_allow:
   - app-staging
   - app-ci
@@ -68,7 +68,8 @@ projects_deny:
   - "*-prod"
 
 # Glob patterns over secret KEY names.
-secrets_allow: []          # empty = every key the project exposes
+secrets_allow:
+  - "*"                    # explicit wildcard; empty means deny all
 secrets_deny:
   - "*PRIVATE_KEY*"
   - "*_SEED"
@@ -117,7 +118,7 @@ Glob patterns (`filepath.Match` syntax) over **project names**. They apply where
 Rules:
 
 - **Deny is checked before allow.** If a name matches `projects_deny`, it is rejected even if it also matches `projects_allow`.
-- **An empty `projects_allow` means allow all.** Add entries only when you want to *restrict* to that set.
+- **An empty `projects_allow` means deny all.** Use the explicit `"*"` wildcard when every project should be reachable.
 
 ```yaml
 projects_allow:
@@ -128,20 +129,21 @@ projects_deny:
 
 ### `secrets_allow` / `secrets_deny`
 
-Glob patterns over **secret key names**, with the same deny-before-allow and empty-allow-means-all semantics as projects. These apply per-key wherever keys are listed, fetched, searched, exported, imported, sealed, or have their history read.
+Glob patterns over **secret key names**, with the same deny-before-allow and empty-allow-means-deny semantics as projects. These apply per-key wherever keys are listed, fetched, searched, exported, imported, sealed, or have their history read.
 
 ```yaml
 secrets_deny:
   - "*PRIVATE_KEY*"
   - "*_TOKEN"
-secrets_allow: []   # otherwise allow every key the project exposes
+secrets_allow:
+  - "*"             # otherwise allow every key the project exposes
 ```
 
 A denied key is filtered out of listings and refused on direct access, so an agent cannot reach it via `vault_get_secret`, `vault_search_secrets`, `vault_seal_for_recipients`, or any other key-scoped tool.
 
 ### `max_reads_per_session`
 
-An integer cap on plaintext `vault_get_secret` calls during the MCP server session. A positive value enables the cap; `0` or a negative value means unlimited reads.
+An integer cap on plaintext `vault_get_secret` calls during the MCP server session. A positive value enables the cap. `0` denies direct plaintext reads, which is useful for an execution-only policy. Negative values are invalid and make policy loading fail.
 
 The server checks the project and key policy first, then consumes one read before resolving the value. Once the cap is reached, later `vault_get_secret` calls fail with `secret value read limit reached for this MCP session`. Restarting `tvault mcp` starts a new session and resets the counter.
 
@@ -159,41 +161,28 @@ Tool handlers route their access decisions through four methods on the loaded po
 | --- | --- | --- |
 | `CanWrite()` | `access_mode` is `read-write` or `full` | all write tools |
 | `CanExec()` | `allow_exec` **and** `access_mode == full` | `vault_run_with_secrets` |
-| `CanAccessProject(name)` | not in `projects_deny`, and (`projects_allow` empty or matched) | project selection / enumeration |
-| `CanAccessSecret(key)` | not in `secrets_deny`, and (`secrets_allow` empty or matched) | per-key access |
-| plaintext read counter | `max_reads_per_session <= 0`, or the positive cap has not been reached | `vault_get_secret` only |
+| `CanAccessProject(name)` | not in `projects_deny`, and matched by non-empty `projects_allow` | project selection / enumeration |
+| `CanAccessSecret(key)` | not in `secrets_deny`, and matched by non-empty `secrets_allow` | per-key access |
+| plaintext read counter | `max_reads_per_session > 0` and the cap has not been reached | `vault_get_secret` only |
 
 Because the policy is loaded at startup and these helpers run on every request, ordinary tool handlers provide no path to mutate the in-memory policy or grant broader access. The command-execution caveat above still applies to files on disk.
 
 ## Recommended starting points
 
-- **Read-only inspector** — let an agent map your secrets without writing or running anything:
+Start from the [complete example](#a-complete-example), then choose one of
+these profiles without removing the other required fields:
 
-  ```yaml
-  access_mode: read-only
-  allow_exec: false
-  ```
+| Profile | `access_mode` | `allow_exec` | Project/key scope | Plaintext cap |
+| --- | --- | --- | --- | --- |
+| Metadata-only inspector | `read-only` | `false` | `secrets_allow: []` | `0` |
+| Scoped reader | `read-only` | `false` | Explicit project and key allowlists | Small positive number |
+| Execution-only operator | `full` | `true` | Explicit project and key allowlists | `0` |
+| Scoped writer | `read-write` | `false` | Explicit non-production project allowlist | `0` or a small positive number |
 
-- **Scoped executor** — let an agent run jobs with secrets and steer it toward `vault_run_with_secrets`; this does not technically disable `vault_get_secret` for otherwise allowed keys:
-
-  ```yaml
-  access_mode: full
-  allow_exec: true
-  redact_output: true
-  secrets_deny:
-    - "*PRIVATE_KEY*"
-  ```
-
-- **Scoped writer** — confine an agent to non-production projects:
-
-  ```yaml
-  access_mode: read-write
-  allow_exec: false
-  projects_allow:
-    - app-staging
-  projects_deny:
-    - "*-prod"
-  ```
+An execution-only policy can inject allowed keys into
+`vault_run_with_secrets` while `max_reads_per_session: 0` blocks
+`vault_get_secret`. Execution still implies write permission because `full`
+mode includes every `read-write` capability.
 
 ::: tip Discover, then act
 Have the agent learn the surface once with `tvault docs features`, then use the relational tools (`vault_search_secrets`, `vault_list_secrets_by_prefix`) to find keys by metadata, and `vault_run_with_secrets` to *use* a value without first requesting it as a direct field. The launched command must still be trusted not to leak its environment through stdout, files, or the network. The policy backs this pattern up by denying keys the agent should never reach.

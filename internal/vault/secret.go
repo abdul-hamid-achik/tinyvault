@@ -2,6 +2,8 @@ package vault
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/crypto"
@@ -139,6 +141,91 @@ func (v *Vault) GetAllSecrets(projectName string) (map[string]string, error) {
 	}
 
 	return result, nil
+}
+
+// GetSelectedSecrets decrypts only keys selected by an exact allowlist or
+// prefix. It returns missing exact keys separately so callers can fail closed
+// without first materializing every project value.
+func (v *Vault) GetSelectedSecrets(projectName string, only []string, prefix string) (map[string]string, []string, error) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
+	if err := v.requireUnlocked(); err != nil {
+		return nil, nil, err
+	}
+	project, err := v.store.GetProjectByName(projectName)
+	if err != nil {
+		return nil, nil, mapStoreError(err)
+	}
+	if len(only) == 0 && prefix == "" {
+		return v.getAllSecretsForProject(project)
+	}
+
+	allKeys, err := v.store.ListSecretKeys(project.ID)
+	if err != nil {
+		return nil, nil, mapStoreError(err)
+	}
+	available := make(map[string]struct{}, len(allKeys))
+	selected := make(map[string]struct{})
+	for _, key := range allKeys {
+		available[key] = struct{}{}
+		if prefix != "" && strings.HasPrefix(key, prefix) {
+			selected[key] = struct{}{}
+		}
+	}
+	missing := make([]string, 0)
+	for _, key := range only {
+		if _, ok := available[key]; !ok {
+			missing = append(missing, key)
+			continue
+		}
+		selected[key] = struct{}{}
+	}
+	sort.Strings(missing)
+
+	dek, err := v.getDecryptedDEK(project.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer crypto.ZeroBytes(dek)
+
+	result := make(map[string]string, len(selected))
+	for key := range selected {
+		entry, err := v.store.GetSecret(project.ID, key)
+		if err != nil {
+			return nil, nil, mapStoreError(err)
+		}
+		plaintext, err := crypto.Decrypt(dek, entry.EncryptedValue)
+		if err != nil {
+			return nil, nil, fmt.Errorf("decrypt secret %s: %w", key, err)
+		}
+		result[key] = string(plaintext)
+		crypto.ZeroBytes(plaintext)
+	}
+	return result, missing, nil
+}
+
+func (v *Vault) getAllSecretsForProject(project *store.Project) (map[string]string, []string, error) {
+	entries, err := v.store.ListSecrets(project.ID)
+	if err != nil {
+		return nil, nil, mapStoreError(err)
+	}
+	dek, err := v.getDecryptedDEK(project.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer crypto.ZeroBytes(dek)
+
+	result := make(map[string]string, len(entries))
+	for key, entry := range entries {
+		plaintext, err := crypto.Decrypt(dek, entry.EncryptedValue)
+		if err != nil {
+			return nil, nil, fmt.Errorf("decrypt secret %s: %w", key, err)
+		}
+		result[key] = string(plaintext)
+		crypto.ZeroBytes(plaintext)
+	}
+	return result, nil, nil
 }
 
 // ListSecretVersions returns metadata for every version of a key (archived +

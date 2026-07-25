@@ -12,8 +12,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/abdul-hamid-achik/tinyvault/internal/crypto"
 	"github.com/abdul-hamid-achik/tinyvault/internal/dotenv"
 	"github.com/abdul-hamid-achik/tinyvault/internal/processenv"
+	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
 )
 
 var (
@@ -23,6 +25,8 @@ var (
 	runPrefix     string
 	runGroup      string
 	runEnvName    string
+	runStrict     bool
+	runIdentity   string
 )
 
 var runCmd = &cobra.Command{
@@ -66,6 +70,8 @@ func init() {
 	runCmd.Flags().StringVar(&runPrefix, "prefix", "", "Inject only secret keys with this prefix")
 	runCmd.Flags().StringVar(&runGroup, "group", "", "Resolve secrets through an environment group's inheritance chain")
 	runCmd.Flags().StringVar(&runEnvName, "env", "", "Environment name within the group (requires --group)")
+	runCmd.Flags().BoolVar(&runStrict, "strict", false, "Fail if any --only key is missing instead of warning")
+	runCmd.Flags().StringVar(&runIdentity, "identity", "", "Decrypt a shared project with this X25519 identity instead of the passphrase")
 }
 
 func runRun(cmd *cobra.Command, args []string) error {
@@ -89,73 +95,179 @@ func runRun(cmd *cobra.Command, args []string) error {
 	if runEnvNoVault && runGroup != "" {
 		return fmt.Errorf("--group/--env select vault secrets and cannot be combined with --no-vault")
 	}
+	identityRequested := runIdentity != "" || strings.TrimSpace(os.Getenv(envIdentityKey)) != ""
+	if runEnvNoVault && identityRequested {
+		return fmt.Errorf("--identity selects vault secrets and cannot be combined with --no-vault")
+	}
 
 	var vaultSecrets map[string]string
 	var project string
+	var missing []string
+	var loadSecret func(string, string) (string, error)
 	if !runEnvNoVault {
-		if runGroup != "" && runEnvName != "" {
+		selectorsPresent := len(runOnly) > 0 || runPrefix != ""
+		switch {
+		case runGroup != "" && runEnvName != "":
 			// Resolution through environment group inheritance.
-			v, err := openAndUnlockVault()
-			if err != nil {
-				return err
+			var v *vault.Vault
+			var idSource string
+			var idErr error
+			var id *crypto.Identity
+			if identityRequested {
+				id, idSource, idErr = resolveIdentity(runIdentity)
+				if idErr != nil {
+					return idErr
+				}
+				if id == nil {
+					return fmt.Errorf("no identity available: pass --identity <name> or set %s", envIdentityKey)
+				}
+				v, idErr = vault.Open(getVaultDir())
+				if idErr != nil {
+					return fmt.Errorf("vault not found at %s, run 'tvault init' first: %w", getVaultDir(), idErr)
+				}
+				warnEnvKeyUsed(os.Stderr, idSource, "run")
+			} else {
+				v, idErr = openAndUnlockVault()
+				if idErr != nil {
+					return idErr
+				}
 			}
 			defer v.Close()
-			vaultSecrets, project, err = resolveAllWithInheritance(v, runGroup, runEnvName)
-			if err != nil {
-				return fmt.Errorf("failed to resolve secrets: %w", err)
+			var resolveErr error
+			switch {
+			case identityRequested && selectorsPresent:
+				vaultSecrets, missing, project, resolveErr = resolveSelectedWithInheritanceIdentity(v, id, runGroup, runEnvName, runOnly, runPrefix)
+			case identityRequested:
+				vaultSecrets, project, resolveErr = resolveAllWithInheritanceIdentity(v, id, runGroup, runEnvName)
+			case selectorsPresent:
+				vaultSecrets, missing, project, resolveErr = resolveSelectedWithInheritance(v, runGroup, runEnvName, runOnly, runPrefix)
+			default:
+				vaultSecrets, project, resolveErr = resolveAllWithInheritance(v, runGroup, runEnvName)
 			}
-		} else if secrets, resolved, ok := agentAllSecrets(projectName); ok {
-			// Fast path: a running agent serves the project's secrets prompt-free.
-			vaultSecrets, project = secrets, resolved
-		} else {
-			v, err := openAndUnlockVault()
+			if resolveErr != nil {
+				return fmt.Errorf("failed to resolve secrets: %w", resolveErr)
+			}
+			if identityRequested {
+				recordAudit(v, "secret.read", "environment_group", runGroup, map[string]any{
+					"via": "identity", "source": idSource, "environment": runEnvName, "selected": selectorsPresent,
+				})
+			}
+			loadSecret = func(referenceProject, key string) (string, error) {
+				if referenceProject == project {
+					var selected map[string]string
+					var absent []string
+					var selectErr error
+					if identityRequested {
+						selected, absent, _, selectErr = resolveSelectedWithInheritanceIdentity(v, id, runGroup, runEnvName, []string{key}, "")
+					} else {
+						selected, absent, _, selectErr = resolveSelectedWithInheritance(v, runGroup, runEnvName, []string{key}, "")
+					}
+					if selectErr != nil {
+						return "", selectErr
+					}
+					if len(absent) > 0 {
+						return "", fmt.Errorf("secret %q not found in project %q", key, referenceProject)
+					}
+					return selected[key], nil
+				}
+				if identityRequested {
+					selected, absent, selectErr := v.GetSelectedSecretsWithIdentity(referenceProject, id, []string{key}, "")
+					if selectErr != nil {
+						return "", fmt.Errorf("read project %q with identity: %w", referenceProject, selectErr)
+					}
+					if len(absent) > 0 {
+						return "", fmt.Errorf("secret %q not found in project %q", key, referenceProject)
+					}
+					return selected[key], nil
+				}
+				return loadRunProjectSecret(referenceProject, key)
+			}
+
+		case identityRequested:
+			id, source, err := resolveIdentity(runIdentity)
 			if err != nil {
 				return err
 			}
-			project = resolveProject(v, projectName)
-			vaultSecrets, err = v.GetAllSecrets(project)
-			v.Close()
+			if id == nil {
+				return fmt.Errorf("no identity available: pass --identity <name> or set %s", envIdentityKey)
+			}
+			v, err := vault.Open(getVaultDir())
 			if err != nil {
-				return fmt.Errorf("failed to get secrets: %w", err)
+				return fmt.Errorf("vault not found at %s, run 'tvault init' first: %w", getVaultDir(), err)
 			}
-		}
-	}
-
-	// Resolve any tvault:// references in env file values against the
-	// vault so a templated .env can be committed safely.
-	resolver := func(ref dotenv.Ref) (string, error) {
-		if vaultSecrets == nil {
-			return "", fmt.Errorf("vault not loaded (use --no-vault=false or remove ${tvault://...} references)")
-		}
-		proj := ref.Project
-		if proj == "" || proj == "current" {
-			if project == "" {
-				return "", fmt.Errorf("no current project; use tvault://PROJECT/KEY syntax")
+			defer v.Close()
+			warnEnvKeyUsed(os.Stderr, source, "run")
+			project = resolveProject(v, projectName)
+			if selectorsPresent {
+				vaultSecrets, missing, err = v.GetSelectedSecretsWithIdentity(project, id, runOnly, runPrefix)
+			} else {
+				vaultSecrets, err = v.GetAllSecretsWithIdentity(project, id)
 			}
-			proj = project
+			if err != nil {
+				return fmt.Errorf("read project %q with identity: %w", project, err)
+			}
+			recordAudit(v, "secret.read", "project", project, map[string]any{"via": "identity", "source": source, "selected": selectorsPresent})
+			loadSecret = func(referenceProject, key string) (string, error) {
+				selected, absent, selectErr := v.GetSelectedSecretsWithIdentity(referenceProject, id, []string{key}, "")
+				if selectErr != nil {
+					return "", fmt.Errorf("read project %q with identity: %w", referenceProject, selectErr)
+				}
+				if len(absent) > 0 {
+					return "", fmt.Errorf("secret %q not found in project %q", key, referenceProject)
+				}
+				return selected[key], nil
+			}
+
+		case selectorsPresent:
+			if secrets, absent, resolved, ok := agentSelectedSecrets(projectName, runOnly, runPrefix); ok {
+				vaultSecrets, missing, project = secrets, absent, resolved
+			} else {
+				v, err := openAndUnlockVault()
+				if err != nil {
+					return err
+				}
+				defer v.Close()
+				project = resolveProject(v, projectName)
+				vaultSecrets, missing, err = v.GetSelectedSecrets(project, runOnly, runPrefix)
+				if err != nil {
+					return fmt.Errorf("failed to get selected secrets: %w", err)
+				}
+			}
+			loadSecret = loadRunProjectSecret
+
+		default:
+			if secrets, resolved, ok := agentAllSecrets(projectName); ok {
+				// Fast path: a running agent serves the project's secrets prompt-free.
+				vaultSecrets, project = secrets, resolved
+			} else {
+				v, err := openAndUnlockVault()
+				if err != nil {
+					return err
+				}
+				project = resolveProject(v, projectName)
+				vaultSecrets, err = v.GetAllSecrets(project)
+				v.Close()
+				if err != nil {
+					return fmt.Errorf("failed to get secrets: %w", err)
+				}
+			}
+			loadSecret = loadRunProjectSecret
 		}
-		val, ok := vaultSecrets[ref.Key]
-		if !ok {
-			return "", fmt.Errorf("secret %q not found in project %q", ref.Key, proj)
-		}
-		return val, nil
 	}
 
-	// --only/--prefix narrow the bulk auto-injection (least privilege). The
-	// full set stays available to the resolver above, so explicit
-	// ${tvault://...} references in an env file still work.
-	injected := vaultSecrets
-	if len(runOnly) > 0 || runPrefix != "" {
-		var missing []string
-		injected, missing = selectSecrets(vaultSecrets, runOnly, runPrefix)
-		if len(missing) > 0 {
-			fmt.Fprintf(os.Stderr, "warning: --only key(s) not found in project %q: %s\n",
-				project, strings.Join(missing, ", "))
+	if len(missing) > 0 {
+		if runStrict {
+			return fmt.Errorf("--only key(s) not found in project %q: %s", project, strings.Join(missing, ", "))
 		}
+		fmt.Fprintf(os.Stderr, "warning: --only key(s) not found in project %q: %s\n", project, strings.Join(missing, ", "))
 	}
 
-	merged := make(map[string]string, len(injected))
-	for k, v := range injected {
+	// Explicit references are resolved one key at a time. This keeps bulk
+	// selection least-privilege while preserving env-file interpolation.
+	resolver := newRunRefResolver(project, vaultSecrets, loadSecret)
+
+	merged := make(map[string]string, len(vaultSecrets))
+	for k, v := range vaultSecrets {
 		merged[k] = v
 	}
 
@@ -227,6 +339,63 @@ func runRun(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func loadRunProjectSecret(project, key string) (string, error) {
+	if value, ok := agentGetSecret(project, key); ok {
+		return value, nil
+	}
+	v, err := openAndUnlockVault()
+	if err != nil {
+		return "", err
+	}
+	defer v.Close()
+	value, err := v.GetSecret(project, key)
+	if err != nil {
+		return "", fmt.Errorf("get secret %q for project %q: %w", key, project, err)
+	}
+	return value, nil
+}
+
+func newRunRefResolver(
+	currentProject string,
+	currentSecrets map[string]string,
+	loadSecret func(string, string) (string, error),
+) func(dotenv.Ref) (string, error) {
+	cache := map[string]map[string]string{}
+	if currentProject != "" && currentSecrets != nil {
+		cache[currentProject] = currentSecrets
+	}
+	return func(ref dotenv.Ref) (string, error) {
+		if currentSecrets == nil {
+			return "", fmt.Errorf("vault not loaded (use --no-vault=false or remove ${tvault://...} references)")
+		}
+		project := ref.Project
+		if project == "" || project == "current" {
+			if currentProject == "" {
+				return "", fmt.Errorf("no current project; use tvault://PROJECT/KEY syntax")
+			}
+			project = currentProject
+		}
+		secrets := cache[project]
+		value, ok := secrets[ref.Key]
+		if !ok {
+			if loadSecret == nil {
+				return "", fmt.Errorf("vault not loaded (use --no-vault=false or remove ${tvault://...} references)")
+			}
+			var err error
+			value, err = loadSecret(project, ref.Key)
+			if err != nil {
+				return "", fmt.Errorf("load secret %q from project %q: %w", ref.Key, project, err)
+			}
+			if secrets == nil {
+				secrets = make(map[string]string)
+				cache[project] = secrets
+			}
+			secrets[ref.Key] = value
+		}
+		return value, nil
+	}
 }
 
 // selectSecrets returns the subset of all whose keys match the --only allowlist

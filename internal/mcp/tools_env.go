@@ -38,6 +38,10 @@ func (s *VaultMCPServer) registerEnvTools() {
 
 //nolint:gocognit,gocyclo // sequential format handling is clearest as a single function
 func (s *VaultMCPServer) handleExportEnv(_ context.Context, _ *sdkmcp.CallToolRequest, input exportEnvInput) (*sdkmcp.CallToolResult, exportEnvOutput, error) {
+	if !s.policy.CanWrite() {
+		return nil, exportEnvOutput{}, fmt.Errorf("file exports are not allowed by policy")
+	}
+
 	project := s.resolveProject(input.Project)
 	if !s.policy.CanAccessProject(project) {
 		return nil, exportEnvOutput{}, fmt.Errorf("project %q is not allowed by policy", project)
@@ -55,11 +59,8 @@ func (s *VaultMCPServer) handleExportEnv(_ context.Context, _ *sdkmcp.CallToolRe
 		if pErr != nil {
 			return nil, exportEnvOutput{}, pErr
 		}
-		if !s.policy.CanAccessProject(childProject) {
-			return nil, exportEnvOutput{}, fmt.Errorf("project %q is not allowed by policy", childProject)
-		}
 		project = childProject
-		allSecrets, err = resolveAllWithInheritanceMCP(s.vault, group, input.Env, childProject)
+		allSecrets, err = s.resolveAllWithInheritanceMCP(group, input.Env, childProject)
 		if err != nil {
 			return nil, exportEnvOutput{}, fmt.Errorf("resolve secrets: %w", err)
 		}

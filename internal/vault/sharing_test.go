@@ -56,6 +56,36 @@ func TestShareAndRecipientRead(t *testing.T) {
 	}
 }
 
+func TestRecipientSelectedReadUsesOnlyAndPrefixUnion(t *testing.T) {
+	v := sharingVault(t)
+	if err := v.SetSecret("default", "CHALUPA_TOKEN", "deploy-token"); err != nil {
+		t.Fatal(err)
+	}
+	alice, err := crypto.GenerateIdentity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := v.ShareProject("default", alice.Recipient()); err != nil {
+		t.Fatal(err)
+	}
+
+	selected, missing, err := v.GetSelectedSecretsWithIdentity(
+		"default", alice, []string{"API_KEY", "MISSING"}, "CHALUPA_",
+	)
+	if err != nil {
+		t.Fatalf("GetSelectedSecretsWithIdentity: %v", err)
+	}
+	if len(missing) != 1 || missing[0] != "MISSING" {
+		t.Fatalf("missing = %v, want [MISSING]", missing)
+	}
+	if len(selected) != 2 || selected["API_KEY"] != "sk_123" || selected["CHALUPA_TOKEN"] != "deploy-token" {
+		t.Fatal("selected recipient read did not return the expected key set")
+	}
+	if _, leaked := selected["DB_URL"]; leaked {
+		t.Fatal("selected recipient read leaked an unselected secret")
+	}
+}
+
 func TestUnshareRotatesAndRevokes(t *testing.T) {
 	v := sharingVault(t)
 	// Bump API_KEY to version 2 to verify versions survive the re-key.

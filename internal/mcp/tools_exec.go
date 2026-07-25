@@ -90,11 +90,8 @@ func (s *VaultMCPServer) handleRunWithSecrets(ctx context.Context, _ *sdkmcp.Cal
 		if pErr != nil {
 			return nil, runResult{}, pErr
 		}
-		if !s.policy.CanAccessProject(childProject) {
-			return nil, runResult{}, fmt.Errorf("project %q is not allowed by policy", childProject)
-		}
 		project = childProject
-		allSecrets, err = resolveAllWithInheritanceMCP(s.vault, group, input.Env, childProject)
+		allSecrets, err = s.resolveAllWithInheritanceMCP(group, input.Env, childProject)
 		if err != nil {
 			return nil, runResult{}, fmt.Errorf("resolve secrets: %w", err)
 		}

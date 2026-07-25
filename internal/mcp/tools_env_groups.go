@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -161,27 +162,66 @@ func resolveEnvProject(group *vault.EnvGroup, envName string) (string, error) {
 	return "", fmt.Errorf("environment %q not found in group %q", envName, group.Name)
 }
 
+// requireEnvProjectAccess checks the selected environment and its configured
+// inheritance source before a handler can read or mutate through the group.
+// Checking both projects up front prevents an allowed child from becoming a
+// policy bypass into a denied base project.
+func (s *VaultMCPServer) requireEnvProjectAccess(group *vault.EnvGroup, envName string) error {
+	childProject, err := resolveEnvProject(group, envName)
+	if err != nil {
+		return err
+	}
+	if !s.policy.CanAccessProject(childProject) {
+		return fmt.Errorf("project %q is not allowed by policy", childProject)
+	}
+	if inheritance, ok := group.Inheritance[envName]; ok {
+		baseProject, err := resolveEnvProject(group, inheritance.From)
+		if err != nil {
+			return err
+		}
+		if !s.policy.CanAccessProject(baseProject) {
+			return fmt.Errorf("inherited project %q is not allowed by policy", baseProject)
+		}
+	}
+	return nil
+}
+
+func (s *VaultMCPServer) requireGroupProjectAccess(group *vault.EnvGroup, envFilter []string) error {
+	for _, environment := range group.Environments {
+		if len(envFilter) > 0 && !containsStr(envFilter, environment.Name) {
+			continue
+		}
+		if accessErr := s.requireEnvProjectAccess(group, environment.Name); accessErr != nil {
+			return accessErr
+		}
+	}
+	return nil
+}
+
 // resolveAllWithInheritanceMCP resolves all secrets for an environment through
 // the inheritance chain. It gets the child project's local secrets, then fills
 // in missing keys from the base environment (if inheritance is configured).
-//
-//nolint:gocognit // env group + inheritance merge has inherent branching
-func resolveAllWithInheritanceMCP(v *vault.Vault, group *vault.EnvGroup, envName, childProject string) (map[string]string, error) {
-	secrets, err := v.GetAllSecrets(childProject)
+func (s *VaultMCPServer) resolveAllWithInheritanceMCP(group *vault.EnvGroup, envName, childProject string) (map[string]string, error) {
+	if accessErr := s.requireEnvProjectAccess(group, envName); accessErr != nil {
+		return nil, accessErr
+	}
+	secrets, err := s.vault.GetAllSecrets(childProject)
 	if err != nil {
 		return nil, fmt.Errorf("get secrets for %s: %w", childProject, err)
 	}
 	if group.Inheritance != nil {
 		if inh, ok := group.Inheritance[envName]; ok {
-			baseProject, bErr := resolveEnvProject(group, inh.From)
-			if bErr == nil {
-				baseSecrets, gErr := v.GetAllSecrets(baseProject)
-				if gErr == nil {
-					for k, val := range baseSecrets {
-						if _, exists := secrets[k]; !exists {
-							secrets[k] = val
-						}
-					}
+			baseProject, err := resolveEnvProject(group, inh.From)
+			if err != nil {
+				return nil, err
+			}
+			baseSecrets, err := s.vault.GetAllSecrets(baseProject)
+			if err != nil {
+				return nil, fmt.Errorf("get secrets for %s: %w", baseProject, err)
+			}
+			for k, val := range baseSecrets {
+				if _, exists := secrets[k]; !exists {
+					secrets[k] = val
 				}
 			}
 		}
@@ -280,6 +320,17 @@ func (s *VaultMCPServer) handleEnvGroupCreate(_ context.Context, _ *sdkmcp.CallT
 	if !s.policy.CanWrite() {
 		return nil, envGroupOutput{}, fmt.Errorf("write operations are not allowed by policy")
 	}
+	if input.Force {
+		existing, err := s.vault.GetEnvGroup(input.Name)
+		switch {
+		case err == nil:
+			if accessErr := s.requireGroupProjectAccess(existing, nil); accessErr != nil {
+				return nil, envGroupOutput{}, accessErr
+			}
+		case !errors.Is(err, vault.ErrGroupNotFound):
+			return nil, envGroupOutput{}, fmt.Errorf("group: %w", err)
+		}
+	}
 
 	envs := make([]vault.EnvGroupEntry, len(input.Environments))
 	for i, e := range input.Environments {
@@ -307,6 +358,9 @@ func (s *VaultMCPServer) handleEnvGroupList(_ context.Context, _ *sdkmcp.CallToo
 
 	out := envGroupListOutput{Groups: []envGroupDetail{}}
 	for _, g := range groups {
+		if accessErr := s.requireGroupProjectAccess(&g, nil); accessErr != nil {
+			continue
+		}
 		out.Groups = append(out.Groups, envGroupDetail{
 			Name:         g.Name,
 			Description:  g.Description,
@@ -317,6 +371,13 @@ func (s *VaultMCPServer) handleEnvGroupList(_ context.Context, _ *sdkmcp.CallToo
 }
 
 func (s *VaultMCPServer) handleEnvDiff(_ context.Context, _ *sdkmcp.CallToolRequest, input envDiffInput) (*sdkmcp.CallToolResult, envDiffOutput, error) {
+	group, err := s.vault.GetEnvGroup(input.Group)
+	if err != nil {
+		return nil, envDiffOutput{}, fmt.Errorf("group: %w", err)
+	}
+	if accessErr := s.requireGroupProjectAccess(group, nil); accessErr != nil {
+		return nil, envDiffOutput{}, accessErr
+	}
 	diff, err := s.vault.DiffEnvironments(input.Group, input.Values)
 	if err != nil {
 		return nil, envDiffOutput{}, fmt.Errorf("diff: %w", err)
@@ -351,10 +412,11 @@ func (s *VaultMCPServer) handleEnvPromote(_ context.Context, _ *sdkmcp.CallToolR
 	if err != nil {
 		return nil, envPromoteOutput{}, fmt.Errorf("group: %w", err)
 	}
-	for _, e := range group.Environments {
-		if (e.Name == input.FromEnv || e.Name == input.ToEnv) && !s.policy.CanAccessProject(e.Project) {
-			return nil, envPromoteOutput{}, fmt.Errorf("project %q is not allowed by policy", e.Project)
-		}
+	if accessErr := s.requireEnvProjectAccess(group, input.FromEnv); accessErr != nil {
+		return nil, envPromoteOutput{}, accessErr
+	}
+	if accessErr := s.requireEnvProjectAccess(group, input.ToEnv); accessErr != nil {
+		return nil, envPromoteOutput{}, accessErr
 	}
 
 	result, err := s.vault.Promote(input.Group, input.FromEnv, input.ToEnv, input.Keys, input.All, input.DryRun)
@@ -449,6 +511,9 @@ func (s *VaultMCPServer) handleEnvSeal(_ context.Context, _ *sdkmcp.CallToolRequ
 	if err != nil {
 		return nil, envSealOutput{}, fmt.Errorf("group: %w", err)
 	}
+	if accessErr := s.requireGroupProjectAccess(group, input.Envs); accessErr != nil {
+		return nil, envSealOutput{}, accessErr
+	}
 
 	// Parse recipients.
 	recipients := make([][]byte, 0, len(input.Recipients))
@@ -513,7 +578,21 @@ func (s *VaultMCPServer) handleEnvInherit(_ context.Context, _ *sdkmcp.CallToolR
 		return nil, envInheritOutput{}, fmt.Errorf("write operations are not allowed by policy")
 	}
 
-	_, err := s.vault.SetInheritance(input.Group, input.Env, input.From)
+	group, err := s.vault.GetEnvGroup(input.Group)
+	if err != nil {
+		return nil, envInheritOutput{}, fmt.Errorf("group: %w", err)
+	}
+	for _, envName := range []string{input.Env, input.From} {
+		project, resolveErr := resolveEnvProject(group, envName)
+		if resolveErr != nil {
+			return nil, envInheritOutput{}, resolveErr
+		}
+		if !s.policy.CanAccessProject(project) {
+			return nil, envInheritOutput{}, fmt.Errorf("project %q is not allowed by policy", project)
+		}
+	}
+
+	_, err = s.vault.SetInheritance(input.Group, input.Env, input.From)
 	if err != nil {
 		return nil, envInheritOutput{}, fmt.Errorf("set inheritance: %w", err)
 	}
@@ -526,6 +605,13 @@ func (s *VaultMCPServer) handleEnvInherit(_ context.Context, _ *sdkmcp.CallToolR
 }
 
 func (s *VaultMCPServer) handleEnvInherited(_ context.Context, _ *sdkmcp.CallToolRequest, input envInheritedInput) (*sdkmcp.CallToolResult, envInheritedOutput, error) {
+	group, err := s.vault.GetEnvGroup(input.Group)
+	if err != nil {
+		return nil, envInheritedOutput{}, fmt.Errorf("group: %w", err)
+	}
+	if accessErr := s.requireEnvProjectAccess(group, input.Env); accessErr != nil {
+		return nil, envInheritedOutput{}, accessErr
+	}
 	keys, err := s.vault.ListInherited(input.Group, input.Env)
 	if err != nil {
 		return nil, envInheritedOutput{}, fmt.Errorf("list inherited: %w", err)
@@ -592,6 +678,9 @@ func (s *VaultMCPServer) handleEnvGroupShow(_ context.Context, _ *sdkmcp.CallToo
 	if err != nil {
 		return nil, envGroupShowOutput{}, fmt.Errorf("group: %w", err)
 	}
+	if accessErr := s.requireGroupProjectAccess(group, nil); accessErr != nil {
+		return nil, envGroupShowOutput{}, accessErr
+	}
 
 	diffStatus := "unknown"
 	diff, dErr := s.vault.DiffEnvironments(input.Name, false)
@@ -625,6 +714,13 @@ func (s *VaultMCPServer) handleEnvGroupAdd(_ context.Context, _ *sdkmcp.CallTool
 	if !s.policy.CanWrite() {
 		return nil, envGroupOutput{}, fmt.Errorf("write operations are not allowed by policy")
 	}
+	existing, err := s.vault.GetEnvGroup(input.Group)
+	if err != nil {
+		return nil, envGroupOutput{}, fmt.Errorf("group: %w", err)
+	}
+	if accessErr := s.requireGroupProjectAccess(existing, nil); accessErr != nil {
+		return nil, envGroupOutput{}, accessErr
+	}
 	if !s.policy.CanAccessProject(input.Project) {
 		return nil, envGroupOutput{}, fmt.Errorf("project %q is not allowed by policy", input.Project)
 	}
@@ -650,6 +746,14 @@ func (s *VaultMCPServer) handleEnvGroupRemove(_ context.Context, _ *sdkmcp.CallT
 		return nil, envGroupOutput{}, fmt.Errorf("write operations are not allowed by policy")
 	}
 
+	existing, err := s.vault.GetEnvGroup(input.Group)
+	if err != nil {
+		return nil, envGroupOutput{}, fmt.Errorf("group: %w", err)
+	}
+	if accessErr := s.requireGroupProjectAccess(existing, nil); accessErr != nil {
+		return nil, envGroupOutput{}, accessErr
+	}
+
 	group, err := s.vault.RemoveEnvGroupEnvironment(input.Group, input.EnvName)
 	if err != nil {
 		return nil, envGroupOutput{}, fmt.Errorf("remove environment: %w", err)
@@ -670,6 +774,14 @@ func (s *VaultMCPServer) handleEnvGroupDelete(_ context.Context, _ *sdkmcp.CallT
 		return nil, struct{}{}, fmt.Errorf("write operations are not allowed by policy")
 	}
 
+	group, err := s.vault.GetEnvGroup(input.Name)
+	if err != nil {
+		return nil, struct{}{}, fmt.Errorf("group: %w", err)
+	}
+	if accessErr := s.requireGroupProjectAccess(group, nil); accessErr != nil {
+		return nil, struct{}{}, accessErr
+	}
+
 	if err := s.vault.DeleteEnvGroup(input.Name); err != nil {
 		return nil, struct{}{}, fmt.Errorf("delete group: %w", err)
 	}
@@ -686,12 +798,23 @@ type envPinInput struct {
 	Key   string `json:"key" jsonschema:"Key to pin (write resolved value into child, breaking inheritance)"`
 }
 
-func (s *VaultMCPServer) handleEnvPin(_ context.Context, _ *sdkmcp.CallToolRequest, input envPinInput) (*sdkmcp.CallToolResult, struct{}, error) {
+func (s *VaultMCPServer) requireEnvKeyWriteAccess(groupName, envName, key string) error {
 	if !s.policy.CanWrite() {
-		return nil, struct{}{}, fmt.Errorf("write operations are not allowed by policy")
+		return fmt.Errorf("write operations are not allowed by policy")
 	}
-	if !s.policy.CanAccessSecret(input.Key) {
-		return nil, struct{}{}, fmt.Errorf("secret %q is not allowed by policy", input.Key)
+	if !s.policy.CanAccessSecret(key) {
+		return fmt.Errorf("secret %q is not allowed by policy", key)
+	}
+	group, err := s.vault.GetEnvGroup(groupName)
+	if err != nil {
+		return fmt.Errorf("group: %w", err)
+	}
+	return s.requireEnvProjectAccess(group, envName)
+}
+
+func (s *VaultMCPServer) handleEnvPin(_ context.Context, _ *sdkmcp.CallToolRequest, input envPinInput) (*sdkmcp.CallToolResult, struct{}, error) {
+	if err := s.requireEnvKeyWriteAccess(input.Group, input.Env, input.Key); err != nil {
+		return nil, struct{}{}, err
 	}
 
 	if err := s.vault.PinKey(input.Group, input.Env, input.Key); err != nil {
@@ -710,11 +833,8 @@ type envUnpinInput struct {
 }
 
 func (s *VaultMCPServer) handleEnvUnpin(_ context.Context, _ *sdkmcp.CallToolRequest, input envUnpinInput) (*sdkmcp.CallToolResult, struct{}, error) {
-	if !s.policy.CanWrite() {
-		return nil, struct{}{}, fmt.Errorf("write operations are not allowed by policy")
-	}
-	if !s.policy.CanAccessSecret(input.Key) {
-		return nil, struct{}{}, fmt.Errorf("secret %q is not allowed by policy", input.Key)
+	if err := s.requireEnvKeyWriteAccess(input.Group, input.Env, input.Key); err != nil {
+		return nil, struct{}{}, err
 	}
 
 	if err := s.vault.UnpinKey(input.Group, input.Env, input.Key); err != nil {

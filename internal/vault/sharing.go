@@ -3,6 +3,8 @@ package vault
 import (
 	"bytes"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -230,6 +232,73 @@ func (v *Vault) GetAllSecretsWithIdentity(name string, id *crypto.Identity) (map
 		result[key] = string(pt)
 	}
 	return result, nil
+}
+
+// GetSelectedSecretsWithIdentity is the recipient-read counterpart to
+// GetSelectedSecrets. It unwraps the project DEK once but decrypts only the
+// exact or prefix-selected values.
+func (v *Vault) GetSelectedSecretsWithIdentity(
+	name string,
+	id *crypto.Identity,
+	only []string,
+	prefix string,
+) (map[string]string, []string, error) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
+	project, err := v.store.GetProjectByName(name)
+	if err != nil {
+		return nil, nil, mapStoreError(err)
+	}
+	if len(project.RecipientWraps) == 0 {
+		return nil, nil, fmt.Errorf("project %q is not shared with any recipient", name)
+	}
+	stanzas := make([][]byte, 0, len(project.RecipientWraps))
+	for _, wrap := range project.RecipientWraps {
+		stanzas = append(stanzas, wrap.Stanza)
+	}
+	dek, err := crypto.UnwrapDEK(id, stanzas)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer crypto.ZeroBytes(dek)
+
+	allKeys, err := v.store.ListSecretKeys(project.ID)
+	if err != nil {
+		return nil, nil, mapStoreError(err)
+	}
+	available := make(map[string]struct{}, len(allKeys))
+	selected := make(map[string]struct{})
+	for _, key := range allKeys {
+		available[key] = struct{}{}
+		if prefix != "" && strings.HasPrefix(key, prefix) {
+			selected[key] = struct{}{}
+		}
+	}
+	missing := make([]string, 0)
+	for _, key := range only {
+		if _, ok := available[key]; !ok {
+			missing = append(missing, key)
+			continue
+		}
+		selected[key] = struct{}{}
+	}
+	sort.Strings(missing)
+
+	result := make(map[string]string, len(selected))
+	for key := range selected {
+		entry, err := v.store.GetSecret(project.ID, key)
+		if err != nil {
+			return nil, nil, mapStoreError(err)
+		}
+		plaintext, err := crypto.Decrypt(dek, entry.EncryptedValue)
+		if err != nil {
+			return nil, nil, fmt.Errorf("decrypt %s: %w", key, err)
+		}
+		result[key] = string(plaintext)
+		crypto.ZeroBytes(plaintext)
+	}
+	return result, missing, nil
 }
 
 // upsertWrap replaces the wrap for recipient if present, else appends it.

@@ -97,6 +97,35 @@ func TestAgentRoutingFastPath(t *testing.T) {
 	}
 }
 
+func TestAgentRoutingSelectedFastPath(t *testing.T) {
+	dir := shortAgentVault(t, "CHALUPA_TOKEN", "selected")
+	v, err := ivault.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := v.Unlock("test-passphrase"); err != nil {
+		_ = v.Close()
+		t.Fatal(err)
+	}
+	if err := v.SetSecret("default", "UNRELATED_SECRET", "must-not-be-returned"); err != nil {
+		_ = v.Close()
+		t.Fatal(err)
+	}
+	if err := v.Close(); err != nil {
+		t.Fatal(err)
+	}
+	stop := startTestAgentForCmd(t, dir)
+	defer stop()
+
+	secrets, missing, project, ok := agentSelectedSecrets(projectName, []string{"CHALUPA_TOKEN"}, "")
+	if !ok || project != "default" || len(missing) != 0 || len(secrets) != 1 || secrets["CHALUPA_TOKEN"] != "selected" {
+		t.Fatalf("agentSelectedSecrets failed (missing=%d, project=%q, ok=%v)", len(missing), project, ok)
+	}
+	if _, leaked := secrets["UNRELATED_SECRET"]; leaked {
+		t.Fatal("agent selected response leaked an unselected value")
+	}
+}
+
 func TestAgentRoutingDisabledByFlag(t *testing.T) {
 	dir := shortAgentVault(t, "K", "v")
 	stop := startTestAgentForCmd(t, dir)

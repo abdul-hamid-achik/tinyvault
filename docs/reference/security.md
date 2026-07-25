@@ -49,7 +49,7 @@ These are the threats TinyVault is built to mitigate, and how.
 - **Someone brute-forces your passphrase.** Argon2id at 64 MiB / 3 / 4 makes each guess roughly 200 ms and memory-bound, which is hostile to GPU and ASIC cracking.
 - **The vault file is tampered with.** Every value, DEK, and the verifier carries an AES-GCM authentication tag. Any modification fails authentication and is rejected with a decryption error rather than silently returning corrupt data.
 - **An AI agent accidentally pulls a secret into its prompt or logs.** The MCP layer offers workflows that do not intentionally return values: `vault_run_with_secrets` injects selected values into a subprocess, `vault_export_env` writes to disk and returns a path, `vault_generate_secret` returns generation metadata but not the generated value, and `vault_seal_for_recipients` returns ciphertext. `vault_get_secret` deliberately returns a raw value, `vault_set_secret` accepts one from the client, and subprocesses can leak or transform what they receive; policy is the real control.
-- **An AI agent escapes its allow-list through normal tool handlers.** An [access policy](/mcp/access-policy) (`~/.tvault/mcp-policy.yaml`) gates projects and secret keys with glob allow/deny lists, and `access_mode` controls whether writes and command execution are permitted. The in-memory policy is loaded once and has no mutation tool. If command execution is enabled, however, the launched shell can modify any file the server user can write — including the policy file used on a future restart.
+- **An AI agent escapes its allow-list through normal tool handlers.** An [access policy](/mcp/access-policy) (`~/.tvault/mcp-policy.yaml`) gates projects and secret keys with glob allow/deny lists, and `access_mode` controls whether writes and command execution are permitted. Explicit policy files must contain every security field, empty allowlists deny access, and environment inheritance checks both the child and base project. The in-memory policy is loaded once and has no mutation tool. If command execution is enabled, however, the launched shell can modify any file the server user can write — including the policy file used on a future restart.
 - **A removed recipient tries to read the updated live vault.** `tvault projects unshare` atomically rotates the project DEK, re-encrypts every current value and archived version, and re-wraps the new DEK to the remaining recipients. The removed identity cannot decrypt that updated state or future writes under the new DEK. See [Sharing](/guide/sharing).
 - **A different-uid process reaches the agent socket.** The agent performs a mandatory peer-credential check before token validation and rejects any peer whose uid does not match its own. For accepted same-uid clients, `--require-token` adds a second bearer-token gate and can scope a token to one project.
 - **A malicious dotenv file is imported.** The parser does no shell, variable, or command expansion; it enforces a filename allowlist, skips symlinks, and caps files at 1 MiB. Importing a `.env` cannot execute a payload embedded in it. See [Dotenv files](/guide/dotenv).
@@ -94,7 +94,7 @@ The server is a thin policy-and-redaction layer over the same vault API the CLI 
 | Tool | What it returns to the model |
 |------|------------------------------|
 | `vault_run_with_secrets` | exit status and command output — literal-value redaction applies only when policy enables it |
-| `vault_export_env` | a file path on disk, not the contents |
+| `vault_export_env` | a file path on disk, not the contents; requires write access |
 | `vault_generate_secret` | key, length, charset, and `stored: true` — never the generated value |
 | `vault_seal_for_recipients` | ciphertext (a sealed `.env.encrypted` blob) |
 | `vault_get_secret` | the raw value — **plus a warning** that it is now in context |
@@ -129,11 +129,17 @@ Its design is deliberately conservative:
 - **KEK-only, reopen per request.** bbolt is single-writer, so an agent that held the database open would block every other `tvault` invocation. Instead the agent caches **only the KEK** and reopens the vault for each request (validating the cached KEK against the verifier, no Argon2id), serialized by a mutex. Direct CLI access keeps working between requests.
 - **Socket born locked.** The socket is created `0600` via a tight umask inside the `0700` vault directory — there is no listen-then-chmod window. Stale-socket cleanup refuses to reuse a path owned by another user or of the wrong type. A `flock`-held lockfile is the authoritative single-instance guard.
 - **Mandatory peer-uid check, fail-closed.** Every connection is checked with `LOCAL_PEERCRED` (macOS) or `SO_PEERCRED` (Linux) and rejected unless the peer's uid equals the agent's. Platforms without a peer-credential implementation fail closed.
-- **Read-only operations.** The wire protocol is newline-delimited JSON, one request per connection, version- and size-checked (64 KB cap), with read/write deadlines. The only operations are `get`, `getall`, `status`, and `stop`. The agent cannot write secrets.
+- **Read-only operations.** The wire protocol is newline-delimited JSON, one request per connection, version- and size-checked (64 KB cap), with read/write deadlines. The operations are `get`, `getall`, `getselected`, `status`, and `stop`. `getselected` accepts validated exact keys and/or a key prefix and decrypts only matching entries, so a selected `run` does not receive an all-values response. The agent cannot write secrets.
 - **KEK zeroed on every exit path.** Signal, idle auto-lock (default 15 minutes, `--idle 0` to disable), explicit `stop`, and panic-recovery all zero the KEK. The accepted residual risk is `SIGKILL`, which cannot run the zeroing — the same caveat that applies to any agent.
 - **No daemonization.** `agent start` runs in the **foreground**. Backgrounding (`&`, `nohup`, systemd `Type=simple`, launchd) is your job, which keeps the live Go runtime from being forked unsafely.
 
 CLI routing tries the agent first and silently falls back to a direct unlock if it is absent. `--no-agent` or `TVAULT_NO_AGENT=1` forces a direct unlock.
+
+When TinyVault launches a child through `run` or MCP execution, it removes all
+`TVAULT_*` control variables from the child's inherited environment before
+adding the explicitly selected application values. This prevents passphrases,
+identity keys, agent tokens, routing overrides, and future TinyVault controls
+from crossing that process boundary.
 
 ### Token honesty
 

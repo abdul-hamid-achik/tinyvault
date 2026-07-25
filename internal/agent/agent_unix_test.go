@@ -81,7 +81,7 @@ func startTestAgentKEK(t *testing.T, idle time.Duration) (string, []byte, func()
 	return dir, kek, stop
 }
 
-func TestAgentGetGetAllStatus(t *testing.T) {
+func TestAgentGetGetAllSelectedStatus(t *testing.T) {
 	dir, stop := startTestAgent(t, 0)
 	defer stop()
 
@@ -103,9 +103,42 @@ func TestAgentGetGetAllStatus(t *testing.T) {
 	if proj != "default" {
 		t.Errorf("resolved project = %q, want default", proj)
 	}
+	selected, missing, selectedProject, serr := c.GetSelected("default", []string{"DB_URL", "MISSING"}, "")
+	if serr != nil {
+		t.Fatalf("GetSelected: %v", serr)
+	}
+	if selected["DB_URL"] != "postgres://x" || len(selected) != 1 {
+		t.Errorf("GetSelected returned the wrong selected key set")
+	}
+	if len(missing) != 1 || missing[0] != "MISSING" {
+		t.Errorf("GetSelected missing = %v, want [MISSING]", missing)
+	}
+	if selectedProject != "default" {
+		t.Errorf("GetSelected resolved project = %q, want default", selectedProject)
+	}
 	st, serr := c.Status()
 	if serr != nil || st.Project != "default" || st.PID == 0 {
 		t.Errorf("Status = %+v (err %v)", st, serr)
+	}
+}
+
+func TestAgentGetSelectedRejectsMalformedSelectors(t *testing.T) {
+	dir, stop := startTestAgent(t, 0)
+	defer stop()
+
+	for name, request := range map[string]string{
+		"empty":          `{"v":1,"op":"getselected","project":"default"}`,
+		"bad only":       `{"v":1,"op":"getselected","project":"default","only":["BAD-KEY"]}`,
+		"bad prefix":     `{"v":1,"op":"getselected","project":"default","prefix":"BAD-"}`,
+		"empty only key": `{"v":1,"op":"getselected","project":"default","only":[""]}`,
+		"legacy key":     `{"v":1,"op":"getselected","project":"default","key":"DB_URL","only":["DB_URL"]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			resp := rawRequest(t, dir, request)
+			if resp.OK || resp.Error == "" {
+				t.Fatalf("malformed selection accepted: %+v", resp)
+			}
+		})
 	}
 }
 

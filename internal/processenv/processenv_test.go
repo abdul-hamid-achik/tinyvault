@@ -11,6 +11,9 @@ func TestSanitizeRemovesControlCredentials(t *testing.T) {
 		"TVAULT_PASSPHRASE=master",
 		"TVAULT_IDENTITY_KEY=private",
 		"TVAULT_AGENT_TOKEN=capability",
+		"TVAULT_DIR=/private/vault",
+		"TVAULT_NO_AGENT=1",
+		"TVAULT_FUTURE_CONTROL=must-not-leak",
 		"TVAULT_PASSPHRASE=duplicate",
 		"APP_TOKEN=keep-me",
 	}

@@ -124,6 +124,35 @@ func TestLoadPolicy_InvalidYAML(t *testing.T) {
 	}
 }
 
+func TestLoadPolicy_RejectsIncompletePolicy(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "partial.yml")
+	if err := os.WriteFile(path, []byte("access_mode: read-only\n"), 0o600); err != nil {
+		t.Fatalf("write partial policy: %v", err)
+	}
+	if _, err := LoadPolicy(path); err == nil || !strings.Contains(err.Error(), "required field") {
+		t.Fatalf("LoadPolicy() error = %v, want incomplete-policy error", err)
+	}
+}
+
+func TestLoadPolicy_RejectsNegativeReadCap(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "negative-cap.yml")
+	content := `access_mode: read-only
+projects_allow: ["*"]
+projects_deny: []
+secrets_allow: ["*"]
+secrets_deny: []
+allow_exec: false
+max_reads_per_session: -1
+redact_output: true
+`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write policy: %v", err)
+	}
+	if _, err := LoadPolicy(path); err == nil || !strings.Contains(err.Error(), "max_reads_per_session") {
+		t.Fatalf("LoadPolicy() error = %v, want invalid-cap error", err)
+	}
+}
+
 func TestHandleExportEnv_WritesFileNoValues(t *testing.T) {
 	srv, _ := newScratchServer(t)
 
@@ -165,6 +194,111 @@ func TestHandleExportEnv_WritesFileNoValues(t *testing.T) {
 	}
 	if !strings.Contains(string(data), "DB_URL") || !strings.Contains(string(data), "API_KEY") {
 		t.Error("exported file should contain both keys")
+	}
+}
+
+func TestHandleExportEnv_ReadOnlyPolicyCannotWriteArbitraryPath(t *testing.T) {
+	srv, _ := newScratchServer(t)
+	srv.policy.AccessMode = "read-only"
+	outPath := filepath.Join(t.TempDir(), "must-not-exist.env")
+
+	if _, _, err := srv.handleExportEnv(context.Background(), nil, exportEnvInput{
+		Project:    "default",
+		OutputPath: outPath,
+	}); err == nil {
+		t.Fatal("read-only policy wrote an export file")
+	}
+	if _, err := os.Stat(outPath); !os.IsNotExist(err) {
+		t.Fatalf("export path exists after denied write: %v", err)
+	}
+}
+
+func TestEnvironmentInheritanceCannotReadPolicyDeniedBaseProject(t *testing.T) {
+	srv, v := newScratchServer(t)
+	if _, err := v.CreateProject("shared-base", "Denied inheritance source"); err != nil {
+		t.Fatalf("create base project: %v", err)
+	}
+	if err := v.SetSecret("shared-base", "INHERITED_TOKEN", "inherited-value"); err != nil {
+		t.Fatalf("set inherited secret: %v", err)
+	}
+	if _, err := v.CreateEnvGroup("app", "", []vault.EnvGroupEntry{
+		{Name: "preview", Project: "default"},
+		{Name: "production", Project: "shared-base"},
+	}, false); err != nil {
+		t.Fatalf("create environment group: %v", err)
+	}
+	if _, err := v.SetInheritance("app", "preview", "production"); err != nil {
+		t.Fatalf("set inheritance: %v", err)
+	}
+
+	srv.policy = &AccessPolicy{
+		AccessMode:         "full",
+		ProjectsAllow:      []string{"default"},
+		SecretsAllow:       []string{"*"},
+		AllowExec:          true,
+		MaxReadsPerSession: 10,
+		RedactOutput:       true,
+	}
+
+	if _, _, err := srv.handleGetSecret(context.Background(), nil, getSecretInput{
+		Group: "app",
+		Env:   "preview",
+		Key:   "INHERITED_TOKEN",
+	}); err == nil || !strings.Contains(err.Error(), "inherited project") {
+		t.Fatalf("get inherited secret error = %v, want denied-base error", err)
+	}
+
+	outPath := filepath.Join(t.TempDir(), "denied.env")
+	if _, _, err := srv.handleExportEnv(context.Background(), nil, exportEnvInput{
+		Group:      "app",
+		Env:        "preview",
+		OutputPath: outPath,
+	}); err == nil || !strings.Contains(err.Error(), "inherited project") {
+		t.Fatalf("export inherited secret error = %v, want denied-base error", err)
+	}
+	if _, err := os.Stat(outPath); !os.IsNotExist(err) {
+		t.Fatalf("denied export created a file: %v", err)
+	}
+}
+
+func TestEnvironmentGroupMutationsRequireAccessToEveryReturnedOrOverwrittenProject(t *testing.T) {
+	srv, v := newScratchServer(t)
+	if _, err := v.CreateProject("shared-base", "Denied group member"); err != nil {
+		t.Fatalf("create base project: %v", err)
+	}
+	if _, err := v.CreateProject("additional", "Allowed project"); err != nil {
+		t.Fatalf("create additional project: %v", err)
+	}
+	if _, err := v.CreateEnvGroup("app", "", []vault.EnvGroupEntry{
+		{Name: "preview", Project: "default"},
+		{Name: "production", Project: "shared-base"},
+	}, false); err != nil {
+		t.Fatalf("create environment group: %v", err)
+	}
+	srv.policy = &AccessPolicy{
+		AccessMode:    "read-write",
+		ProjectsAllow: []string{"default", "additional"},
+		SecretsAllow:  []string{"*"},
+	}
+
+	if _, _, err := srv.handleEnvGroupAdd(context.Background(), nil, envGroupAddInput{
+		Group: "app", EnvName: "staging", Project: "additional",
+	}); err == nil || !strings.Contains(err.Error(), "shared-base") {
+		t.Fatalf("add to mixed-access group error = %v, want denied-member error", err)
+	}
+	if _, _, err := srv.handleEnvGroupRemove(context.Background(), nil, envGroupRemoveInput{
+		Group: "app", EnvName: "preview",
+	}); err == nil || !strings.Contains(err.Error(), "shared-base") {
+		t.Fatalf("remove from mixed-access group error = %v, want denied-member error", err)
+	}
+	if _, _, err := srv.handleEnvGroupCreate(context.Background(), nil, envGroupCreateInput{
+		Name: "app", Force: true, Environments: []envGroupEntryIn{{Name: "preview", Project: "default"}},
+	}); err == nil || !strings.Contains(err.Error(), "shared-base") {
+		t.Fatalf("force overwrite mixed-access group error = %v, want denied-member error", err)
+	}
+
+	if _, _, err := srv.handleCreateProject(context.Background(), nil, createProjectInput{Name: "not-allowed"}); err == nil || !strings.Contains(err.Error(), "not allowed") {
+		t.Fatalf("create denied project error = %v, want policy error", err)
 	}
 }
 

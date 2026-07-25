@@ -29,6 +29,9 @@ func (c *Client) Get(_, _ string) (string, error) { return "", ErrUnsupportedPla
 func (c *Client) GetAll(_ string) (map[string]string, string, error) {
 	return nil, "", ErrUnsupportedPlatform
 }
+func (c *Client) GetSelected(_ string, _ []string, _ string) (map[string]string, []string, string, error) {
+	return nil, nil, "", ErrUnsupportedPlatform
+}
 func (c *Client) Status() (*StatusInfo, error) { return nil, ErrUnsupportedPlatform }
 func (c *Client) StatusForProject(_ string) (*StatusInfo, error) {
 	return nil, ErrUnsupportedPlatform
