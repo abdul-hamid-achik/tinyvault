@@ -22,6 +22,24 @@ If `tvault` was installed from the retired formula, migrate once with
 
 ## Unreleased
 
+## 0.20.1 — 2026-07-26
+
+### Fixed
+
+- `tvault studio` no longer holds the vault database open for the whole
+  interactive session. bbolt takes a process-wide exclusive lock, so every other
+  `tvault` invocation on the machine failed while the studio was open. It now
+  caches only the KEK and reopens the vault per operation — the same pattern the
+  local agent uses — so a reopen costs a file open rather than re-deriving the
+  key. No TinyVault surface holds the lock across a long-lived session anymore.
+
+### Added
+
+- The studio's status pane reports the local agent (pid, time to idle-lock) and
+  the installed service (launchd/systemd, and whether it is registered). This is
+  read-only: it dials the socket and stats the definition, and never installs —
+  `tvault agent install` remains the only way to write a service.
+
 ## 0.20.0 — 2026-07-26
 
 ### Added

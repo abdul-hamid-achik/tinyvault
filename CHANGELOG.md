@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-07-26
+
 ### Added
 
 - The `tvault studio` status pane now reports the local agent (pid, time to
@@ -376,7 +378,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 See the [GitHub releases](https://github.com/abdul-hamid-achik/tinyvault/releases)
 for v0.8.0 and earlier.
 
-[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.20.1...HEAD
+[0.20.1]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.19.1...v0.20.0
 [0.19.1]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.18.2...v0.19.0
