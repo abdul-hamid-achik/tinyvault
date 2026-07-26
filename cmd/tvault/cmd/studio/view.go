@@ -339,6 +339,38 @@ func (m Model) statusBody(w, _ int) []string {
 		}
 		rows = append(rows, kv(m.styles, "env", envDetail, w))
 	}
+	rows = append(rows, m.serviceRows(w)...)
+	return rows
+}
+
+// serviceRows describes the agent and its managed service, read-only.
+//
+// Rows are omitted rather than shown as "no"/"none": the common case is no
+// agent and no installed service, and padding the pane with absences would push
+// the information the studio is actually for off the top.
+func (m Model) serviceRows(w int) []string {
+	if !m.svc.probed {
+		return nil
+	}
+	var rows []string
+	if m.svc.agentRunning {
+		detail := fmt.Sprintf("pid %d", m.svc.agentPID)
+		if m.svc.agentIdleRemaining > 0 {
+			detail += ", locks in " + (time.Duration(m.svc.agentIdleRemaining) * time.Second).String()
+		}
+		rows = append(rows, kv(m.styles, "agent", m.styles.good.Render(detail), w))
+	}
+	if m.svc.serviceKind != "" {
+		state := m.svc.serviceKind
+		if m.svc.serviceRegistered {
+			state = m.styles.good.Render(state + ", registered")
+		} else {
+			// Installed but not registered is worth flagging: the definition is
+			// on disk yet nothing will start it.
+			state = m.styles.warn.Render(state + ", not registered")
+		}
+		rows = append(rows, kv(m.styles, "service", state, w))
+	}
 	return rows
 }
 

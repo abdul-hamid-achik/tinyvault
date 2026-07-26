@@ -118,6 +118,9 @@ type Model struct {
 	editing    bool            // true = editing an existing key, false = new
 	confirmKey string          // key pending delete confirmation
 
+	// agent + managed-service state, refreshed alongside the other loads.
+	svc serviceData
+
 	// env-group state
 	envGroups      []vault.EnvGroup              // all groups, loaded once
 	projGroupIndex map[string]envMembership      // project name → group/env info
@@ -199,6 +202,7 @@ func (m Model) Init() tea.Cmd {
 		projectsCmd(m.sess),
 		auditCmd(m.sess, m.opts.AuditLimit),
 		envGroupsCmd(m.sess),
+		serviceCmd(m.sess.Dir()),
 	}
 	if m.viewProject != "" {
 		cmds = append(cmds, secretsCmd(m.sess, m.viewProject))
@@ -262,6 +266,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, frameTick()
 		}
 		m.animating = false
+		return m, nil
+
+	case serviceLoadedMsg:
+		m.svc = serviceData(msg)
 		return m, nil
 
 	case statusLoadedMsg:
@@ -731,6 +739,7 @@ func (m Model) reloadCmds() []tea.Cmd {
 		projectsCmd(m.sess),
 		auditCmd(m.sess, m.opts.AuditLimit),
 		envGroupsCmd(m.sess),
+		serviceCmd(m.sess.Dir()),
 	}
 	if m.viewProject != "" {
 		cmds = append(cmds, secretsCmd(m.sess, m.viewProject))

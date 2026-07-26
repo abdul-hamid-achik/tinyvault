@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- The `tvault studio` status pane now reports the local agent (pid, time to
+  idle-lock) and the installed service (launchd/systemd, and whether it is
+  registered with the manager). This is read-only — it dials the socket and
+  stats the definition, and never installs; `tvault agent install` remains the
+  only way to write a service. Rows are omitted when there is nothing to report
+  rather than shown as absences.
+
 ### Fixed
 
 - `tvault studio` no longer holds the vault database open for the whole

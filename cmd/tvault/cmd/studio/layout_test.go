@@ -153,3 +153,83 @@ func TestGridExactUnlockOverlay(t *testing.T) {
 		assertExactGrid(t, m.View().Content, sz[0], sz[1])
 	}
 }
+
+// TestGridExactWithServiceRows covers the agent/service rows in the status
+// pane. They are appended after the env-group rows, so they are the most likely
+// thing to push the pane past its allotted height and corrupt Bubble Tea's
+// cell-diff renderer.
+func TestGridExactWithServiceRows(t *testing.T) {
+	v := newScratchSession(t)
+	// The narrow/short sizes matter most: that is where extra rows overflow.
+	for _, sz := range [][2]int{{120, 40}, {90, 24}, {80, 20}, {60, 14}, {40, 10}} {
+		for _, svc := range []serviceData{
+			{probed: true}, // nothing installed
+			{probed: true, agentRunning: true, agentPID: 4242}, // agent only
+			{probed: true, agentRunning: true, agentPID: 4242, agentIdleRemaining: 900},
+			{probed: true, serviceKind: "launchd", serviceRegistered: true},  // service only
+			{probed: true, serviceKind: "systemd", serviceRegistered: false}, // installed, not registered
+			{
+				probed: true, agentRunning: true, agentPID: 4242, agentIdleRemaining: 3600,
+				serviceKind: "launchd", serviceRegistered: true,
+			}, // both, the widest case
+		} {
+			m := New(v, Options{})
+			m.anim = false
+			m = update(t, m, tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
+			m = update(t, m, statusLoadedMsg(mustLoadStatus(t, v)))
+			m = update(t, m, serviceLoadedMsg(svc))
+			assertExactGrid(t, m.View().Content, sz[0], sz[1])
+		}
+	}
+}
+
+// TestServiceRowsAreOmittedBeforeProbe keeps the pane quiet until the async
+// probe returns, instead of briefly claiming there is no agent.
+func TestServiceRowsAreOmittedBeforeProbe(t *testing.T) {
+	v := newScratchSession(t)
+	m := New(v, Options{})
+	if rows := m.serviceRows(80); rows != nil {
+		t.Errorf("expected no rows before the probe, got %v", rows)
+	}
+}
+
+// TestServiceRowsOmitAbsences documents the choice not to render "no"/"none":
+// the common case is no agent and no service, and padding the pane with
+// absences would push out what the studio is actually for.
+func TestServiceRowsOmitAbsences(t *testing.T) {
+	v := newScratchSession(t)
+	m := New(v, Options{})
+	m.svc = serviceData{probed: true}
+	if rows := m.serviceRows(80); len(rows) != 0 {
+		t.Errorf("a probed-but-empty state should render nothing, got %v", rows)
+	}
+}
+
+// TestServiceRowsContent pins what the rows actually say, so the pane cannot
+// silently stop reporting a running agent or an unregistered service.
+func TestServiceRowsContent(t *testing.T) {
+	v := newScratchSession(t)
+	m := New(v, Options{})
+
+	m.svc = serviceData{probed: true, agentRunning: true, agentPID: 4242, agentIdleRemaining: 900}
+	rows := strings.Join(m.serviceRows(120), "\n")
+	for _, want := range []string{"agent", "pid 4242", "locks in 15m"} {
+		if !strings.Contains(rows, want) {
+			t.Errorf("agent row missing %q, got %q", want, rows)
+		}
+	}
+
+	m.svc = serviceData{probed: true, serviceKind: "launchd", serviceRegistered: true}
+	rows = strings.Join(m.serviceRows(120), "\n")
+	if !strings.Contains(rows, "launchd") || !strings.Contains(rows, "registered") {
+		t.Errorf("service row should name the manager and its state, got %q", rows)
+	}
+
+	// Installed but not registered must be visibly different: the definition is
+	// on disk yet nothing will start it.
+	m.svc = serviceData{probed: true, serviceKind: "systemd", serviceRegistered: false}
+	rows = strings.Join(m.serviceRows(120), "\n")
+	if !strings.Contains(rows, "not registered") {
+		t.Errorf("an unregistered service must say so, got %q", rows)
+	}
+}

@@ -127,7 +127,10 @@ Security Scan, Build**. All four must be green.
   `browse` and `ui` remain working aliases for `studio`; the `browse:` config
   block in `~/.tvault/config.yaml` keeps its name.
 - **Read-only by default** — with no flags it never writes; the only decryption
-  is the on-demand reveal (`r`), audited like `tvault get`. `--rw` enables
+  is the on-demand reveal (`r`), audited like `tvault get`. The status pane also
+  reports the agent and its managed service, but **read-only**: it dials the
+  socket and stats the definition, never installs. `tvault agent install` writes
+  a system service, which is deliberately out of a browser's reach. `--rw` enables
   audited in-app edits (`n`/`e`/`d`) that reuse the CLI's `vault.SetSecret`/
   `DeleteSecret` path; rotation + project create/delete stay in the CLI.
 - **Invariant — KEK-only, never a held-open DB.** `studio.Session`
