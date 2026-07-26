@@ -340,3 +340,78 @@ func TestSystemdQuote(t *testing.T) {
 		}
 	}
 }
+
+// TestVerifyProgramCatchesAMissingBinary covers the failure that reports
+// success: `launchctl bootstrap` accepts a job whose program is gone, so the
+// service looks registered and simply never runs.
+func TestVerifyProgramCatchesAMissingBinary(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+
+	for _, kind := range []Kind{KindLaunchd, KindSystemd} {
+		cfg := testConfig()
+		cfg.Executable = filepath.Join(home, "gone", "tvault")
+		if _, err := Write(kind, cfg); err != nil {
+			t.Fatalf("%s: Write: %v", kind, err)
+		}
+
+		exe, err := VerifyProgram(kind)
+		if err == nil {
+			t.Errorf("%s: a missing binary must be reported, not silently accepted", kind)
+		}
+		if exe != cfg.Executable {
+			t.Errorf("%s: reported program = %q, want %q", kind, exe, cfg.Executable)
+		}
+		if err != nil && !strings.Contains(err.Error(), "tvault agent install") {
+			t.Errorf("%s: the error should say how to fix it, got %v", kind, err)
+		}
+	}
+}
+
+func TestVerifyProgramAcceptsAnExistingBinary(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+
+	exe := filepath.Join(home, "tvault")
+	if err := os.WriteFile(exe, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []Kind{KindLaunchd, KindSystemd} {
+		cfg := testConfig()
+		cfg.Executable = exe
+		if _, err := Write(kind, cfg); err != nil {
+			t.Fatalf("%s: Write: %v", kind, err)
+		}
+		if got, err := VerifyProgram(kind); err != nil || got != exe {
+			t.Errorf("%s: VerifyProgram = %q, %v; want %q, nil", kind, got, err, exe)
+		}
+	}
+}
+
+// TestProgramPathRoundTripsEscapedAndQuotedPaths keeps the parser honest for
+// the paths that need escaping in each format.
+func TestProgramPathRoundTripsEscapedAndQuotedPaths(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+
+	for kind, exe := range map[Kind]string{
+		KindLaunchd: "/Users/a&b/bin/tvault",  // & must survive XML escaping
+		KindSystemd: "/home/u/my apps/tvault", // a space forces ExecStart quoting
+	} {
+		cfg := testConfig()
+		cfg.Executable = exe
+		if _, err := Write(kind, cfg); err != nil {
+			t.Fatalf("%s: Write: %v", kind, err)
+		}
+		got, err := ProgramPath(kind)
+		if err != nil {
+			t.Fatalf("%s: ProgramPath: %v", kind, err)
+		}
+		if got != exe {
+			t.Errorf("%s: ProgramPath = %q, want %q", kind, got, exe)
+		}
+	}
+}

@@ -22,6 +22,24 @@ If `tvault` was installed from the retired formula, migrate once with
 
 ## Unreleased
 
+## 0.20.2 — 2026-07-26
+
+### Fixed
+
+- `tvault agent install` recorded the resolved binary path, which on Homebrew
+  points into a version-pinned directory. The next `brew upgrade` deleted it, so
+  the service silently stopped starting — `launchctl bootstrap` still succeeded
+  and `tvault agent restart` reported success. The stable symlink is now
+  recorded, and both `restart` and `status` report a missing binary instead of
+  claiming everything is fine.
+
+  After upgrading, re-run `tvault agent install` once to rewrite the definition:
+
+  ```bash
+  brew upgrade --cask tvault
+  tvault agent install --passphrase-file ~/.config/secrets/env
+  ```
+
 ## 0.20.1 — 2026-07-26
 
 ### Fixed

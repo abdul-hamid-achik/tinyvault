@@ -242,6 +242,12 @@ func printServiceStatus() {
 		}
 		PrintKeyValue("Service state", state)
 	}
+	// A registered service whose binary is gone looks healthy to the manager
+	// and never runs, so surface it here rather than leaving the user to read
+	// exit codes out of launchctl.
+	if _, verr := service.VerifyProgram(kind); verr != nil {
+		fmt.Fprintf(os.Stderr, "warning: %v\n", verr)
+	}
 }
 
 func runAgentStop(_ *cobra.Command, _ []string) error {

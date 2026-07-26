@@ -107,11 +107,13 @@ func serviceConfig(cfg Config) (service.Config, error) {
 	if err != nil {
 		return service.Config{}, fmt.Errorf("locate the tvault binary: %w", err)
 	}
-	// Resolve symlinks so the definition survives a Homebrew upgrade replacing
-	// the symlink target, and so `brew unlink` cannot leave a dangling path.
-	if resolved, rerr := filepath.EvalSymlinks(exe); rerr == nil {
-		exe = resolved
-	}
+	// Record the path as invoked, symlinks intact. Resolving them is actively
+	// harmful for a package manager: /opt/homebrew/bin/tvault is a stable
+	// symlink, but it points into a VERSIONED directory
+	// (…/Caskroom/tvault/0.20.0/tvault) that the next `brew upgrade` deletes.
+	// A definition holding the resolved path stops spawning after any upgrade,
+	// with launchd reporting only exit status 78. The symlink is the durable
+	// path, so keep it.
 
 	passFile := strings.TrimSpace(agentPassphraseFileFlag)
 	if passFile == "" {
@@ -250,6 +252,13 @@ func runAgentRestart(_ *cobra.Command, _ []string) error {
 	}
 	if !installed {
 		return fmt.Errorf("no service definition at %s; run 'tvault agent install' first", path)
+	}
+	// Check the recorded binary before touching the service. `launchctl
+	// bootstrap` happily accepts a job whose program is gone and reports
+	// success, so without this the command claims "restarted" while the agent
+	// never comes back — visible only as exit status 78 in `launchctl list`.
+	if _, verr := service.VerifyProgram(kind); verr != nil {
+		return verr
 	}
 	if unloadErr := service.Unload(kind); unloadErr != nil {
 		return unloadErr

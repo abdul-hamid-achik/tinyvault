@@ -23,8 +23,10 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"html"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"text/template"
@@ -95,6 +97,63 @@ func (c Config) Validate() error {
 		return fmt.Errorf("idle must not be negative, got %s", c.Idle)
 	}
 	return nil
+}
+
+// ProgramPath extracts the executable a definition on disk will run.
+//
+// It exists so callers can catch the case that makes a service fail silently:
+// the recorded binary no longer exists (a package upgrade moved it), which
+// launchd reports only as exit status 78 while `launchctl bootstrap` still
+// succeeds — so the service looks registered and simply never runs.
+func ProgramPath(kind Kind) (string, error) {
+	path, err := UnitPath(kind)
+	if err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read %s: %w", path, err)
+	}
+	body := string(data)
+
+	switch kind {
+	case KindLaunchd:
+		// The first <string> inside ProgramArguments is the executable.
+		i := strings.Index(body, "<key>ProgramArguments</key>")
+		if i < 0 {
+			return "", fmt.Errorf("%s has no ProgramArguments", path)
+		}
+		m := regexp.MustCompile(`<string>([^<]*)</string>`).FindStringSubmatch(body[i:])
+		if m == nil {
+			return "", fmt.Errorf("%s has an empty ProgramArguments", path)
+		}
+		return html.UnescapeString(m[1]), nil
+	case KindSystemd:
+		m := regexp.MustCompile(`(?m)^ExecStart=(?:"([^"]+)"|(\S+))`).FindStringSubmatch(body)
+		if m == nil {
+			return "", fmt.Errorf("%s has no ExecStart", path)
+		}
+		if m[1] != "" {
+			return m[1], nil
+		}
+		return m[2], nil
+	default:
+		return "", fmt.Errorf("unknown service kind %q", kind)
+	}
+}
+
+// VerifyProgram reports whether the installed definition's executable still
+// exists, returning the path either way so callers can name it.
+func VerifyProgram(kind Kind) (string, error) {
+	exe, err := ProgramPath(kind)
+	if err != nil {
+		return "", err
+	}
+	if _, serr := os.Stat(exe); serr != nil {
+		return exe, fmt.Errorf("the installed service points at %s, which no longer exists "+
+			"(a package upgrade likely replaced it); re-run 'tvault agent install'", exe)
+	}
+	return exe, nil
 }
 
 // args returns the agent's command-line arguments, excluding the executable.

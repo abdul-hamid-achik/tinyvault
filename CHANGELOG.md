@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.20.2] - 2026-07-26
+
+### Fixed
+
+- `tvault agent install` recorded the *resolved* binary path, which on Homebrew
+  points into a version-pinned directory (`…/Caskroom/tvault/0.20.0/tvault`).
+  The next `brew upgrade` deleted it, so the service stopped spawning — while
+  `launchctl bootstrap` still succeeded and `tvault agent restart` reported
+  success. The stable symlink is now recorded instead.
+- `tvault agent restart` verifies the recorded binary still exists and fails
+  with an actionable error instead of claiming success, and `tvault agent
+  status` warns when an installed service points at a missing binary. launchd
+  surfaces this only as exit status 78, which is invisible without looking.
+
+
 ## [0.20.1] - 2026-07-26
 
 ### Added
@@ -378,7 +393,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 See the [GitHub releases](https://github.com/abdul-hamid-achik/tinyvault/releases)
 for v0.8.0 and earlier.
 
-[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.20.1...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.20.2...HEAD
+[0.20.2]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.20.1...v0.20.2
 [0.20.1]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.19.1...v0.20.0
 [0.19.1]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.19.0...v0.19.1
