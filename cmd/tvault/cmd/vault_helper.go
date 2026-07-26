@@ -64,7 +64,21 @@ func openAndUnlockVault() (*vault.Vault, error) {
 		return nil, wrapVaultOpenErr(dir, err)
 	}
 
-	passphrase := os.Getenv("TVAULT_PASSPHRASE")
+	// A configured passphrase file is consulted before the TTY: it is how a
+	// daemonized agent (launchd/systemd), which inherits no TVAULT_PASSPHRASE,
+	// unlocks at all. A malformed or loosely-permissioned file is a hard error
+	// rather than a silent fall-through to the prompt, so a broken deployment
+	// surfaces instead of hanging a service on a prompt nobody can answer.
+	cfg, cfgErr := loadConfig()
+	if cfgErr != nil {
+		_ = v.Close()
+		return nil, fmt.Errorf("read %s: %w", configPath(), cfgErr)
+	}
+	passphrase, err := passphraseFromEnvOrFile(cfg)
+	if err != nil {
+		_ = v.Close()
+		return nil, err
+	}
 	if passphrase == "" {
 		if !term.IsTerminal(int(os.Stdin.Fd())) {
 			// Non-interactive and no passphrase env: fail fast with the

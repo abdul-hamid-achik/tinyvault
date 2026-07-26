@@ -18,8 +18,30 @@ import (
 //	  no_anim: false
 //	  single_pane: false
 //	  audit_limit: 100
+//	agent:
+//	  passphrase_file: ~/.config/secrets/env
+//	  log_dir: ""        # empty = $XDG_STATE_HOME/tvault
+//	  log_level: info
 type Config struct {
 	Browse BrowseConfig `yaml:"browse"`
+	Agent  AgentConfig  `yaml:"agent"`
+}
+
+// AgentConfig holds settings for `tvault agent` and the service definitions
+// `tvault agent install` generates. Explicit flags and environment variables
+// always win over these.
+type AgentConfig struct {
+	// PassphraseFile points at an env-style file (KEY=VALUE, `export` accepted)
+	// containing TVAULT_PASSPHRASE. It exists so the agent can unlock under
+	// launchd/systemd, where there is no TTY to prompt at. tvault reads the
+	// file itself and refuses one that is group- or world-readable, which is
+	// why the passphrase must never be inlined into a plist or unit file.
+	PassphraseFile string `yaml:"passphrase_file"`
+	// LogDir overrides where agent logs are written. Empty means the XDG state
+	// directory ($XDG_STATE_HOME/tvault, else ~/.local/state/tvault).
+	LogDir string `yaml:"log_dir"`
+	// LogLevel is one of debug, info, warn, error. Empty means info.
+	LogLevel string `yaml:"log_level"`
 }
 
 // BrowseConfig holds default settings for `tvault studio` (under the
