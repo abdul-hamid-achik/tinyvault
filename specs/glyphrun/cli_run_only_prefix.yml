@@ -18,6 +18,9 @@ target:
     - "/bin/sh"
     - "-c"
     - |
+      export TVAULT_DIR=.glyphrun/tmp/cli-run-only
+      export TVAULT_PASSPHRASE=glyphpass
+      export TVAULT_NO_AGENT=1
       ./bin/tvault run --only DIGITALOCEAN_TOKEN -- sh -c 'echo "ONLY tok=[$DIGITALOCEAN_TOKEN] other=[$OTHER_KEY]"' && \
       echo --- && \
       ./bin/tvault run --prefix NUXT_ -- sh -c 'echo "PREFIX nuxt=[$NUXT_DATABASE_URL] tok=[$DIGITALOCEAN_TOKEN]"'

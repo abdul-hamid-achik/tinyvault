@@ -8,7 +8,7 @@ intent: |
   This verifies the studio TUI displays env profile metadata.
 
 target:
-  cmd: ["./bin/tvault", "studio", "--no-anim"]
+  cmd: ["./bin/tvault", "studio", "--no-anim", "--vault", ".glyphrun/tmp/vault"]
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/vault"
@@ -45,6 +45,13 @@ preconditions:
       timeoutMs: 10000
     - run: "TVAULT_DIR=.glyphrun/tmp/vault TVAULT_PASSPHRASE=glyphpass ./bin/tvault env inherit --group liftclub --env preview --from production"
       timeoutMs: 10000
+    # The TUI is launched with --vault and unlocks from a passphrase file
+    # named in the vault's own config.yaml, so the spec does not depend on
+    # the harness exporting TVAULT_DIR/TVAULT_PASSPHRASE into the PTY process.
+    - run: "printf 'TVAULT_PASSPHRASE=glyphpass\\n' > .glyphrun/tmp/vault/pass.env && chmod 600 .glyphrun/tmp/vault/pass.env"
+      timeoutMs: 5000
+    - run: "printf 'agent:\\n  passphrase_file: .glyphrun/tmp/vault/pass.env\\n' > .glyphrun/tmp/vault/config.yaml"
+      timeoutMs: 5000
 
 steps:
   - wait:

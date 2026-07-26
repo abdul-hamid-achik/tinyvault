@@ -17,7 +17,7 @@ intent: |
   pane focus end-to-end.
 
 target:
-  cmd: ["./bin/tvault", "studio", "--no-anim"]
+  cmd: ["./bin/tvault", "studio", "--no-anim", "--vault", ".glyphrun/tmp/vim"]
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/vim"
@@ -46,6 +46,13 @@ preconditions:
       timeoutMs: 10000
     - run: "TVAULT_DIR=.glyphrun/tmp/vim TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph -p webapp"
       timeoutMs: 10000
+    # The TUI is launched with --vault and unlocks from a passphrase file
+    # named in the vault's own config.yaml, so the spec does not depend on
+    # the harness exporting TVAULT_DIR/TVAULT_PASSPHRASE into the PTY process.
+    - run: "printf 'TVAULT_PASSPHRASE=glyphpass\\n' > .glyphrun/tmp/vim/pass.env && chmod 600 .glyphrun/tmp/vim/pass.env"
+      timeoutMs: 5000
+    - run: "printf 'agent:\\n  passphrase_file: .glyphrun/tmp/vim/pass.env\\n' > .glyphrun/tmp/vim/config.yaml"
+      timeoutMs: 5000
 
 steps:
   - wait:

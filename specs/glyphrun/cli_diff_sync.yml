@@ -22,7 +22,7 @@ target:
   cmd:
     - "/bin/sh"
     - "-c"
-    - "./bin/tvault diff .glyphrun/tmp/cli-diff/.env -p webapp --values && echo '--- RECONCILE ---' && ./bin/tvault sync --direction push --path .glyphrun/tmp/cli-diff/.env --overwrite -p webapp"
+    - "export TVAULT_DIR=.glyphrun/tmp/cli-diff; export TVAULT_PASSPHRASE=glyphpass; ./bin/tvault diff .glyphrun/tmp/cli-diff/.env -p webapp --values && echo '--- RECONCILE ---' && ./bin/tvault sync --direction push --path .glyphrun/tmp/cli-diff/.env --overwrite -p webapp"
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/cli-diff"

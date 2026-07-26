@@ -13,7 +13,7 @@ intent: |
   PTY and closes cleanly with esc.
 
 target:
-  cmd: ["./bin/tvault", "studio", "--no-anim"]
+  cmd: ["./bin/tvault", "studio", "--no-anim", "--vault", ".glyphrun/tmp/drift"]
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/drift"
@@ -48,6 +48,13 @@ preconditions:
       timeoutMs: 10000
     - run: "TVAULT_DIR=.glyphrun/tmp/drift TVAULT_PASSPHRASE=glyphpass ./bin/tvault env group create liftclub --env production=liftclub --env preview=liftclub-preview"
       timeoutMs: 10000
+    # The TUI is launched with --vault and unlocks from a passphrase file
+    # named in the vault's own config.yaml, so the spec does not depend on
+    # the harness exporting TVAULT_DIR/TVAULT_PASSPHRASE into the PTY process.
+    - run: "printf 'TVAULT_PASSPHRASE=glyphpass\\n' > .glyphrun/tmp/drift/pass.env && chmod 600 .glyphrun/tmp/drift/pass.env"
+      timeoutMs: 5000
+    - run: "printf 'agent:\\n  passphrase_file: .glyphrun/tmp/drift/pass.env\\n' > .glyphrun/tmp/drift/config.yaml"
+      timeoutMs: 5000
 
 steps:
   - wait:

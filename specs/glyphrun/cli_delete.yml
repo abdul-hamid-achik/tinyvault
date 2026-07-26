@@ -14,7 +14,7 @@ intent: |
   PTY; the fine-grained unit coverage lives in the runDelete tests.
 
 target:
-  cmd: ["/bin/sh", "-c", "./bin/tvault delete K1 -y -p default && ./bin/tvault list -p default"]
+  cmd: ["/bin/sh", "-c", "export TVAULT_DIR=.glyphrun/tmp/cli-del; export TVAULT_PASSPHRASE=glyphpass; ./bin/tvault delete K1 -y -p default && ./bin/tvault list -p default"]
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/cli-del"

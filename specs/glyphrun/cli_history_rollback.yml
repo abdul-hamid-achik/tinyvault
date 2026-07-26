@@ -20,7 +20,7 @@ target:
   cmd:
     - "/bin/sh"
     - "-c"
-    - "./bin/tvault history TOKEN -p default && ./bin/tvault rollback TOKEN --to 1 -p default && ./bin/tvault get TOKEN -p default"
+    - "export TVAULT_DIR=.glyphrun/tmp/cli-hist; export TVAULT_PASSPHRASE=glyphpass; ./bin/tvault history TOKEN -p default && ./bin/tvault rollback TOKEN --to 1 -p default && ./bin/tvault get TOKEN -p default"
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/cli-hist"

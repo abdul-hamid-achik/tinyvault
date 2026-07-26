@@ -17,7 +17,7 @@ target:
   cmd:
     - "/bin/sh"
     - "-c"
-    - "./bin/tvault identity new alice && ./bin/tvault identity list && ./bin/tvault identity export alice --force"
+    - "export TVAULT_DIR=.glyphrun/tmp/cli-id; export TVAULT_PASSPHRASE=glyphpass; ./bin/tvault identity new alice && ./bin/tvault identity list && ./bin/tvault identity export alice --force"
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/cli-id"

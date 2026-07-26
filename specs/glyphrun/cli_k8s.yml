@@ -22,7 +22,7 @@ target:
     - "/bin/sh"
     - "-c"
     - >-
-      PUB=$(./bin/tvault identity list | awk '/cluster/{print $2}');
+      export TVAULT_DIR=.glyphrun/tmp/cli-k8s; export TVAULT_PASSPHRASE=glyphpass; PUB=$(./bin/tvault identity list | awk '/cluster/{print $2}');
       ./bin/tvault seal --format k8s --name app-secrets --recipient "$PUB" -p app -o .glyphrun/tmp/cli-k8s/sealed.yaml &&
       cat .glyphrun/tmp/cli-k8s/sealed.yaml &&
       echo '---RENDER---' &&

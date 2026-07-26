@@ -13,7 +13,7 @@ intent: |
   this spec proves it renders and responds to keystrokes over a PTY.
 
 target:
-  cmd: ["./bin/tvault", "studio", "--no-anim"]
+  cmd: ["./bin/tvault", "studio", "--no-anim", "--vault", ".glyphrun/tmp/filter"]
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/filter"
@@ -42,6 +42,13 @@ preconditions:
       timeoutMs: 10000
     - run: "TVAULT_DIR=.glyphrun/tmp/filter TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://glyph -p webapp"
       timeoutMs: 10000
+    # The TUI is launched with --vault and unlocks from a passphrase file
+    # named in the vault's own config.yaml, so the spec does not depend on
+    # the harness exporting TVAULT_DIR/TVAULT_PASSPHRASE into the PTY process.
+    - run: "printf 'TVAULT_PASSPHRASE=glyphpass\\n' > .glyphrun/tmp/filter/pass.env && chmod 600 .glyphrun/tmp/filter/pass.env"
+      timeoutMs: 5000
+    - run: "printf 'agent:\\n  passphrase_file: .glyphrun/tmp/filter/pass.env\\n' > .glyphrun/tmp/filter/config.yaml"
+      timeoutMs: 5000
 
 steps:
   - wait:

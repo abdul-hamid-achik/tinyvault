@@ -18,7 +18,7 @@ target:
   cmd:
     - "/bin/sh"
     - "-c"
-    - "./bin/tvault env --format dotenv && echo --- && ./bin/tvault run -- sh -c 'echo INJECTED=$DB_URL'"
+    - "export TVAULT_DIR=.glyphrun/tmp/cli-env; export TVAULT_PASSPHRASE=glyphpass; ./bin/tvault env --format dotenv && echo --- && ./bin/tvault run -- sh -c 'echo INJECTED=$DB_URL'"
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/cli-env"

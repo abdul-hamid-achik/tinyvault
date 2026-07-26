@@ -19,6 +19,9 @@ target:
     - "/bin/sh"
     - "-c"
     - |
+      export TVAULT_DIR=.glyphrun/tmp/cli-mcp-coexist
+      export TVAULT_PASSPHRASE=glyphpass
+      export TVAULT_NO_AGENT=1
       ( sleep 30 | ./bin/tvault mcp >/dev/null 2>&1 ) &
       sleep 2                       # let mcp boot, unlock, and release the lock
       ./bin/tvault get DB_URL && ./bin/tvault run -- sh -c 'echo INJECTED=$DB_URL'

@@ -29,7 +29,7 @@ target:
   cmd:
     - "/bin/sh"
     - "-c"
-    - "./bin/tvault key rotate && TVAULT_PASSPHRASE=newglyphpass ./bin/tvault get DB_URL -p default"
+    - "export TVAULT_DIR=.glyphrun/tmp/cli-key; export TVAULT_PASSPHRASE=glyphpass; ./bin/tvault key rotate && TVAULT_PASSPHRASE=newglyphpass ./bin/tvault get DB_URL -p default"
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/cli-key"

@@ -86,6 +86,16 @@ every top-level command at least once.
 
 These shaped how the specs are written; keep them in mind when editing.
 
+0. **Specs export their own env; do not rely on `target.env` alone.** The
+   harness does not reliably propagate `target.env` into the PTY process, so a
+   spec that trusted it ran against the developer's real `~/.tvault` instead of
+   its throwaway vault — the TUI specs showed the wrong vault and the CLI specs
+   hung on a passphrase prompt until they timed out. Every spec now carries the
+   environment itself: shell targets `export` it as the first statement of their
+   script, and `tvault studio` takes `--vault <dir>` on the command line and
+   unlocks from a passphrase file named in that vault's own `config.yaml`. Keep
+   new specs to that pattern; `target.env` stays as documentation of intent.
+
 1. **The config passphrase is injected into every target.** `glyphrun.config.yml`
    sets `TVAULT_PASSPHRASE: glyphpass` for the `local` environment, so `studio`
    launches **unlocked** by default (that is what most specs want). A spec's

@@ -15,7 +15,7 @@ target:
   cmd:
     - "/bin/sh"
     - "-c"
-    - "./bin/tvault set DB_URL postgres://glyph -p default && ./bin/tvault get DB_URL -p default && echo && ./bin/tvault list -p default && ./bin/tvault status"
+    - "export TVAULT_DIR=.glyphrun/tmp/cli-core; export TVAULT_PASSPHRASE=glyphpass; ./bin/tvault set DB_URL postgres://glyph -p default && ./bin/tvault get DB_URL -p default && echo && ./bin/tvault list -p default && ./bin/tvault status"
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/cli-core"

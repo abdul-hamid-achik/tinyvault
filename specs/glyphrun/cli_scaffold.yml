@@ -26,7 +26,7 @@ target:
     - "/bin/sh"
     - "-c"
     - >-
-      set -o pipefail;
+      export TVAULT_DIR=.glyphrun/tmp/cli-scaf; export TVAULT_PASSPHRASE=glyphpass; set -o pipefail;
       echo '=== DOCTOR ===';
       ./bin/tvault doctor | grep -F 'All checks passed.'
       && echo '=== HOOK ==='

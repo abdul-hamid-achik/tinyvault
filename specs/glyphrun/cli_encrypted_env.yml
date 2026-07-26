@@ -19,7 +19,7 @@ target:
     - "/bin/sh"
     - "-c"
     - >
-      PUB=$(./bin/tvault identity list | awk '{print $2}' | head -1) &&
+      export TVAULT_DIR=.glyphrun/tmp/cli-eenv; export TVAULT_PASSPHRASE=glyphpass; PUB=$(./bin/tvault identity list | awk '{print $2}' | head -1) &&
       ./bin/tvault encrypt-env --in .glyphrun/tmp/cli-eenv/.env --out .glyphrun/tmp/cli-eenv/.env.encrypted --recipient "$PUB" &&
       ./bin/tvault decrypt-env --in .glyphrun/tmp/cli-eenv/.env.encrypted --identity ci
   cwd: "."

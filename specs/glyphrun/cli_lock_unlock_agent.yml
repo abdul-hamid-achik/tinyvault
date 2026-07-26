@@ -13,7 +13,7 @@ intent: |
   "✓ Vault unlocked", "agent not running") render and the chain exits 0.
 
 target:
-  cmd: ["/bin/sh", "-c", "./bin/tvault lock && ./bin/tvault unlock && ./bin/tvault agent status"]
+  cmd: ["/bin/sh", "-c", "export TVAULT_DIR=.glyphrun/tmp/cli-lock; export TVAULT_PASSPHRASE=glyphpass; export TVAULT_NO_AGENT=1; ./bin/tvault lock && ./bin/tvault unlock && ./bin/tvault agent status"]
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/cli-lock"

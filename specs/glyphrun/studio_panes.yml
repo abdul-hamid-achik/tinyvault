@@ -12,7 +12,7 @@ intent: |
   spec proves the per-pane footer hint renders and updates in a real terminal.
 
 target:
-  cmd: ["./bin/tvault", "studio", "--no-anim"]
+  cmd: ["./bin/tvault", "studio", "--no-anim", "--vault", ".glyphrun/tmp/panes"]
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/panes"
@@ -39,6 +39,13 @@ preconditions:
       timeoutMs: 10000
     - run: "TVAULT_DIR=.glyphrun/tmp/panes TVAULT_PASSPHRASE=glyphpass ./bin/tvault set STRIPE_KEY sk_live_glyph123 -p webapp"
       timeoutMs: 10000
+    # The TUI is launched with --vault and unlocks from a passphrase file
+    # named in the vault's own config.yaml, so the spec does not depend on
+    # the harness exporting TVAULT_DIR/TVAULT_PASSPHRASE into the PTY process.
+    - run: "printf 'TVAULT_PASSPHRASE=glyphpass\\n' > .glyphrun/tmp/panes/pass.env && chmod 600 .glyphrun/tmp/panes/pass.env"
+      timeoutMs: 5000
+    - run: "printf 'agent:\\n  passphrase_file: .glyphrun/tmp/panes/pass.env\\n' > .glyphrun/tmp/panes/config.yaml"
+      timeoutMs: 5000
 
 steps:
   - wait:

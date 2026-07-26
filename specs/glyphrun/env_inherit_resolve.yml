@@ -8,7 +8,7 @@ intent: |
   end-to-end smoke test for the inheritance resolution path.
 
 target:
-  cmd: ["./bin/tvault", "get", "STRIPE_KEY", "--group", "liftclub", "--env", "preview", "--show-source"]
+  cmd: ["/bin/sh", "-c", "export TVAULT_DIR=.glyphrun/tmp/vault; export TVAULT_PASSPHRASE=glyphpass; ./bin/tvault get STRIPE_KEY --group liftclub --env preview --show-source"]
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/vault"

@@ -8,7 +8,7 @@ intent: |
   values. This verifies the JSON output path for CI consumption.
 
 target:
-  cmd: ["./bin/tvault", "env", "diff", "liftclub", "--json"]
+  cmd: ["/bin/sh", "-c", "export TVAULT_DIR=.glyphrun/tmp/vault; export TVAULT_PASSPHRASE=glyphpass; ./bin/tvault env diff liftclub --json"]
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/vault"

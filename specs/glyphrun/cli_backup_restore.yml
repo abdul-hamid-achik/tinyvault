@@ -16,7 +16,7 @@ target:
   cmd:
     - "/bin/sh"
     - "-c"
-    - "./bin/tvault backup .glyphrun/tmp/cli-bak/backup.db && ./bin/tvault restore .glyphrun/tmp/cli-bak/backup.db -y && ./bin/tvault get DB_URL -p webapp"
+    - "export TVAULT_DIR=.glyphrun/tmp/cli-bak; export TVAULT_PASSPHRASE=glyphpass; ./bin/tvault backup .glyphrun/tmp/cli-bak/backup.db && ./bin/tvault restore .glyphrun/tmp/cli-bak/backup.db -y && ./bin/tvault get DB_URL -p webapp"
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/cli-bak"

@@ -20,7 +20,7 @@ target:
   cmd:
     - "/bin/sh"
     - "-c"
-    - "./bin/tvault export --format dotenv -o .glyphrun/tmp/cli-exp/exp/.env -p webapp && ./bin/tvault projects create restored && ./bin/tvault import .glyphrun/tmp/cli-exp/exp/.env -p restored && ./bin/tvault list -p restored"
+    - "export TVAULT_DIR=.glyphrun/tmp/cli-exp; export TVAULT_PASSPHRASE=glyphpass; ./bin/tvault export --format dotenv -o .glyphrun/tmp/cli-exp/exp/.env -p webapp && ./bin/tvault projects create restored && ./bin/tvault import .glyphrun/tmp/cli-exp/exp/.env -p restored && ./bin/tvault list -p restored"
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/cli-exp"

@@ -16,7 +16,7 @@ target:
   cmd:
     - "/bin/sh"
     - "-c"
-    - "./bin/tvault projects create api && ./bin/tvault projects list && ./bin/tvault use api && ./bin/tvault projects list && ./bin/tvault projects create scratch && ./bin/tvault projects delete scratch -y"
+    - "export TVAULT_DIR=.glyphrun/tmp/cli-proj; export TVAULT_PASSPHRASE=glyphpass; ./bin/tvault projects create api && ./bin/tvault projects list && ./bin/tvault use api && ./bin/tvault projects list && ./bin/tvault projects create scratch && ./bin/tvault projects delete scratch -y"
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/cli-proj"

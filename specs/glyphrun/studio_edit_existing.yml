@@ -21,7 +21,7 @@ intent: |
   cmd/tvault/cmd/studio/mutations_test.go.
 
 target:
-  cmd: ["./bin/tvault", "studio", "--rw", "--no-anim"]
+  cmd: ["./bin/tvault", "studio", "--rw", "--no-anim", "--vault", ".glyphrun/tmp/edit"]
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/edit"
@@ -48,6 +48,13 @@ preconditions:
       timeoutMs: 10000
     - run: "TVAULT_DIR=.glyphrun/tmp/edit TVAULT_PASSPHRASE=glyphpass ./bin/tvault set DB_URL postgres://old -p webapp"
       timeoutMs: 10000
+    # The TUI is launched with --vault and unlocks from a passphrase file
+    # named in the vault's own config.yaml, so the spec does not depend on
+    # the harness exporting TVAULT_DIR/TVAULT_PASSPHRASE into the PTY process.
+    - run: "printf 'TVAULT_PASSPHRASE=glyphpass\\n' > .glyphrun/tmp/edit/pass.env && chmod 600 .glyphrun/tmp/edit/pass.env"
+      timeoutMs: 5000
+    - run: "printf 'agent:\\n  passphrase_file: .glyphrun/tmp/edit/pass.env\\n' > .glyphrun/tmp/edit/config.yaml"
+      timeoutMs: 5000
 
 steps:
   - wait:

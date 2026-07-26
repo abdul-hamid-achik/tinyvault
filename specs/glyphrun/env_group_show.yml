@@ -7,7 +7,7 @@ intent: |
   surface end-to-end.
 
 target:
-  cmd: ["./bin/tvault", "env", "group", "show", "liftclub"]
+  cmd: ["/bin/sh", "-c", "export TVAULT_DIR=.glyphrun/tmp/vault; export TVAULT_PASSPHRASE=glyphpass; ./bin/tvault env group show liftclub"]
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/vault"

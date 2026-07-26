@@ -22,7 +22,7 @@ target:
   cmd:
     - "/bin/sh"
     - "-c"
-    - 'REC=$(./bin/tvault identity list | awk "/^alice/{print \$2}"); ./bin/tvault seal -p webapp --recipient "$REC" | ./bin/tvault open --identity alice'
+    - 'export TVAULT_DIR=.glyphrun/tmp/cli-seal; export TVAULT_PASSPHRASE=glyphpass; REC=$(./bin/tvault identity list | awk "/^alice/{print \$2}"); ./bin/tvault seal -p webapp --recipient "$REC" | ./bin/tvault open --identity alice'
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/cli-seal"

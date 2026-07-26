@@ -14,7 +14,7 @@ target:
   cmd:
     - "/bin/sh"
     - "-c"
-    - "./bin/tvault env --format pulumi-config --stack prod"
+    - "export TVAULT_DIR=.glyphrun/tmp/cli-env-pulumi; export TVAULT_PASSPHRASE=glyphpass; export TVAULT_NO_AGENT=1; ./bin/tvault env --format pulumi-config --stack prod"
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/cli-env-pulumi"

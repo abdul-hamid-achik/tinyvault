@@ -15,7 +15,7 @@ target:
   cmd:
     - "/bin/sh"
     - "-c"
-    - "echo '=== search ===' && ./bin/tvault search --prefix DB_ && echo '=== list ===' && ./bin/tvault list -p webapp --prefix DB_"
+    - "export TVAULT_DIR=.glyphrun/tmp/cli-search; export TVAULT_PASSPHRASE=glyphpass; echo '=== search ===' && ./bin/tvault search --prefix DB_ && echo '=== list ===' && ./bin/tvault list -p webapp --prefix DB_"
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/cli-search"
