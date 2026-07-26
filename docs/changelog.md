@@ -22,6 +22,36 @@ If `tvault` was installed from the retired formula, migrate once with
 
 ## Unreleased
 
+## 0.20.0 — 2026-07-26
+
+### Added
+
+- `tvault agent install` / `uninstall` / `restart` register the agent as a
+  per-user background service — a launchd LaunchAgent on macOS, a systemd user
+  unit on Linux. Review the generated definition first with `--dry-run`:
+
+  ```bash
+  tvault agent install --dry-run
+  tvault agent install --passphrase-file ~/.config/secrets/env
+  tvault agent restart   # after upgrading tvault
+  ```
+
+  The definition records only the *path* to a passphrase file, never the
+  passphrase, and is written 0600. The service restarts on failure but not after
+  a clean exit, so the agent's idle auto-lock still takes effect.
+- `TVAULT_PASSPHRASE_FILE` (or `agent.passphrase_file` in
+  `~/.tvault/config.yaml`) points at an env-style file holding
+  `TVAULT_PASSPHRASE`, so the agent can unlock where there is no terminal to
+  prompt at. TinyVault refuses a file that is readable by group or others.
+- Structured agent logging. Logs default to `$XDG_STATE_HOME/tvault/agent.log`
+  (0600 inside a 0700 directory) and rotate at 5 MiB. Configure with
+  `--log-dir` / `--log-level`, `TVAULT_LOG_DIR` / `TVAULT_LOG_LEVEL`, or
+  `agent.log_dir` / `agent.log_level`. `tvault agent logs` prints the path and
+  `--clear` resets it for a redeploy. Records name operations, projects and key
+  names — never a secret value, passphrase, or capability token.
+- `tvault agent status` now also reports the installed service and whether it is
+  registered with the service manager.
+
 ## 0.19.1 — 2026-07-26
 
 ### Fixed
