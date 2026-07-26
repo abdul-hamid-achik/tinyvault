@@ -6,6 +6,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `tvault agent install` / `uninstall` / `restart` register the agent as a
+  per-user service: a launchd LaunchAgent on macOS, a systemd user unit on
+  Linux. `--dry-run` prints the definition without writing it. The definition is
+  0600 and records only the *path* to a passphrase file, never the passphrase.
+  Restart-on-failure is deliberately not restart-always, so the agent's idle
+  auto-lock is respected rather than immediately undone.
+- `TVAULT_PASSPHRASE_FILE` (and `agent.passphrase_file` in config) point at an
+  env-style file holding `TVAULT_PASSPHRASE`, letting the agent unlock where
+  there is no TTY. tvault refuses a file readable by group or others, and no
+  error echoes the value.
+- Structured agent logging via `charm.land/log/v2`. Logs default to
+  `$XDG_STATE_HOME/tvault/agent.log` (0600 in a 0700 directory), configurable
+  with `--log-dir`/`--log-level`, `TVAULT_LOG_DIR`/`TVAULT_LOG_LEVEL`, or
+  `agent.log_dir`/`agent.log_level`. One file rotates at 5 MiB.
+  `tvault agent logs` reports the path; `--clear` resets it for a redeploy.
+  Records name operations, projects and key names — never a value, passphrase,
+  KEK byte or capability token.
+- `tvault agent status` now reports the installed service and whether it is
+  registered.
+
 ## [0.19.1] - 2026-07-26
 
 ### Fixed

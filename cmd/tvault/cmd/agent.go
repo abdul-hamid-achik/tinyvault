@@ -13,7 +13,13 @@ import (
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/agent"
 	"github.com/abdul-hamid-achik/tinyvault/internal/logging"
+	"github.com/abdul-hamid-achik/tinyvault/internal/service"
 )
+
+// defaultAgentIdle is the auto-lock timeout shared by `agent start` and the
+// service definition `agent install` writes, so a service behaves like a
+// foreground agent unless the user says otherwise.
+const defaultAgentIdle = 15 * time.Minute
 
 var (
 	agentIdle         time.Duration
@@ -68,7 +74,7 @@ var agentStopCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(agentCmd)
 	agentCmd.AddCommand(agentStartCmd, agentStatusCmd, agentStopCmd)
-	agentStartCmd.Flags().DurationVar(&agentIdle, "idle", 15*time.Minute, "Auto-lock after this idle duration (0 = never)")
+	agentStartCmd.Flags().DurationVar(&agentIdle, "idle", defaultAgentIdle, "Auto-lock after this idle duration (0 = never)")
 	agentStartCmd.Flags().BoolVar(&agentRequireToken, "require-token", false,
 		"Deny socket requests without a valid capability token from --token-file (privilege separation for OS-confined delegates)")
 	agentStartCmd.Flags().StringVar(&agentTokenFile, "token-file", "",
@@ -211,7 +217,31 @@ func runAgentStatus(_ *cobra.Command, _ []string) error {
 	if st.IdleRemainingSeconds > 0 {
 		PrintKeyValue("Idle-locks in", (time.Duration(st.IdleRemainingSeconds) * time.Second).String())
 	}
+	printServiceStatus()
 	return nil
+}
+
+// printServiceStatus appends the managed-service state to human-readable
+// `agent status` output. It is silent when nothing is installed, so the common
+// foreground case stays uncluttered, and it never fails the command: whether a
+// service definition exists is diagnostics, not the question being asked.
+func printServiceStatus() {
+	kind, err := service.DefaultKind()
+	if err != nil {
+		return
+	}
+	installed, path, err := service.Installed(kind)
+	if err != nil || !installed {
+		return
+	}
+	PrintKeyValue("Service", fmt.Sprintf("%s (%s)", kind, path))
+	if loaded, lerr := service.Loaded(kind); lerr == nil {
+		state := "not registered"
+		if loaded {
+			state = "registered"
+		}
+		PrintKeyValue("Service state", state)
+	}
 }
 
 func runAgentStop(_ *cobra.Command, _ []string) error {

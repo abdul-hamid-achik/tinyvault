@@ -356,13 +356,21 @@ Before every commit:
 | `charm.land/lipgloss/v2`                 | TUI styling/layout (`tvault studio` only)   |
 | `charm.land/bubbles/v2`                  | TUI components: textinput, spinner, help, viewport, key |
 | `charm.land/glamour/v2`                  | Markdown rendering for the in-app help pane |
+| `charm.land/log/v2`                      | Structured agent logging (`internal/logging`) |
 
 The studio UI is a `cmd/` subcommand, **not** an `internal/` package — it
-imports the `charm.land/*` v2 libraries that are otherwise absent from
-the project. Those libraries are pulled in **only** by `tvault studio`
-(aliases: `browse`, `ui`); no other command links them at runtime. The
-stack is strictly the v2 line (no `harmonica`, no `huh`): animations are
-hand-rolled easing.
+imports the `charm.land/*` **TUI** libraries (bubbletea, lipgloss, bubbles,
+glamour) that are otherwise absent from the project. Those libraries are pulled
+in **only** by `tvault studio` (aliases: `browse`, `ui`); no other command links
+them at runtime. The stack is strictly the v2 line (no `harmonica`, no `huh`):
+animations are hand-rolled easing.
+
+`charm.land/log/v2` is the one exception to "only studio imports charm.land":
+it is a logging library, not a TUI one, and `internal/logging` uses it for the
+agent. It must stay on the **v2** line. `github.com/charmbracelet/log` v1 is
+*not* a substitute — it requires `lipgloss` v1, which pulls an `x/cellbuf` that
+does not compile against the `x/ansi` the v2 packages pin. That combination
+fails the build, so do not "simplify" the import.
 
 ## Where things live
 
