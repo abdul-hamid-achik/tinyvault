@@ -8,7 +8,7 @@ import (
 )
 
 func TestMutationsRequireRW(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{}) // read-only
 	m = update(t, m, keyPress("3"))
 	m = update(t, m, keyPress("n"))
@@ -22,7 +22,7 @@ func TestMutationsRequireRW(t *testing.T) {
 }
 
 func TestNewSecretFlow(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{ReadWrite: true})
 	m = update(t, m, keyPress("3"))
 	m = update(t, m, keyPress("n"))
@@ -46,14 +46,14 @@ func TestNewSecretFlow(t *testing.T) {
 	if _, ok := cmd().(mutationDoneMsg); !ok {
 		t.Fatalf("expected mutationDoneMsg")
 	}
-	if val, err := v.GetSecret("webapp", "NEWKEY"); err != nil || val != "newval" {
+	if val, err := scratchGet(t, v, "webapp", "NEWKEY"); err != nil || val != "newval" {
 		t.Errorf("new secret not stored: %q (%v)", val, err)
 	}
 	_ = next
 }
 
 func TestEditSecretFlow(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{ReadWrite: true})
 	m = update(t, m, keyPress("3"))
 	ref, _ := m.currentSecret()
@@ -67,14 +67,14 @@ func TestEditSecretFlow(t *testing.T) {
 		t.Fatal("enter should issue setSecretCmd")
 	}
 	cmd()
-	if val, _ := v.GetSecret("webapp", ref.Key); val != "editedvalue" {
+	if val, _ := scratchGet(t, v, "webapp", ref.Key); val != "editedvalue" {
 		t.Errorf("edit not applied: %q", val)
 	}
 	_ = next
 }
 
 func TestDeleteSecretFlow(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{ReadWrite: true})
 	m = update(t, m, keyPress("3"))
 	ref, _ := m.currentSecret()
@@ -95,14 +95,14 @@ func TestDeleteSecretFlow(t *testing.T) {
 	if _, ok := cmd().(mutationDoneMsg); !ok {
 		t.Fatal("expected mutationDoneMsg")
 	}
-	if _, err := v.GetSecret("webapp", ref.Key); err == nil {
+	if _, err := scratchGet(t, v, "webapp", ref.Key); err == nil {
 		t.Error("secret should be deleted")
 	}
 	_ = next
 }
 
 func TestMutationRequiresUnlock(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	v.Lock()
 	m := newReadyModel(t, v, Options{ReadWrite: true})
 	m = update(t, m, keyPress("3"))
@@ -116,12 +116,12 @@ func TestMutationRequiresUnlock(t *testing.T) {
 }
 
 func TestEditOverlaysGridExact(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	for _, sz := range [][2]int{{120, 40}, {90, 24}, {50, 14}} {
 		m := New(v, Options{ReadWrite: true})
 		m.anim = false
 		m = update(t, m, tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
-		m = update(t, m, statusLoadedMsg(loadStatus(v)))
+		m = update(t, m, statusLoadedMsg(mustLoadStatus(t, v)))
 		secs, _ := loadSecrets(v, m.viewProject)
 		m = update(t, m, secretsLoadedMsg{project: m.viewProject, refs: secs})
 		m = update(t, m, keyPress("3"))

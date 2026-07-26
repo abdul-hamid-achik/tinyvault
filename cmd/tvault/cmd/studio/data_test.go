@@ -7,8 +7,11 @@ import (
 )
 
 func TestLoadStatus(t *testing.T) {
-	v := newScratchVault(t)
-	st := loadStatus(v)
+	v := newScratchSession(t)
+	st, err := loadStatus(v)
+	if err != nil {
+		t.Fatalf("loadStatus: %v", err)
+	}
 	if !st.unlocked {
 		t.Error("freshly created vault should report unlocked")
 	}
@@ -27,37 +30,44 @@ func TestLoadStatus(t *testing.T) {
 	}
 
 	v.Lock()
-	if loadStatus(v).unlocked {
+	locked, err := loadStatus(v)
+	if err != nil {
+		t.Fatalf("loadStatus: %v", err)
+	}
+	if locked.unlocked {
 		t.Error("locked vault should report locked")
 	}
 }
 
 func TestLoadStatus_WithEnvGroup(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 
 	// Create a second project and link both into a group.
-	if _, err := v.CreateProject("webapp-preview", ""); err != nil {
-		t.Fatalf("create webapp-preview: %v", err)
-	}
-	_, err := v.CreateEnvGroup("webapp", "WebApp envs", []vault.EnvGroupEntry{
-		{Name: "production", Project: "webapp"},
-		{Name: "preview", Project: "webapp-preview"},
-	}, false)
+	scratchEdit(t, v, func(vv *vault.Vault) error {
+		if _, err := vv.CreateProject("webapp-preview", ""); err != nil {
+			return err
+		}
+		if _, err := vv.CreateEnvGroup("webapp", "WebApp envs", []vault.EnvGroupEntry{
+			{Name: "production", Project: "webapp"},
+			{Name: "preview", Project: "webapp-preview"},
+		}, false); err != nil {
+			return err
+		}
+		return nil
+	})
+
+	// Set up inheritance and switch to the preview project.
+	scratchEdit(t, v, func(vv *vault.Vault) error {
+		if _, err := vv.SetInheritance("webapp", "preview", "production"); err != nil {
+			return err
+		}
+		return vv.SetCurrentProject("webapp-preview")
+	})
+
+	st, err := loadStatus(v)
 	if err != nil {
-		t.Fatalf("create env group: %v", err)
+		t.Fatalf("loadStatus: %v", err)
 	}
-
-	// Set up inheritance.
-	if _, err := v.SetInheritance("webapp", "preview", "production"); err != nil {
-		t.Fatalf("set inheritance: %v", err)
-	}
-
-	// Switch to the preview project.
-	if err := v.SetCurrentProject("webapp-preview"); err != nil {
-		t.Fatalf("set current: %v", err)
-	}
-
-	st := loadStatus(v)
 	if st.envGroup != "webapp" {
 		t.Errorf("envGroup = %q, want webapp", st.envGroup)
 	}
@@ -70,7 +80,7 @@ func TestLoadStatus_WithEnvGroup(t *testing.T) {
 }
 
 func TestLoadProjects(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	projects, err := loadProjects(v)
 	if err != nil {
 		t.Fatalf("loadProjects: %v", err)
@@ -91,7 +101,7 @@ func TestLoadProjects(t *testing.T) {
 }
 
 func TestLoadSecrets(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	refs, err := loadSecrets(v, "webapp")
 	if err != nil {
 		t.Fatalf("loadSecrets: %v", err)
@@ -113,7 +123,7 @@ func TestLoadSecrets(t *testing.T) {
 }
 
 func TestLoadSecretsMetadataOnlyWhenLocked(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	v.Lock()
 	// Search reads metadata only, so it works even when locked.
 	refs, err := loadSecrets(v, "webapp")
@@ -126,7 +136,7 @@ func TestLoadSecretsMetadataOnlyWhenLocked(t *testing.T) {
 }
 
 func TestLoadAudit(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	entries, err := loadAudit(v, 100)
 	if err != nil {
 		t.Fatalf("loadAudit: %v", err)
@@ -137,7 +147,7 @@ func TestLoadAudit(t *testing.T) {
 }
 
 func TestRevealSecret(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	val, err := revealSecret(v, "webapp", "STRIPE_KEY")
 	if err != nil {
 		t.Fatalf("revealSecret: %v", err)
@@ -153,7 +163,7 @@ func TestRevealSecret(t *testing.T) {
 }
 
 func TestRevealCmdProducesError(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	v.Lock()
 	msg := revealCmd(v, "webapp", "STRIPE_KEY", 0)()
 	if _, ok := msg.(errMsg); !ok {
@@ -162,7 +172,7 @@ func TestRevealCmdProducesError(t *testing.T) {
 }
 
 func TestRevealIsAudited(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	if _, err := revealSecret(v, "webapp", "STRIPE_KEY"); err != nil {
 		t.Fatalf("revealSecret: %v", err)
 	}

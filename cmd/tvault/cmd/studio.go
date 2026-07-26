@@ -80,24 +80,46 @@ func runStudio(cmd *cobra.Command, args []string) error {
 	}
 
 	dir := getVaultDir()
+
+	// Extract the KEK and close the database before the TUI starts. bbolt's lock
+	// is process-wide, so a studio that held it open would block every other
+	// tvault invocation on the machine for the whole session; the studio reopens
+	// per operation instead (see studio.Session).
+	var kek []byte
+	cfg, err := loadConfig()
+	if err != nil {
+		return fmt.Errorf("read %s: %w", configPath(), err)
+	}
+	pass, err := passphraseFromEnvOrFile(cfg)
+	if err != nil {
+		return err
+	}
+	// The probe open confirms the vault exists and is not held by another
+	// process before a TUI is drawn that could not load anything. It is closed
+	// unconditionally — leaving it open is the very defect this avoids.
 	v, err := vault.Open(dir)
 	if err != nil {
 		return wrapVaultOpenErr(dir, err)
 	}
-	defer v.Close()
-
-	// Unlock non-interactively if a passphrase is available; otherwise the
-	// studio launches locked and the user unlocks in-app with 'u'.
-	if pass := os.Getenv("TVAULT_PASSPHRASE"); pass != "" {
-		_ = v.Unlock(pass) //nolint:errcheck // a wrong env passphrase just means "stay locked"
+	// A wrong passphrase just means "launch locked" and unlock in-app, so only a
+	// successful unlock yields a KEK.
+	if pass != "" && v.Unlock(pass) == nil {
+		kek, _ = v.KEK() //nolint:errcheck // no KEK means the studio starts locked
 	}
+	if cerr := v.Close(); cerr != nil {
+		return fmt.Errorf("close the vault before starting the studio: %w", cerr)
+	}
+
+	sess := studio.NewSession(dir, kek)
+	// Zero the cached KEK on every exit path, including a panic in the TUI.
+	defer sess.Close()
 
 	project := projectName
 	if len(args) == 1 {
 		project = args[0]
 	}
 
-	return studio.Run(v, studio.Options{
+	return studio.Run(sess, studio.Options{
 		Project:    project,
 		SinglePane: studioSinglePane,
 		NoAnim:     studioNoAnim,

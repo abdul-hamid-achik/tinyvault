@@ -10,7 +10,7 @@ import (
 )
 
 func TestQuitKey(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	next, cmd := m.Update(keyPress("q"))
 	got := next.(Model)
@@ -26,7 +26,7 @@ func TestQuitKey(t *testing.T) {
 }
 
 func TestPaneSwitching(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 
 	for _, tc := range []struct {
@@ -52,7 +52,7 @@ func TestPaneSwitching(t *testing.T) {
 }
 
 func TestNavigateSecrets(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("3")) // focus secrets
 	if m.secCursor != 0 {
@@ -72,7 +72,7 @@ func TestNavigateSecrets(t *testing.T) {
 }
 
 func TestRevealAndHide(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("3")) // secrets
 
@@ -103,7 +103,7 @@ func TestRevealAndHide(t *testing.T) {
 }
 
 func TestRevealBlockedWhenLocked(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	v.Lock()
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("3"))
@@ -118,7 +118,7 @@ func TestRevealBlockedWhenLocked(t *testing.T) {
 }
 
 func TestWipeRevealedOnQuit(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("3"))
 	ref, _ := m.currentSecret()
@@ -133,7 +133,7 @@ func TestWipeRevealedOnQuit(t *testing.T) {
 }
 
 func TestFilterSecrets(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	if len(m.secrets) != 3 {
 		t.Fatalf("setup: %d secrets, want 3", len(m.secrets))
@@ -159,7 +159,7 @@ func TestFilterSecrets(t *testing.T) {
 }
 
 func TestUnlockFlow(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	v.Lock()
 	m := newReadyModel(t, v, Options{})
 	if m.status.unlocked {
@@ -179,7 +179,7 @@ func TestUnlockFlow(t *testing.T) {
 	if m.mode != modeNormal {
 		t.Error("enter should leave unlock mode")
 	}
-	if !v.IsUnlocked() {
+	if !v.Unlocked() {
 		t.Error("correct passphrase should unlock the vault")
 	}
 	if cmd == nil {
@@ -188,7 +188,7 @@ func TestUnlockFlow(t *testing.T) {
 }
 
 func TestUnlockWrongPassphraseShakes(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	v.Lock()
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("u"))
@@ -196,7 +196,7 @@ func TestUnlockWrongPassphraseShakes(t *testing.T) {
 		m = update(t, m, keyPress(string(r)))
 	}
 	m = update(t, m, keyPress("enter"))
-	if v.IsUnlocked() {
+	if v.Unlocked() {
 		t.Error("wrong passphrase must not unlock")
 	}
 	if !strings.Contains(m.statusLine, "unlock failed") {
@@ -205,7 +205,7 @@ func TestUnlockWrongPassphraseShakes(t *testing.T) {
 }
 
 func TestHelpToggle(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("?"))
 	if m.mode != modeHelp {
@@ -221,7 +221,7 @@ func TestHelpToggle(t *testing.T) {
 // fully loaded model and assert the rendered screen has the expected
 // landmarks. This catches layout/format regressions without a PTY.
 func TestViewRendersCoherentScreen(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	out := m.View().Content
 
@@ -237,11 +237,11 @@ func TestViewRendersCoherentScreen(t *testing.T) {
 }
 
 func TestViewSinglePaneNarrow(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := New(v, Options{})
 	m.anim = false
 	m = update(t, m, tea.WindowSizeMsg{Width: 70, Height: 20})
-	m = update(t, m, statusLoadedMsg(loadStatus(v)))
+	m = update(t, m, statusLoadedMsg(mustLoadStatus(t, v)))
 	out := m.View().Content
 	// Single-pane mode shows a tab strip with numbered panes.
 	if !strings.Contains(out, "3 Secrets") {
@@ -250,7 +250,7 @@ func TestViewSinglePaneNarrow(t *testing.T) {
 }
 
 func TestViewTooSmall(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := New(v, Options{})
 	m.anim = false
 	m = update(t, m, tea.WindowSizeMsg{Width: 20, Height: 5})

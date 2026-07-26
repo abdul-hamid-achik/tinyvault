@@ -12,49 +12,41 @@ import (
 // newEnvGroupVault creates a scratch vault with two projects linked in an
 // env group, with inheritance configured and some secrets. The current
 // project is set to the preview env.
-func newEnvGroupVault(t *testing.T) *vault.Vault {
+func newEnvGroupVault(t *testing.T) *Session {
 	t.Helper()
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 
 	// Create a preview project and seed it with a partial key set.
-	if _, err := v.CreateProject("webapp-preview", ""); err != nil {
-		t.Fatalf("create webapp-preview: %v", err)
-	}
-	if err := v.SetSecret("webapp-preview", "DB_URL", "postgres://preview"); err != nil {
-		t.Fatalf("set DB_URL: %v", err)
-	}
-	// STRIPE_KEY is NOT set in preview — it will be inherited from production.
-
-	// Link both into a group.
-	_, err := v.CreateEnvGroup("webapp", "WebApp envs", []vault.EnvGroupEntry{
-		{Name: "production", Project: "webapp"},
-		{Name: "preview", Project: "webapp-preview"},
-	}, false)
-	if err != nil {
-		t.Fatalf("create env group: %v", err)
-	}
-
-	// Configure inheritance: preview inherits from production.
-	if _, err := v.SetInheritance("webapp", "preview", "production"); err != nil {
-		t.Fatalf("set inheritance: %v", err)
-	}
-
-	// Switch to preview so the studio shows the child env.
-	if err := v.SetCurrentProject("webapp-preview"); err != nil {
-		t.Fatalf("set current: %v", err)
-	}
+	scratchEdit(t, v, func(vv *vault.Vault) error {
+		if _, err := vv.CreateProject("webapp-preview", ""); err != nil {
+			return err
+		}
+		if err := vv.SetSecret("webapp-preview", "DB_URL", "postgres://preview"); err != nil {
+			return err
+		}
+		if _, err := vv.CreateEnvGroup("webapp", "WebApp envs", []vault.EnvGroupEntry{
+			{Name: "production", Project: "webapp"},
+			{Name: "preview", Project: "webapp-preview"},
+		}, false); err != nil {
+			return err
+		}
+		if _, err := vv.SetInheritance("webapp", "preview", "production"); err != nil {
+			return err
+		}
+		return vv.SetCurrentProject("webapp-preview")
+	})
 	return v
 }
 
 // newEnvGroupReadyModel builds a ready model against an env-group vault,
 // with all the async loads (status, projects, secrets, audit, env groups,
 // inherited) simulated.
-func newEnvGroupReadyModel(t *testing.T, v *vault.Vault, opts Options) Model {
+func newEnvGroupReadyModel(t *testing.T, v *Session, opts Options) Model {
 	t.Helper()
 	m := New(v, opts)
 	m.anim = false
 	m = update(t, m, tea.WindowSizeMsg{Width: 120, Height: 40})
-	m = update(t, m, statusLoadedMsg(loadStatus(v)))
+	m = update(t, m, statusLoadedMsg(mustLoadStatus(t, v)))
 	projects, err := loadProjects(v)
 	if err != nil {
 		t.Fatalf("load projects: %v", err)
@@ -151,7 +143,7 @@ func TestCycleEnvWrapsAround(t *testing.T) {
 }
 
 func TestCycleEnvNoGroup(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("g"))
 	if !strings.Contains(m.statusLine, "not in an env group") {
@@ -176,7 +168,7 @@ func TestInheritedKeyIndicatorShowsArrow(t *testing.T) {
 }
 
 func TestInheritedKeyIndicatorNoGroup(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	// No env group → no inherited map → no markers in the secrets pane.
 	out := m.View().Content
@@ -229,7 +221,7 @@ func TestDriftOverlayClosesOnEsc(t *testing.T) {
 }
 
 func TestDriftOverlayNoGroup(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("D"))
 	if !strings.Contains(m.statusLine, "not in an env group") {
@@ -276,7 +268,7 @@ func TestGroupsOverlayClosesOnEsc(t *testing.T) {
 }
 
 func TestGroupsOverlayEmpty(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	// Load env groups (empty) so the model has the data.
 	groups, _ := loadEnvGroups(v)
@@ -300,7 +292,7 @@ func TestGridExactDriftOverlay(t *testing.T) {
 		m := New(v, Options{})
 		m.anim = false
 		m = update(t, m, tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
-		m = update(t, m, statusLoadedMsg(loadStatus(v)))
+		m = update(t, m, statusLoadedMsg(mustLoadStatus(t, v)))
 		groups, _ := loadEnvGroups(v)
 		m = update(t, m, envGroupsLoadedMsg{groups: groups})
 		m = update(t, m, keyPress("D"))
@@ -319,7 +311,7 @@ func TestGridExactGroupsOverlay(t *testing.T) {
 		m := New(v, Options{})
 		m.anim = false
 		m = update(t, m, tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
-		m = update(t, m, statusLoadedMsg(loadStatus(v)))
+		m = update(t, m, statusLoadedMsg(mustLoadStatus(t, v)))
 		groups, _ := loadEnvGroups(v)
 		m = update(t, m, envGroupsLoadedMsg{groups: groups})
 		m = update(t, m, keyPress("G"))
@@ -362,7 +354,7 @@ func TestBuildProjGroupIndex(t *testing.T) {
 }
 
 // mustLoadSecrets is a test helper that fails on error.
-func mustLoadSecrets(t *testing.T, v *vault.Vault, project string) []vault.SecretRef {
+func mustLoadSecrets(t *testing.T, v *Session, project string) []vault.SecretRef {
 	t.Helper()
 	refs, err := loadSecrets(v, project)
 	if err != nil {

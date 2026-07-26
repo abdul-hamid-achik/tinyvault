@@ -80,8 +80,11 @@ type Options struct {
 
 // Model is the top-level Bubble Tea model for `tvault studio`.
 type Model struct {
-	vault *vault.Vault
-	opts  Options
+	// sess reopens the vault per operation instead of holding it. See Session
+	// for why the studio must not keep bbolt's exclusive lock for a whole
+	// interactive session.
+	sess *Session
+	opts Options
 
 	// data
 	status      statusData
@@ -142,9 +145,10 @@ type Model struct {
 	shakeUntil time.Time
 }
 
-// New builds the initial model. The vault is already open (and possibly
-// already unlocked via TVAULT_PASSPHRASE) by the caller.
-func New(v *vault.Vault, opts Options) Model {
+// New builds the initial model. The session may be locked (the TUI unlocks
+// in-app with 'u') or already carry a KEK when the caller unlocked it via
+// TVAULT_PASSPHRASE.
+func New(sess *Session, opts Options) Model {
 	fi := textinput.New()
 	fi.Placeholder = "filter keys…"
 	fi.Prompt = ""
@@ -160,7 +164,7 @@ func New(v *vault.Vault, opts Options) Model {
 	sp := spinner.New(spinner.WithSpinner(spinner.Dot))
 
 	m := Model{
-		vault:    v,
+		sess:     sess,
 		opts:     opts,
 		revealed: make(map[string]string),
 		active:   paneSecrets,
@@ -191,13 +195,13 @@ func New(v *vault.Vault, opts Options) Model {
 func (m Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{
 		tea.RequestBackgroundColor,
-		statusCmd(m.vault),
-		projectsCmd(m.vault),
-		auditCmd(m.vault, m.opts.AuditLimit),
-		envGroupsCmd(m.vault),
+		statusCmd(m.sess),
+		projectsCmd(m.sess),
+		auditCmd(m.sess, m.opts.AuditLimit),
+		envGroupsCmd(m.sess),
 	}
 	if m.viewProject != "" {
-		cmds = append(cmds, secretsCmd(m.vault, m.viewProject))
+		cmds = append(cmds, secretsCmd(m.sess, m.viewProject))
 	}
 	if m.anim {
 		cmds = append(cmds, m.spin.Tick, frameTick())
@@ -266,7 +270,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "":
 			m.viewProject = m.status.currentProject
 			if m.viewProject != "" {
-				cmds := []tea.Cmd{secretsCmd(m.vault, m.viewProject)}
+				cmds := []tea.Cmd{secretsCmd(m.sess, m.viewProject)}
 				if inhCmd := m.loadInheritedForCurrent(); inhCmd != nil {
 					cmds = append(cmds, inhCmd)
 				}
@@ -422,9 +426,9 @@ type copiedMsg struct {
 	value string
 }
 
-func copyCmd(v *vault.Vault, project, key string) tea.Cmd {
+func copyCmd(s *Session, project, key string) tea.Cmd {
 	return func() tea.Msg {
-		val, err := revealSecret(v, project, key)
+		val, err := revealSecret(s, project, key)
 		if err != nil {
 			return errMsg{context: "copy " + key, err: err}
 		}
@@ -434,20 +438,30 @@ func copyCmd(v *vault.Vault, project, key string) tea.Cmd {
 
 // copyInheritedCmd resolves a key through the inheritance chain and copies
 // the value to the clipboard.
-func copyInheritedCmd(v *vault.Vault, groupName, envName, key, childProject string) tea.Cmd {
+func copyInheritedCmd(s *Session, groupName, envName, key, childProject string) tea.Cmd {
 	return func() tea.Msg {
-		val, _, err := v.ResolveKey(groupName, envName, key)
+		var val string
+		// The resolve and its audit share one open, so a copy cannot be
+		// recorded without the value having actually been produced.
+		err := s.with(func(v *vault.Vault) error {
+			var e error
+			val, _, e = v.ResolveKey(groupName, envName, key)
+			if e != nil {
+				return e
+			}
+			//nolint:errcheck // audit is best-effort
+			v.AppendAudit(&store.AuditEntry{
+				Action:       "secret.read",
+				ResourceType: "secret",
+				ResourceName: key,
+				Timestamp:    time.Now().UTC(),
+				Metadata:     map[string]any{"project": childProject, "source": "tui", "resolved_via": groupName + "/" + envName},
+			})
+			return nil
+		})
 		if err != nil {
 			return errMsg{context: "copy " + key, err: err}
 		}
-		//nolint:errcheck // audit is best-effort
-		v.AppendAudit(&store.AuditEntry{
-			Action:       "secret.read",
-			ResourceType: "secret",
-			ResourceName: key,
-			Timestamp:    time.Now().UTC(),
-			Metadata:     map[string]any{"project": childProject, "source": "tui", "resolved_via": groupName + "/" + envName},
-		})
 		return copiedMsg{key: key, value: val}
 	}
 }
@@ -494,7 +508,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.unlock.SetValue("")
 			m.unlock.Blur()
 			m.mode = modeNormal
-			if err := m.vault.Unlock(pass); err != nil {
+			if err := m.sess.Unlock(pass); err != nil {
 				m.lastErr = err
 				m.statusLine = "unlock failed: " + err.Error()
 				m.shakeUntil = time.Now().Add(flashDuration)
@@ -502,7 +516,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			}
 			m.statusLine = "vault unlocked"
-			return m, tea.Batch(statusCmd(m.vault), auditCmd(m.vault, m.opts.AuditLimit))
+			return m, tea.Batch(statusCmd(m.sess), auditCmd(m.sess, m.opts.AuditLimit))
 		}
 		var cmd tea.Cmd
 		m.unlock, cmd = m.unlock.Update(msg)
@@ -537,7 +551,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case "enter":
 			key, proj, val := m.pendingKey, m.viewProject, m.edit.Value()
 			m.cancelEdit()
-			return m, setSecretCmd(m.vault, proj, key, val)
+			return m, setSecretCmd(m.sess, proj, key, val)
 		}
 		var cmd tea.Cmd
 		m.edit, cmd = m.edit.Update(msg)
@@ -549,7 +563,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			key, proj := m.confirmKey, m.viewProject
 			m.confirmKey = ""
 			m.mode = modeNormal
-			return m, deleteSecretCmd(m.vault, proj, key)
+			return m, deleteSecretCmd(m.sess, proj, key)
 		case "n", "N", "esc":
 			m.confirmKey = ""
 			m.mode = modeNormal
@@ -614,7 +628,7 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.viewProject = m.projects[m.projCursor].Name
 			m.secCursor = 0
 			m.loading = true
-			return m, secretsCmd(m.vault, m.viewProject)
+			return m, secretsCmd(m.sess, m.viewProject)
 		}
 		return m, nil
 
@@ -661,7 +675,7 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.statusLine = "loading drift…"
-		return m, diffCmd(m.vault, em.group)
+		return m, diffCmd(m.sess, em.group)
 
 	case key.Matches(msg, m.keys.ListGroups):
 		m.mode = modeGroups
@@ -676,11 +690,11 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.unlock.Focus()
 
 	case key.Matches(msg, m.keys.Lock):
-		m.vault.Lock()
+		m.sess.Lock()
 		m.wipeRevealed()
 		m.statusLine = "vault locked"
 		cmd := m.ensureAnim()
-		return m, tea.Batch(statusCmd(m.vault), cmd)
+		return m, tea.Batch(statusCmd(m.sess), cmd)
 
 	case key.Matches(msg, m.keys.Reload):
 		m.wipeRevealed() // re-mask everything; the data is being refetched
@@ -713,13 +727,13 @@ func (m *Model) focusPane(p paneID) {
 // reloadCmds returns the commands that refresh all panes from disk.
 func (m Model) reloadCmds() []tea.Cmd {
 	cmds := []tea.Cmd{
-		statusCmd(m.vault),
-		projectsCmd(m.vault),
-		auditCmd(m.vault, m.opts.AuditLimit),
-		envGroupsCmd(m.vault),
+		statusCmd(m.sess),
+		projectsCmd(m.sess),
+		auditCmd(m.sess, m.opts.AuditLimit),
+		envGroupsCmd(m.sess),
 	}
 	if m.viewProject != "" {
-		cmds = append(cmds, secretsCmd(m.vault, m.viewProject))
+		cmds = append(cmds, secretsCmd(m.sess, m.viewProject))
 	}
 	return cmds
 }
@@ -760,7 +774,7 @@ func (m Model) startEditSecret() (tea.Model, tea.Cmd) {
 		m.statusLine = "vault is locked — press u to unlock"
 		return m, nil
 	}
-	val, err := revealSecret(m.vault, ref.Project, ref.Key)
+	val, err := revealSecret(m.sess, ref.Project, ref.Key)
 	if err != nil {
 		m.statusLine = "edit " + ref.Key + ": " + err.Error()
 		return m, nil
@@ -803,7 +817,7 @@ func (m Model) moveCursor(delta int) (tea.Model, tea.Cmd) {
 		if p != m.viewProject {
 			m.viewProject = p
 			m.secCursor = 0
-			return m, secretsCmd(m.vault, p)
+			return m, secretsCmd(m.sess, p)
 		}
 	case paneSecrets:
 		if len(m.secrets) == 0 {
@@ -830,9 +844,9 @@ func (m Model) revealCurrent() (tea.Model, tea.Cmd) {
 	// For inherited keys (not stored in the child project), use ResolveKey
 	// to resolve through the inheritance chain.
 	if ik, isInherited := m.inherited[ref.Key]; isInherited && strings.HasPrefix(ik.Source, "inherited:") {
-		return m, revealInheritedCmd(m.vault, m.status.envGroup, m.status.envName, ref.Key, ref.Project, m.revealEpoch)
+		return m, revealInheritedCmd(m.sess, m.status.envGroup, m.status.envName, ref.Key, ref.Project, m.revealEpoch)
 	}
-	return m, revealCmd(m.vault, ref.Project, ref.Key, m.revealEpoch)
+	return m, revealCmd(m.sess, ref.Project, ref.Key, m.revealEpoch)
 }
 
 func (m Model) revealAllCurrent() (tea.Model, tea.Cmd) {
@@ -848,7 +862,7 @@ func (m Model) revealAllCurrent() (tea.Model, tea.Cmd) {
 		if _, done := m.revealed[ref.Project+"/"+ref.Key]; done {
 			continue
 		}
-		cmds = append(cmds, revealCmd(m.vault, ref.Project, ref.Key, m.revealEpoch))
+		cmds = append(cmds, revealCmd(m.sess, ref.Project, ref.Key, m.revealEpoch))
 	}
 	m.revealAll = true
 	return m, tea.Batch(cmds...)
@@ -869,9 +883,9 @@ func (m Model) copyCurrent() (tea.Model, tea.Cmd) {
 	}
 	// For inherited keys, resolve through the inheritance chain.
 	if ik, isInherited := m.inherited[ref.Key]; isInherited && strings.HasPrefix(ik.Source, "inherited:") {
-		return m, copyInheritedCmd(m.vault, m.status.envGroup, m.status.envName, ref.Key, ref.Project)
+		return m, copyInheritedCmd(m.sess, m.status.envGroup, m.status.envName, ref.Key, ref.Project)
 	}
-	return m, copyCmd(m.vault, ref.Project, ref.Key)
+	return m, copyCmd(m.sess, ref.Project, ref.Key)
 }
 
 // currentSecret returns the secret under the cursor, if any.
@@ -974,11 +988,11 @@ func (m *Model) cycleEnv() (tea.Cmd, bool) {
 			m.wipeRevealed()
 			m.loading = true
 			m.inherited = nil
-			cmds := []tea.Cmd{secretsCmd(m.vault, next.Project)}
+			cmds := []tea.Cmd{secretsCmd(m.sess, next.Project)}
 			// Load inherited status if the new env has inheritance.
 			if g.Inheritance != nil {
 				if _, hasInh := g.Inheritance[next.Name]; hasInh {
-					cmds = append(cmds, inheritedCmd(m.vault, g.Name, next.Name))
+					cmds = append(cmds, inheritedCmd(m.sess, g.Name, next.Name))
 				}
 			}
 			return tea.Batch(cmds...), true
@@ -1000,7 +1014,7 @@ func (m Model) loadInheritedForCurrent() tea.Cmd {
 		}
 		if g.Inheritance != nil {
 			if _, hasInh := g.Inheritance[em.env]; hasInh {
-				return inheritedCmd(m.vault, em.group, em.env)
+				return inheritedCmd(m.sess, em.group, em.env)
 			}
 		}
 	}

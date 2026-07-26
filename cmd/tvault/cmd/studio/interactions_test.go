@@ -8,7 +8,7 @@ import (
 )
 
 func TestCopyFlow(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("3"))
 
@@ -32,7 +32,7 @@ func TestCopyFlow(t *testing.T) {
 }
 
 func TestCopyAlreadyRevealedUsesCache(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("3"))
 	ref, _ := m.currentSecret()
@@ -45,7 +45,7 @@ func TestCopyAlreadyRevealedUsesCache(t *testing.T) {
 }
 
 func TestRevealAll(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("3"))
 	next, cmd := m.Update(keyPress("R"))
@@ -59,7 +59,7 @@ func TestRevealAll(t *testing.T) {
 }
 
 func TestLockClearsReveals(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("3"))
 	ref, _ := m.currentSecret()
@@ -68,7 +68,7 @@ func TestLockClearsReveals(t *testing.T) {
 		t.Fatal("setup: expected a revealed value")
 	}
 	m = update(t, m, keyPress("L"))
-	if v.IsUnlocked() {
+	if v.Unlocked() {
 		t.Error("L should lock the vault")
 	}
 	if len(m.revealed) != 0 {
@@ -77,7 +77,7 @@ func TestLockClearsReveals(t *testing.T) {
 }
 
 func TestProjectEnterLoadsSecrets(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("2")) // projects
 	// move to the "api" project (sorted: api, default, webapp).
@@ -97,7 +97,7 @@ func TestProjectEnterLoadsSecrets(t *testing.T) {
 }
 
 func TestProjectNavigatePreviews(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("2")) // projects, cursor on webapp (current)
 	start := m.viewProject
@@ -112,7 +112,7 @@ func TestProjectNavigatePreviews(t *testing.T) {
 }
 
 func TestAuditNavigation(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("4")) // audit
 	before := m.auditOffset
@@ -123,7 +123,7 @@ func TestAuditNavigation(t *testing.T) {
 }
 
 func TestReloadAndRedraw(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	_, cmd := m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
 	if cmd == nil {
@@ -136,7 +136,7 @@ func TestReloadAndRedraw(t *testing.T) {
 }
 
 func TestHelpOverlayRenders(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("?"))
 	out := m.View().Content
@@ -150,7 +150,7 @@ func TestHelpOverlayRenders(t *testing.T) {
 }
 
 func TestUnlockOverlayRenders(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	v.Lock()
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("u"))
@@ -161,7 +161,7 @@ func TestUnlockOverlayRenders(t *testing.T) {
 }
 
 func TestResizeRelayout(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("?")) // help mode — relayout must re-render help
 	m = update(t, m, tea.WindowSizeMsg{Width: 100, Height: 30})
@@ -173,7 +173,7 @@ func TestResizeRelayout(t *testing.T) {
 }
 
 func TestRevealFlashUnderlinesValue(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m.anim = true
 	m = update(t, m, keyPress("3"))
@@ -186,12 +186,12 @@ func TestRevealFlashUnderlinesValue(t *testing.T) {
 }
 
 func TestLockedSinglePaneHint(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	v.Lock()
 	m := New(v, Options{SinglePane: true})
 	m.anim = false
 	m = update(t, m, tea.WindowSizeMsg{Width: 80, Height: 24})
-	m = update(t, m, statusLoadedMsg(loadStatus(v)))
+	m = update(t, m, statusLoadedMsg(mustLoadStatus(t, v)))
 	m = update(t, m, keyPress("3"))
 	out := m.View().Content
 	if !strings.Contains(out, "locked") {
@@ -200,7 +200,7 @@ func TestLockedSinglePaneHint(t *testing.T) {
 }
 
 func TestMouseWheelMovesCursor(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("3")) // secrets
 	if m.secCursor != 0 {
@@ -217,7 +217,7 @@ func TestMouseWheelMovesCursor(t *testing.T) {
 }
 
 func TestPaneChangeWipesReveals(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("3")) // secrets
 	ref, _ := m.currentSecret()
@@ -233,7 +233,7 @@ func TestPaneChangeWipesReveals(t *testing.T) {
 }
 
 func TestLateRevealAfterEscDropped(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("3"))
 	ref, _ := m.currentSecret()
@@ -251,7 +251,7 @@ func TestLateRevealAfterEscDropped(t *testing.T) {
 }
 
 func TestLateRevealWrongProjectDropped(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("3"))
 	// A reveal tagged for a different project than the one in view is dropped.
@@ -262,7 +262,7 @@ func TestLateRevealWrongProjectDropped(t *testing.T) {
 }
 
 func TestReloadWipesReveals(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("3"))
 	ref, _ := m.currentSecret()

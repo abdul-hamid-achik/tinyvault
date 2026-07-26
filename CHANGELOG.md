@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `tvault studio` no longer holds the vault database open for the whole
+  interactive session. bbolt takes a process-wide exclusive lock, so every other
+  `tvault` invocation on the machine failed for as long as the studio was open.
+  The studio now caches only the KEK and reopens the vault per operation, the
+  same pattern the local agent already used, so a reopen costs a file open rather
+  than re-deriving the key. With this, no tvault surface holds the lock across a
+  long-lived session.
+
 ## [0.20.0] - 2026-07-26
 
 ### Added

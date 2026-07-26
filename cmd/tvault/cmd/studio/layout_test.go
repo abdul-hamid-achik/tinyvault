@@ -42,12 +42,12 @@ func stripANSIForTest(s string) string {
 }
 
 func TestMultiPaneGridExact(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	for _, sz := range [][2]int{{120, 40}, {100, 30}, {90, 24}, {160, 50}} {
 		m := New(v, Options{})
 		m.anim = false
 		m = update(t, m, tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
-		m = update(t, m, statusLoadedMsg(loadStatus(v)))
+		m = update(t, m, statusLoadedMsg(mustLoadStatus(t, v)))
 		projects, _ := loadProjects(v)
 		m = update(t, m, projectsLoadedMsg{projects: projects})
 		secs, _ := loadSecrets(v, m.viewProject)
@@ -59,12 +59,12 @@ func TestMultiPaneGridExact(t *testing.T) {
 }
 
 func TestSinglePaneGridExact(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	for _, sz := range [][2]int{{70, 20}, {80, 24}, {50, 15}} {
 		m := New(v, Options{})
 		m.anim = false
 		m = update(t, m, tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
-		m = update(t, m, statusLoadedMsg(loadStatus(v)))
+		m = update(t, m, statusLoadedMsg(mustLoadStatus(t, v)))
 		secs, _ := loadSecrets(v, m.viewProject)
 		m = update(t, m, secretsLoadedMsg{project: m.viewProject, refs: secs})
 		assertExactGrid(t, m.View().Content, sz[0], sz[1])
@@ -72,7 +72,7 @@ func TestSinglePaneGridExact(t *testing.T) {
 }
 
 func TestGridExactAfterReveal(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("3"))
 	m = update(t, m, keyPress("down"))
@@ -82,7 +82,7 @@ func TestGridExactAfterReveal(t *testing.T) {
 }
 
 func TestGridExactInFilterAndStatusLine(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	m := newReadyModel(t, v, Options{})
 	m = update(t, m, keyPress("/"))
 	m = update(t, m, keyPress("D"))
@@ -93,12 +93,12 @@ func TestGridExactInFilterAndStatusLine(t *testing.T) {
 // sizes, including the small ones where the glamour box can't fully fit —
 // the overlay must still produce an exact w×h grid (clampGrid backstop).
 func TestGridExactHelpOverlay(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	for _, sz := range [][2]int{{120, 40}, {100, 30}, {90, 24}, {160, 50}, {40, 10}, {50, 12}, {80, 14}} {
 		m := New(v, Options{})
 		m.anim = false
 		m = update(t, m, tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
-		m = update(t, m, statusLoadedMsg(loadStatus(v)))
+		m = update(t, m, statusLoadedMsg(mustLoadStatus(t, v)))
 		m = update(t, m, keyPress("?"))
 		assertExactGrid(t, m.View().Content, sz[0], sz[1])
 	}
@@ -109,14 +109,14 @@ func TestGridExactHelpOverlay(t *testing.T) {
 // modal box — the sized textinput must scroll within its field rather than
 // overflow the frame.
 func TestGridExactEditOverlay(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	longVal := "postgres://user:pw@some-very-long-host.example.com:5432/a_long_database_name?sslmode=require"
 	for _, sz := range [][2]int{{120, 40}, {100, 30}, {90, 24}, {160, 50}, {40, 10}} {
 		m := New(v, Options{ReadWrite: true})
 		m.anim = false
 		m.rw = true
 		m = update(t, m, tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
-		m = update(t, m, statusLoadedMsg(loadStatus(v)))
+		m = update(t, m, statusLoadedMsg(mustLoadStatus(t, v)))
 		// modeNewKey: the key-name field (empty → placeholder must fit).
 		m = update(t, m, keyPress("n"))
 		if m.mode != modeNewKey {
@@ -139,13 +139,13 @@ func TestGridExactEditOverlay(t *testing.T) {
 // TestGridExactUnlockOverlay guards the unlock modal (modeUnlock) — only
 // reachable on a locked vault — at several sizes.
 func TestGridExactUnlockOverlay(t *testing.T) {
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	v.Lock()
 	for _, sz := range [][2]int{{120, 40}, {90, 24}, {40, 10}, {50, 12}} {
 		m := New(v, Options{})
 		m.anim = false
 		m = update(t, m, tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
-		m = update(t, m, statusLoadedMsg(loadStatus(v)))
+		m = update(t, m, statusLoadedMsg(mustLoadStatus(t, v)))
 		m = update(t, m, keyPress("u"))
 		if m.mode != modeUnlock {
 			t.Fatalf("expected modeUnlock at %dx%d", sz[0], sz[1])

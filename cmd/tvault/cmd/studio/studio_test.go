@@ -10,17 +10,20 @@ import (
 	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
 )
 
-// newScratchVault creates a temp vault populated with two projects and a
-// handful of secrets + audit entries. It is the shared fixture for the
-// data and model tests.
-func newScratchVault(t *testing.T) *vault.Vault {
+// newScratchSession creates a temp vault populated with two projects and a
+// handful of secrets + audit entries, then CLOSES it and returns a Session
+// holding its KEK. It is the shared fixture for the data and model tests.
+//
+// Closing matters: the studio reopens the vault per operation, so a fixture that
+// kept it open would collide with bbolt's exclusive lock and every Session call
+// would fail with ErrVaultBusy.
+func newScratchSession(t *testing.T) *Session {
 	t.Helper()
 	dir := t.TempDir()
 	v, err := vault.Create(dir, "test-pass")
 	if err != nil {
 		t.Fatalf("create vault: %v", err)
 	}
-	t.Cleanup(func() { _ = v.Close() })
 
 	if _, err := v.CreateProject("webapp", "the web app"); err != nil {
 		t.Fatalf("create webapp: %v", err)
@@ -53,17 +56,59 @@ func newScratchVault(t *testing.T) *vault.Vault {
 			t.Fatalf("append audit: %v", err)
 		}
 	}
-	return v
+
+	kek, err := v.KEK()
+	if err != nil {
+		t.Fatalf("extract KEK: %v", err)
+	}
+	if err := v.Close(); err != nil {
+		t.Fatalf("close scratch vault: %v", err)
+	}
+	sess := NewSession(dir, kek)
+	t.Cleanup(sess.Close)
+	return sess
+}
+
+// mustLoadStatus loads the status pane's data, failing the test on error.
+func mustLoadStatus(t *testing.T, s *Session) statusData {
+	t.Helper()
+	sd, err := loadStatus(s)
+	if err != nil {
+		t.Fatalf("loadStatus: %v", err)
+	}
+	return sd
+}
+
+// scratchGet reads one value straight from the vault, so a test can assert what
+// a studio mutation actually persisted rather than trusting the model's state.
+func scratchGet(t *testing.T, s *Session, project, key string) (string, error) {
+	t.Helper()
+	var val string
+	err := s.with(func(v *vault.Vault) error {
+		var e error
+		val, e = v.GetSecret(project, key)
+		return e
+	})
+	return val, err
+}
+
+// scratchEdit opens the session's vault for direct setup a test needs before
+// exercising the studio (creating a group, adding a key, and so on).
+func scratchEdit(t *testing.T, s *Session, fn func(*vault.Vault) error) {
+	t.Helper()
+	if err := s.with(fn); err != nil {
+		t.Fatalf("scratch edit: %v", err)
+	}
 }
 
 // newReadyModel builds a model the way the program would after the first
 // window-size + data-load round trip, ready for synthetic key events.
-func newReadyModel(t *testing.T, v *vault.Vault, opts Options) Model {
+func newReadyModel(t *testing.T, v *Session, opts Options) Model {
 	t.Helper()
 	m := New(v, opts)
 	m.anim = false // deterministic tests: no frame loop
 	m = update(t, m, tea.WindowSizeMsg{Width: 120, Height: 40})
-	m = update(t, m, statusLoadedMsg(loadStatus(v)))
+	m = update(t, m, statusLoadedMsg(mustLoadStatus(t, v)))
 	projects, err := loadProjects(v)
 	if err != nil {
 		t.Fatalf("load projects: %v", err)

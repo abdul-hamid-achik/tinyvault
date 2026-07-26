@@ -17,7 +17,7 @@ func TestDumpScreen(t *testing.T) {
 	if os.Getenv("TVAULT_TUI_DUMP") == "" {
 		t.Skip("set TVAULT_TUI_DUMP=1 to dump the rendered screen")
 	}
-	v := newScratchVault(t)
+	v := newScratchSession(t)
 	w, h := 120, 40
 	if cs := os.Getenv("TVAULT_TUI_COLS"); cs != "" {
 		_, _ = sscan(cs, &w)
@@ -28,7 +28,7 @@ func TestDumpScreen(t *testing.T) {
 	m := New(v, Options{})
 	m.anim = false
 	m = update(t, m, tea.WindowSizeMsg{Width: w, Height: h})
-	m = update(t, m, statusLoadedMsg(loadStatus(v)))
+	m = update(t, m, statusLoadedMsg(mustLoadStatus(t, v)))
 	projects, _ := loadProjects(v)
 	m = update(t, m, projectsLoadedMsg{projects: projects})
 	secs, _ := loadSecrets(v, m.viewProject)

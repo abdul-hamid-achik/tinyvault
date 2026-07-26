@@ -130,6 +130,14 @@ Security Scan, Build**. All four must be green.
   is the on-demand reveal (`r`), audited like `tvault get`. `--rw` enables
   audited in-app edits (`n`/`e`/`d`) that reuse the CLI's `vault.SetSecret`/
   `DeleteSecret` path; rotation + project create/delete stay in the CLI.
+- **Invariant — KEK-only, never a held-open DB.** `studio.Session`
+  (`session.go`) caches the KEK and reopens the vault per operation, exactly
+  like the agent. bbolt's lock is process-wide, so holding the database for a
+  whole interactive session would block every other `tvault` on the machine.
+  Every data function takes a `*Session` and goes through `Session.with`; the
+  cmd layer extracts the KEK, closes the vault, and `defer sess.Close()` zeros
+  it. `TestSessionDoesNotHoldTheVaultLock` guards this — keep it passing, and
+  don't "optimize" `with` into a cached handle.
 - **Invariant:** every rendered `View().Content` must be exactly the terminal
   `width × height` cells, or Bubble Tea's cell-diff renderer corrupts the
   screen. `layout_test.go` enforces this across all modes — keep it passing.
