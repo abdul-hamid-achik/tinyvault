@@ -6,6 +6,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-07-26
+
+### Fixed
+
+- `tvault run` no longer holds the vault database open while the child process
+  runs. bbolt takes a process-wide exclusive lock, so wrapping a long-lived
+  process (an MCP server, a dev server) made every other `tvault` invocation on
+  the machine fail for as long as that child lived. Secrets are materialized
+  into the child's environment and the lock is released before the child starts.
+  The `--only`/`--prefix`, `--group`/`--env`, and `--identity` paths were all
+  affected; the unselected path already closed eagerly.
+- A busy vault is no longer reported as a missing one. `tvault studio`, `unlock`,
+  `lock`, and `rotate` discarded the underlying error and always claimed the
+  vault was absent — pointing at `tvault init` when the real cause was another
+  process holding the lock. The original error is now preserved and the
+  `tvault init` hint only appears for a genuinely uninitialized vault.
+- `ErrVaultBusy` no longer suggests reading secrets via `tvault agent start`,
+  which was circular advice when that was the failing command. It now names the
+  commands that can hold the database and points at `pgrep -fl tvault`.
+- An interactive passphrase prompt no longer holds the database lock while it
+  waits for input, which blocked every other `tvault` until the user typed.
+
 ## [0.19.0] - 2026-07-24
 
 ### Added
@@ -311,7 +333,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 See the [GitHub releases](https://github.com/abdul-hamid-achik/tinyvault/releases)
 for v0.8.0 and earlier.
 
-[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.19.1...HEAD
+[0.19.1]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.18.2...v0.19.0
 [0.18.2]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.18.1...v0.18.2
 [0.18.1]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.18.0...v0.18.1

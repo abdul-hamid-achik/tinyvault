@@ -22,6 +22,24 @@ If `tvault` was installed from the retired formula, migrate once with
 
 ## Unreleased
 
+## 0.19.1 — 2026-07-26
+
+### Fixed
+
+- `tvault run` no longer holds the vault database open while the child process
+  runs. bbolt takes a process-wide exclusive lock, so wrapping a long-lived
+  process (an MCP server, a dev server) made every other `tvault` invocation on
+  the machine fail for as long as that child lived. The lock is now released
+  before the child starts.
+- A busy vault is no longer reported as a missing one. `tvault studio`,
+  `unlock`, `lock`, and `rotate` claimed the vault was absent and pointed at
+  `tvault init` when the real cause was another process holding the lock.
+- The "vault is locked by another tvault process" message no longer suggests
+  `tvault agent start` (circular when that was the failing command); it points
+  at `pgrep -fl tvault` instead.
+- An interactive passphrase prompt no longer holds the lock while waiting for
+  input.
+
 ## 0.19.0 — 2026-07-24
 
 - Recipient identities can now resolve `env --group/--env` and

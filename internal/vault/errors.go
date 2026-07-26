@@ -11,8 +11,8 @@ var (
 	// `tvault mcp` or `tvault studio`). Distinct from ErrLocked, which means
 	// the vault exists but is locked at rest.
 	ErrVaultBusy = errors.New("vault is locked by another tvault process " +
-		"(the database is open — e.g. a running 'tvault mcp' or 'tvault studio'). " +
-		"Stop it, or read secrets via 'tvault agent start'")
+		"(the database is open — e.g. a running 'tvault mcp', 'tvault studio' or " +
+		"'tvault agent'). Find it with: pgrep -fl tvault")
 
 	// ErrWrongPassphrase is returned when the passphrase does not match.
 	ErrWrongPassphrase = errors.New("wrong passphrase")

@@ -82,7 +82,7 @@ func runStudio(cmd *cobra.Command, args []string) error {
 	dir := getVaultDir()
 	v, err := vault.Open(dir)
 	if err != nil {
-		return fmt.Errorf("vault not found at %s, run 'tvault init' first", dir)
+		return wrapVaultOpenErr(dir, err)
 	}
 	defer v.Close()
 

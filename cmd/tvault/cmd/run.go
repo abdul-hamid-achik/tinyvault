@@ -104,6 +104,21 @@ func runRun(cmd *cobra.Command, args []string) error {
 	var project string
 	var missing []string
 	var loadSecret func(string, string) (string, error)
+
+	// bbolt holds an exclusive process-wide lock, so the vault must be closed
+	// before the child starts: a long-lived child (an MCP server, a dev server)
+	// would otherwise block every other tvault invocation on the machine for as
+	// long as it runs. releaseVault is called explicitly once the environment is
+	// fully built; the defer is only a safety net for the error paths above it.
+	var openedVault *vault.Vault
+	releaseVault := func() {
+		if openedVault != nil {
+			_ = openedVault.Close()
+			openedVault = nil
+		}
+	}
+	defer releaseVault()
+
 	if !runEnvNoVault {
 		selectorsPresent := len(runOnly) > 0 || runPrefix != ""
 		switch {
@@ -123,7 +138,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 				}
 				v, idErr = vault.Open(getVaultDir())
 				if idErr != nil {
-					return fmt.Errorf("vault not found at %s, run 'tvault init' first: %w", getVaultDir(), idErr)
+					return wrapVaultOpenErr(getVaultDir(), idErr)
 				}
 				warnEnvKeyUsed(os.Stderr, idSource, "run")
 			} else {
@@ -132,7 +147,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 					return idErr
 				}
 			}
-			defer v.Close()
+			openedVault = v
 			var resolveErr error
 			switch {
 			case identityRequested && selectorsPresent:
@@ -193,9 +208,9 @@ func runRun(cmd *cobra.Command, args []string) error {
 			}
 			v, err := vault.Open(getVaultDir())
 			if err != nil {
-				return fmt.Errorf("vault not found at %s, run 'tvault init' first: %w", getVaultDir(), err)
+				return wrapVaultOpenErr(getVaultDir(), err)
 			}
-			defer v.Close()
+			openedVault = v
 			warnEnvKeyUsed(os.Stderr, source, "run")
 			project = resolveProject(v, projectName)
 			if selectorsPresent {
@@ -226,9 +241,9 @@ func runRun(cmd *cobra.Command, args []string) error {
 				if err != nil {
 					return err
 				}
-				defer v.Close()
 				project = resolveProject(v, projectName)
 				vaultSecrets, missing, err = v.GetSelectedSecrets(project, runOnly, runPrefix)
+				v.Close()
 				if err != nil {
 					return fmt.Errorf("failed to get selected secrets: %w", err)
 				}
@@ -298,6 +313,10 @@ func runRun(cmd *cobra.Command, args []string) error {
 		env = append(env, fmt.Sprintf("%s=%s", key, value))
 	}
 	env = processenv.Sanitize(env)
+
+	// Every secret is now materialized in env; drop bbolt's exclusive lock so
+	// the child (which may run indefinitely) never blocks other tvault processes.
+	releaseVault()
 
 	// Find the executable.
 	executable, err := exec.LookPath(args[0])
