@@ -60,7 +60,11 @@ func (a *agentState) handleConn(conn *net.UnixConn) {
 	if a.requireToken {
 		s, ok := a.lookupToken(req.Token)
 		if !ok {
-			fmt.Fprintf(os.Stderr, "tvault agent: denied %q from peer uid %d (token required or invalid)\n", req.Op, uid)
+			// The token is never logged, only the fact that one was missing or
+			// unknown; tokenID's hash prefix is what identifies a valid one.
+			a.lg.Warn("request denied",
+				"op", req.Op, "peer_uid", uid, "peer_pid", pid,
+				"reason", "token required or invalid")
 			writeResponse(conn, errResp("token required or invalid"))
 			return
 		}
@@ -69,7 +73,49 @@ func (a *agentState) handleConn(conn *net.UnixConn) {
 	writeResponse(conn, a.dispatch(req, uid, pid, scope))
 }
 
+// dispatch records one structured line per request around dispatchOp.
+//
+// The fields describe the *shape* of the request — operation, peer, project,
+// key name, how many keys were selected — which is the same metadata the audit
+// log already keeps. No decrypted value, passphrase, KEK byte or capability
+// token reaches the log; a token appears only as tokenID's hash prefix.
 func (a *agentState) dispatch(req Request, uid uint32, pid int, scope tokenScope) Response {
+	start := time.Now()
+	resp := a.dispatchOp(req, uid, pid, scope)
+
+	fields := []any{
+		"op", req.Op,
+		"peer_uid", uid,
+		"peer_pid", pid,
+		"dur", time.Since(start).Round(time.Millisecond).String(),
+	}
+	if req.Project != "" {
+		fields = append(fields, "project", req.Project)
+	}
+	if req.Key != "" {
+		fields = append(fields, "key", req.Key)
+	}
+	// Counts rather than the names themselves: a bulk selection can carry
+	// dozens of keys and would drown the record without adding much.
+	if len(req.Only) > 0 {
+		fields = append(fields, "only_count", len(req.Only))
+	}
+	if req.Prefix != "" {
+		fields = append(fields, "prefix", req.Prefix)
+	}
+	if a.requireToken {
+		fields = append(fields, "token_id", tokenID(req.Token))
+	}
+
+	if resp.OK {
+		a.lg.Info("request served", fields...)
+	} else {
+		a.lg.Warn("request failed", append(fields, "err", resp.Error)...)
+	}
+	return resp
+}
+
+func (a *agentState) dispatchOp(req Request, uid uint32, pid int, scope tokenScope) Response {
 	tokID := ""
 	if a.requireToken {
 		tokID = tokenID(req.Token)

@@ -4,6 +4,7 @@ package agent
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/signal"
@@ -11,6 +12,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"charm.land/log/v2"
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/crypto"
 )
@@ -36,6 +39,10 @@ type agentState struct {
 	tokenFile    string
 	tokMu        sync.RWMutex
 	tokens       map[string]tokenScope
+
+	// lg is never nil: Start substitutes a discard logger when the caller
+	// supplies none, so every call site can log unconditionally.
+	lg *log.Logger
 }
 
 // Start runs the agent in the FOREGROUND, blocking until shutdown (a signal,
@@ -59,9 +66,15 @@ func Start(opts Options) (err error) {
 		return serr
 	}
 
+	lg := opts.Logger
+	if lg == nil {
+		// No destination configured: discard rather than defaulting to stderr,
+		// which would corrupt a caller that reads the agent's output.
+		lg = log.New(io.Discard)
+	}
 	a := &agentState{
 		opts: opts, kek: opts.KEK, listener: l, started: time.Now(),
-		requireToken: opts.RequireToken, tokenFile: opts.TokenFile,
+		requireToken: opts.RequireToken, tokenFile: opts.TokenFile, lg: lg,
 	}
 	if opts.RequireToken {
 		toks, terr := loadTokens(opts.TokenFile)
@@ -106,8 +119,24 @@ func Start(opts Options) (err error) {
 		opts.OnReady(socketPath(opts.Dir), os.Getpid())
 	}
 
+	idle := "disabled"
+	if opts.Idle > 0 {
+		idle = opts.Idle.String()
+	}
+	lg.Info("agent listening",
+		"socket", socketPath(opts.Dir),
+		"pid", os.Getpid(),
+		"vault_dir", opts.Dir,
+		"project", opts.Project,
+		"idle", idle,
+		"require_token", opts.RequireToken,
+	)
+
 	a.acceptLoop()
 	a.drain()
+	// Logged before Start's deferred ZeroBytes so the record cannot outlive the
+	// process without an explanation for why the agent stopped serving.
+	lg.Info("agent stopped", "uptime", time.Since(a.started).Round(time.Second).String())
 	return nil
 }
 

@@ -5,18 +5,22 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/agent"
+	"github.com/abdul-hamid-achik/tinyvault/internal/logging"
 )
 
 var (
 	agentIdle         time.Duration
 	agentRequireToken bool
 	agentTokenFile    string
+	agentLogDirFlag   string
+	agentLogLevelFlag string
 )
 
 var agentCmd = &cobra.Command{
@@ -69,6 +73,33 @@ func init() {
 		"Deny socket requests without a valid capability token from --token-file (privilege separation for OS-confined delegates)")
 	agentStartCmd.Flags().StringVar(&agentTokenFile, "token-file", "",
 		"0600 file of `token[:project]` lines for --require-token (SIGHUP reloads it)")
+	agentStartCmd.Flags().StringVar(&agentLogDirFlag, "log-dir", "",
+		"Directory for agent logs (default $XDG_STATE_HOME/tvault)")
+	agentStartCmd.Flags().StringVar(&agentLogLevelFlag, "log-level", "",
+		"Agent log level: debug, info, warn or error (default info)")
+}
+
+// agentLogDir resolves the log directory: flag, then TVAULT_LOG_DIR, then
+// config, then the XDG state directory (resolved inside internal/logging).
+func agentLogDir(cfg Config) string {
+	if v := strings.TrimSpace(agentLogDirFlag); v != "" {
+		return expandHome(v)
+	}
+	if v := strings.TrimSpace(os.Getenv("TVAULT_LOG_DIR")); v != "" {
+		return expandHome(v)
+	}
+	return expandHome(strings.TrimSpace(cfg.Agent.LogDir))
+}
+
+// agentLogLevel resolves the log level with the same precedence as agentLogDir.
+func agentLogLevel(cfg Config) string {
+	if v := strings.TrimSpace(agentLogLevelFlag); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(os.Getenv("TVAULT_LOG_LEVEL")); v != "" {
+		return v
+	}
+	return strings.TrimSpace(cfg.Agent.LogLevel)
 }
 
 func runAgentStart(_ *cobra.Command, _ []string) error {
@@ -78,12 +109,35 @@ func runAgentStart(_ *cobra.Command, _ []string) error {
 	if agentRequireToken && agentTokenFile == "" {
 		return fmt.Errorf("--require-token needs --token-file")
 	}
-	if !term.IsTerminal(int(os.Stdin.Fd())) && os.Getenv("TVAULT_PASSPHRASE") == "" {
-		return fmt.Errorf("agent start needs a TTY or TVAULT_PASSPHRASE to unlock the vault")
+	cfg, err := loadConfig()
+	if err != nil {
+		return fmt.Errorf("read %s: %w", configPath(), err)
 	}
+	// A configured passphrase file counts as a usable unlock source: it is how
+	// the agent starts under launchd/systemd, where there is neither a TTY nor
+	// an inherited TVAULT_PASSPHRASE.
+	if !term.IsTerminal(int(os.Stdin.Fd())) &&
+		os.Getenv("TVAULT_PASSPHRASE") == "" && passphraseFilePath(cfg) == "" {
+		return fmt.Errorf(
+			"agent start needs a TTY, TVAULT_PASSPHRASE, or %s (see 'tvault agent install')",
+			envPassphraseFile)
+	}
+
+	logger, logCloser, err := logging.New("agent", logging.Options{
+		Dir:   agentLogDir(cfg),
+		Level: agentLogLevel(cfg),
+		// Mirror to stderr only in the foreground: under launchd/systemd the
+		// supervisor already captures stderr, and a copy would double-write.
+		Stderr: term.IsTerminal(int(os.Stderr.Fd())),
+	})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = logCloser.Close() }()
 
 	v, err := openAndUnlockVault()
 	if err != nil {
+		logger.Error("agent failed to unlock the vault", "err", err)
 		return err
 	}
 	kek, err := v.KEK()
@@ -94,13 +148,18 @@ func runAgentStart(_ *cobra.Command, _ []string) error {
 	project := resolveProject(v, projectName)
 	_ = v.Close() // release the bbolt lock; the agent reopens per request
 
-	return agent.Start(agent.Options{
+	// agent.Start can fail after the vault is unlocked but before it logs
+	// anything itself (a too-long socket path, a held lock, a bad token file).
+	// Record that here or the log ends at "unlocked" with no explanation — the
+	// worst case being a service supervisor that keeps restarting silently.
+	if startErr := agent.Start(agent.Options{
 		Dir:          getVaultDir(),
 		KEK:          kek,
 		Project:      project,
 		Idle:         agentIdle,
 		RequireToken: agentRequireToken,
 		TokenFile:    agentTokenFile,
+		Logger:       logger,
 		OnReady: func(socket string, pid int) {
 			idle := "disabled"
 			if agentIdle > 0 {
@@ -108,7 +167,11 @@ func runAgentStart(_ *cobra.Command, _ []string) error {
 			}
 			fmt.Fprintf(os.Stderr, "tvault agent listening at %s (pid %d, idle %s). Press Ctrl-C to stop.\n", socket, pid, idle)
 		},
-	})
+	}); startErr != nil {
+		logger.Error("agent failed to start", "err", startErr)
+		return startErr
+	}
+	return nil
 }
 
 func runAgentStatus(_ *cobra.Command, _ []string) error {

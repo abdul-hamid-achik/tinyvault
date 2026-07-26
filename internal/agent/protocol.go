@@ -12,7 +12,11 @@
 // direct access working between requests.
 package agent
 
-import "time"
+import (
+	"time"
+
+	"charm.land/log/v2"
+)
 
 // ProtocolVersion is the wire protocol version. A mismatching client is
 // rejected with a clear error rather than mis-parsed.
@@ -41,6 +45,12 @@ type Options struct {
 	// docs/reference/security.md#token-honesty.
 	RequireToken bool
 	TokenFile    string // 0600 file of `token[:project]` lines (require-token mode)
+	// Logger receives structured lifecycle and request records. Nil disables
+	// logging entirely (the agent stays silent rather than inventing a
+	// destination). Records name operations, projects and key names — the same
+	// metadata the audit log already keeps — and never a decrypted value, a
+	// passphrase, KEK bytes or a capability token.
+	Logger *log.Logger
 }
 
 // Request is one newline-delimited JSON request. One request → one response

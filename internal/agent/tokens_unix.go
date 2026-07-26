@@ -94,11 +94,11 @@ func (a *agentState) reloadTokens() {
 	}
 	m, err := loadTokens(a.tokenFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "tvault agent: token reload failed, keeping current set: %v\n", err)
+		a.lg.Error("token reload failed, keeping the current set", "err", err)
 		return
 	}
 	a.tokMu.Lock()
 	a.tokens = m
 	a.tokMu.Unlock()
-	fmt.Fprintf(os.Stderr, "tvault agent: reloaded %d token(s)\n", len(m))
+	a.lg.Info("tokens reloaded", "count", len(m))
 }
