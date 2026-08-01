@@ -1,0 +1,173 @@
+name: npm publish
+
+on:
+  # Auto-publish after each successful GoReleaser release (tag push v*). The
+  # binaries live on the GitHub release, so this workflow must wait for the
+  # Release workflow to finish uploading them.
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+  # Manual fallback: run after a release and optionally pin a version
+  # (e.g. to re-publish a skipped release). Empty = latest GitHub release.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (e.g. 0.17.1). Empty = latest GitHub release."
+        required: false
+        type: string
+
+# Publishes via npm trusted publishing (GitHub Actions OIDC) — the only
+# long-term path: npm is restricting 2FA-bypass tokens from direct publish
+# (target Jan 2027), so OIDC is primary and a classic automation token in
+# NPM_TOKEN is just a stopgap fallback (publishes without --provenance).
+# Neither path needs an OTP; --otp is only for manual `npm publish` from a
+# terminal with your security key.
+#
+# FIRST PUBLISH (one-time, manual): npm requires the package to exist before
+# OIDC can be configured, so create the 7 packages by hand, then register the
+# trusted publisher and save its token as the NPM_TOKEN secret:
+#   cd npm/platforms/darwin-arm64 && npm publish --otp=<code>
+#   (repeat for the other 5 platform packages, then npm/cli)
+#   npmjs.com -> Access -> "Publish to npm from GitHub Actions (OIDC)"
+#   -> abdul-hamid-achik/tinyvault -> save token as NPM_TOKEN secret.
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+      # npm trusted publishing requires npm >= 11.5.1 (see chalupa npm-publish).
+      - name: Upgrade npm
+        run: |
+          npm install --global npm@11.6.2
+          test "$(npm --version)" = "11.6.2"
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.version }}" ]]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="$(curl -fsSL https://api.github.com/repos/abdul-hamid-achik/tinyvault/releases/latest | jq -r .tag_name)"
+          fi
+          VERSION="${VERSION#v}"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "invalid version: $VERSION" >&2; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Pack npm packages from release assets
+        run: node npm/scripts/pack.mjs "${{ steps.version.outputs.version }}"
+      - name: Verify packages before publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          for dir in npm/platforms/*/; do
+            pkg="$(node -p "require('./${dir}package.json').name")"
+            ver="$(node -p "require('./${dir}package.json').version")"
+            [[ "$ver" != "0.0.0" ]] || { echo "$pkg still at 0.0.0 — pack.mjs failed?" >&2; exit 1; }
+            bin="$(node -p "require('./${dir}package.json').os[0] === 'win32' ? 'bin/tvault.exe' : 'bin/tvault'")"
+            test -s "${dir}${bin}" || { echo "$pkg missing ${dir}${bin}" >&2; exit 1; }
+            echo "ok: $pkg@$ver ($(stat -c%s "${dir}${bin}") bytes)"
+          done
+          node -e 'const p=require("./npm/cli/package.json"); if (p.version === "0.0.0") { console.error("main still at 0.0.0 — pack.mjs failed?"); process.exit(1) } console.log(`ok: ${p.name}@${p.version}`)'
+      - name: Publish platform packages
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Platforms first: the main package's optionalDependencies resolve to
+          # them. Idempotent: already-published versions are skipped, so a
+          # rerun of this workflow can never error with EPUBLISHCONFLICT.
+          for dir in npm/platforms/*/; do
+            pkg="$(node -p "require('./${dir}package.json').name")"
+            ver="$(node -p "require('./${dir}package.json').version")"
+            if npm view "$pkg@$ver" version >/dev/null 2>&1; then
+              echo "already published: $pkg@$ver"
+              continue
+            fi
+            if (cd "$dir" && npm publish --provenance) 2>/tmp/publish.err; then
+              echo "published: $pkg@$ver (with provenance)"
+            else
+              echo "::warning::npm publish --provenance failed for $pkg (token may not be OIDC-issued); retrying without provenance" >&2
+              cat /tmp/publish.err >&2 || true
+              (cd "$dir" && npm publish)
+              echo "published: $pkg@$ver"
+            fi
+          done
+      - name: Publish main package
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          pkg="$(node -p "require('./npm/cli/package.json').name")"
+          ver="$(node -p "require('./npm/cli/package.json').version")"
+          if npm view "$pkg@$ver" version >/dev/null 2>&1; then
+            echo "already published: $pkg@$ver"
+            exit 0
+          fi
+          if (cd npm/cli && npm publish --provenance) 2>/tmp/publish.err; then
+            echo "published: $pkg@$ver (with provenance)"
+          else
+            echo "::warning::npm publish --provenance failed (token may not be OIDC-issued); retrying without provenance" >&2
+            cat /tmp/publish.err >&2 || true
+            (cd npm/cli && npm publish)
+            echo "published: $pkg@$ver"
+          fi
+
+  smoke:
+    needs: publish
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    env:
+      TVAULT_PASSPHRASE: smoke-test-passphrase
+    steps:
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: "24"
+      - name: Install package from npm
+        shell: bash
+        run: npm install --global "@thelacanians/tinyvault@${{ needs.publish.outputs.version }}"
+      - name: CLI smoke through the npm shim
+        shell: bash
+        run: |
+          set -euo pipefail
+          export TVAULT_DIR="$(mktemp -d)"
+          tvault --version
+          tvault init
+          tvault set SMOKE_KEY "smoke-value"
+          [[ "$(tvault get SMOKE_KEY)" == "smoke-value" ]]
+          # The exact invocation MCP hosts use:
+          npx -y "@thelacanians/tinyvault@${{ needs.publish.outputs.version }}" --version
+      - name: MCP stdio handshake through the npm shim
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26"
+      - name: Run stdio handshake test
+        shell: bash
+        run: |
+          set -euo pipefail
+          export TVAULT_DIR="$(mktemp -d)"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            export TVAULT_BIN="$(command -v tvault).cmd"
+          else
+            export TVAULT_BIN="$(command -v tvault)"
+          fi
+          go test ./internal/mcp -run TestStdioHandshake -count=1

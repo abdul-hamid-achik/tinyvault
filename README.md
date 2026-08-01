@@ -4,6 +4,7 @@ Dead-simple local secrets management for developers and AI agents.
 
 [![CI](https://github.com/abdul-hamid-achik/tinyvault/actions/workflows/ci.yml/badge.svg)](https://github.com/abdul-hamid-achik/tinyvault/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/abdul-hamid-achik/tinyvault)](https://goreportcard.com/report/github.com/abdul-hamid-achik/tinyvault)
+[![npm](https://img.shields.io/npm/v/@thelacanians/tinyvault)](https://www.npmjs.com/package/@thelacanians/tinyvault)
 
 📖 **Documentation → [tinyvault.dev](https://tinyvault.dev)**
 
@@ -42,6 +43,9 @@ TinyVault is built around value-minimizing agent workflows: search metadata, inj
 ```bash
 # Homebrew (macOS/Linux)
 brew install --cask abdul-hamid-achik/tap/tvault
+
+# npm (any OS — also powers `npx -y @thelacanians/tinyvault mcp` for MCP hosts)
+npm install -g @thelacanians/tinyvault
 
 # Go install
 go install github.com/abdul-hamid-achik/tinyvault/cmd/tvault@latest

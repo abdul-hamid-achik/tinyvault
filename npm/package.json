@@ -1,0 +1,16 @@
+{
+  "name": "tinyvault-npm",
+  "private": true,
+  "version": "0.0.0",
+  "description": "npm distribution packages for TinyVault (@thelacanians/tinyvault + per-platform binary payloads)",
+  "workspaces": [
+    "cli",
+    "platforms/*"
+  ],
+  "scripts": {
+    "pack": "node scripts/pack.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "name": "@thelacanians/tinyvault",
+  "version": "0.0.0",
+  "description": "Local-first secrets management CLI and MCP server. Single binary, no accounts, no cloud. Secrets for developers and AI agents.",
+  "license": "MIT",
+  "author": "Abdul Hamid Achik",
+  "homepage": "https://tinyvault.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abdul-hamid-achik/tinyvault.git"
+  },
+  "bugs": {
+    "url": "https://github.com/abdul-hamid-achik/tinyvault/issues"
+  },
+  "keywords": [
+    "secrets",
+    "secrets-management",
+    "env",
+    "dotenv",
+    ".env",
+    "mcp",
+    "model-context-protocol",
+    "vault",
+    "cli",
+    "local-first",
+    "passphrase"
+  ],
+  "bin": {
+    "tvault": "cli.js"
+  },
+  "files": [
+    "cli.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "@thelacanians/tinyvault-darwin-arm64": "0.17.1",
+    "@thelacanians/tinyvault-darwin-x64": "0.17.1",
+    "@thelacanians/tinyvault-linux-arm64": "0.17.1",
+    "@thelacanians/tinyvault-linux-x64": "0.17.1",
+    "@thelacanians/tinyvault-win32-arm64": "0.17.1",
+    "@thelacanians/tinyvault-win32-x64": "0.17.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prepublishOnly": "node -e \"const p=require(\\\"./package.json\\\");if(p.version===\\\"0.0.0\\\"){console.error(\\\"version is 0.0.0 — run node npm/scripts/pack.mjs <version> first\\\");process.exit(1)}\""
+  }
+}

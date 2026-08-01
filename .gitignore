@@ -36,6 +36,9 @@ go.work.sum
 tmp/
 dist/
 
+# npm distribution binaries (built by npm/scripts/pack.mjs from release assets)
+npm/platforms/*/bin/
+
 # Dependencies
 vendor/
 node_modules/

@@ -1,0 +1,22 @@
+{
+  "name": "@thelacanians/tinyvault-win32-arm64",
+  "version": "0.0.0",
+  "description": "TinyVault binary for win32-arm64 (tvault — local-first secrets CLI and MCP server)",
+  "license": "MIT",
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "bin/",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "prepublishOnly": "node -e \"const p=require(\\\"./package.json\\\");if(p.version===\\\"0.0.0\\\"){console.error(\\\"version is 0.0.0 — run node npm/scripts/pack.mjs <version> first\\\");process.exit(1)}\""
+  }
+}

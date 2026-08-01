@@ -14,7 +14,7 @@ The recommended design is value-minimizing: give the agent operations that use a
 You need:
 
 1. an initialized vault;
-2. `tvault` available to the MCP host;
+2. `tvault` available to the MCP host (`npm install -g @thelacanians/tinyvault`, `brew install --cask abdul-hamid-achik/tap/tvault`, or a GitHub release binary);
 3. `TVAULT_PASSPHRASE` in the server process's environment; and
 4. an access policy for anything beyond fail-closed metadata access.
 
@@ -38,6 +38,20 @@ Most MCP hosts use a configuration shaped like this:
     "tinyvault": {
       "command": "tvault",
       "args": ["mcp"]
+    }
+  }
+}
+```
+
+If `tvault` is not installed globally, the host can launch it through npx —
+useful for hosts where you do not want a global install:
+
+```json
+{
+  "mcpServers": {
+    "tinyvault": {
+      "command": "npx",
+      "args": ["-y", "@thelacanians/tinyvault", "mcp"]
     }
   }
 }

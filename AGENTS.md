@@ -79,6 +79,10 @@ cmd/tvault/
     env_group.go             # tvault env group/diff/promote/inherit/pin/unpin/inherited/seal (environment profiles)
     json_helper.go           # writeJSON(): shared --json encoder
     docs.go                  # tvault docs (machine-readable feature manifest)
+    npm/                     # npm distribution (@thelacanians/tinyvault)
+      cli/                   # main package: cli.js shim + package.json (spawns the platform binary)
+      platforms/             # @thelacanians/tinyvault-{os}-{arch} packages (binary payloads)
+      scripts/pack.mjs       # downloads release assets, verifies checksums, versions packages
     projects.go / use.go     # tvault projects list/create / tvault use PROJECT
     backup.go                # tvault backup <path> / tvault restore <path> (restore is a separate command)
     rotate.go                # tvault key rotate
@@ -382,4 +386,5 @@ fails the build, so do not "simplify" the import.
 - **Contributing guide:** [CONTRIBUTING.md](CONTRIBUTING.md)
 - **CI:** `.github/workflows/ci.yml` (test, lint, govulncheck, build)
 - **Release:** `.github/workflows/release.yml` (GoReleaser on `v*` tags)
+- **npm:** `.github/workflows/npm-publish.yml` (publish `@thelacanians/tinyvault` after each Release; OIDC trusted publishing with NPM_TOKEN fallback; smoke matrix macOS/Linux/Windows)
 - **MCP host config example:** see [MCP server](docs/mcp/index.md) or [README.md](README.md)
