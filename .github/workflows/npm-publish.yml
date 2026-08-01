@@ -143,7 +143,24 @@ jobs:
           node-version: "24"
       - name: Install package from npm
         shell: bash
-        run: npm install --global "@thelacanians/tinyvault@${{ needs.publish.outputs.version }}"
+        # Retried, because `needs: publish` orders the jobs but not the
+        # registry: npm serves a just-published version from a CDN that takes
+        # seconds to catch up, so the first install after a release can answer
+        # ETARGET "No matching version found". That reads as "the publish
+        # failed" when the publish was perfect — which is exactly what happened
+        # on 0.21.0, where a plain rerun then passed untouched.
+        run: |
+          set -euo pipefail
+          version="${{ needs.publish.outputs.version }}"
+          for attempt in 1 2 3 4 5 6; do
+            if npm install --global "@thelacanians/tinyvault@${version}"; then
+              exit 0
+            fi
+            echo "install attempt ${attempt} failed; the registry may not be serving ${version} yet"
+            sleep 10
+          done
+          echo "::error::@thelacanians/tinyvault@${version} was still not installable after 6 attempts over a minute"
+          exit 1
       - name: CLI smoke through the npm shim
         shell: bash
         run: |
