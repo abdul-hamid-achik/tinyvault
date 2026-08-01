@@ -22,6 +22,45 @@ If `tvault` was installed from the retired formula, migrate once with
 
 ## Unreleased
 
+## 0.21.0 — 2026-08-01
+
+### Added
+
+- **npm distribution.** `npm install -g @thelacanians/tinyvault` installs the
+  same binaries as the GitHub release, through per-platform packages and a thin
+  spawn shim — and `npx -y @thelacanians/tinyvault mcp` becomes a zero-install
+  MCP server command for hosts that prefer it.
+
+  ```bash
+  npm install -g @thelacanians/tinyvault
+  ```
+
+### Fixed
+
+- **The "vault is locked" error stopped blaming the agent.** Run non-interactively
+  with no passphrase, it used to say *"set TVAULT_PASSPHRASE, start 'tvault
+  agent', or run in a TTY"* — to everyone, including people whose agent was
+  already running and could never satisfy the command:
+
+  ```bash
+  tvault run --only API_KEY -- tvault get API_KEY   # works, served by the agent
+  tvault run --only API_KEY -- tvault set PROBE x   # "vault is locked" (exit 3)
+  ```
+
+  Two deliberate boundaries meet there. The agent serves reads only and never
+  hands out the key, so writes need the passphrase whether or not it is running;
+  and a child of `tvault run` (or MCP exec) inherits no `TVAULT_*` variable, so
+  the parent's passphrase never reaches it. The error now says which applies and
+  what would actually work, rather than sending you to debug a healthy socket.
+
+  Nothing about the behaviour changed — nested reads still work through the
+  agent, nested writes still need their own credential. Making the nested write
+  "work" would have meant a write operation on the agent socket (any process
+  running as you could then rewrite your vault) or forwarding the passphrase to
+  children (handing a wrapped process the whole vault after you narrowed it with
+  `--only`). Both are worse than the error message was. See
+  [Troubleshooting](/reference/troubleshooting).
+
 ## 0.20.2 — 2026-07-26
 
 ### Fixed

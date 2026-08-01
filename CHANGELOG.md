@@ -6,6 +6,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-08-01
+
+### Added
+
+- npm distribution: `npm install -g @thelacanians/tinyvault` installs the same
+  binaries as the GitHub release, via per-platform
+  `@thelacanians/tinyvault-{os}-{arch}` packages and a thin spawn shim. It also
+  makes `npx -y @thelacanians/tinyvault mcp` a zero-install MCP server command
+  for hosts that prefer it. CI publishes the packages after each release and
+  verifies the payloads against the release checksums.
+
+### Fixed
+
+- The non-interactive "vault is locked" error told every caller to "start
+  'tvault agent'" — including callers whose agent was already running and could
+  never satisfy the command. The agent serves reads only and never hands out the
+  key, so a write (`set`, `delete`, `import`, `rotate`) needs the passphrase
+  regardless, and a `tvault` nested inside `tvault run` or MCP exec inherits no
+  `TVAULT_*` variable at all. The message now reports which of those applies and
+  what would actually work, instead of sending people to debug a healthy socket.
+  The behaviour itself is unchanged and deliberate: nested reads still route
+  through the agent, nested writes still need their own credential, and neither
+  the read-only agent protocol nor the child-environment stripping was widened
+  to make them "work".
+
 ## [0.20.2] - 2026-07-26
 
 ### Fixed
