@@ -17,6 +17,10 @@ Every direct `tvault` unlock derives your key with Argon2id (64 MiB, 3 passes, 4
 
 The agent unlocks once, caches the resulting key in memory, and answers read requests over the socket. Subsequent reads are prompt-free and fast.
 
+::: warning It makes reads prompt-free, not writes
+The agent answers `get` / `getall` / `getselected` and never hands the key out, so `set`, `delete`, `import`, and `rotate` still need the passphrase (`TVAULT_PASSPHRASE`, a `0600` `TVAULT_PASSPHRASE_FILE`, or a TTY prompt) while it is running. A running agent is not an unlocked vault for writing — that is what stops any process running as you from quietly rewriting your secrets through the socket. See [Troubleshooting](/reference/troubleshooting).
+:::
+
 ## Quick start
 
 Start the agent, then background it however you prefer:

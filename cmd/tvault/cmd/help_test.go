@@ -60,7 +60,7 @@ func TestEmitHelpJSON(t *testing.T) {
 	if got, want := len(doc["topics"].([]any)), 7; got != want {
 		t.Errorf("topics has %d entries, want %d", got, want)
 	}
-	if got, want := len(doc["troubleshooting"].([]any)), 9; got != want {
+	if got, want := len(doc["troubleshooting"].([]any)), 10; got != want {
 		t.Errorf("troubleshooting has %d entries, want %d", got, want)
 	}
 }

@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"golang.org/x/term"
 
+	"github.com/abdul-hamid-achik/tinyvault/internal/agent"
 	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
 )
 
@@ -132,7 +134,42 @@ func nonInteractiveLockedError(v *vault.Vault) error {
 		// we already produced the contract JSON on stdout.
 		rootCmd.SilenceErrors = true
 	}
-	return fmt.Errorf("vault is locked: set TVAULT_PASSPHRASE, start 'tvault agent', or run in a TTY: %w", vault.ErrLocked)
+	// agentReachable() is an observation, not a routing decision, so it holds
+	// even under --no-agent, and it costs nothing when no socket exists (the
+	// dial fails on the missing path). This is already a failure path.
+	return fmt.Errorf("%w: %s", vault.ErrLocked, lockedRemedy(agentReachable()))
+}
+
+// lockedRemedy explains how this process could actually unlock, for the state
+// it can observe.
+//
+// It must never offer "start 'tvault agent'" as the remedy for a command that
+// needs the key. The agent's wire protocol is read-only (get / getall /
+// getselected / status / stop) and it never hands out the KEK, so `set`,
+// `delete`, `import`, `rotate` and every other unlock-requiring command still
+// needs the passphrase while an agent is happily serving reads.
+//
+// The old fixed advice was most misleading exactly where it was most often
+// read: a `tvault set` nested inside `tvault run`, whose child inherits no
+// TVAULT_* variable (processenv.Sanitize) and whose user already has an agent
+// running. "start 'tvault agent'" sent people debugging a healthy socket
+// instead of supplying a credential, so both facts are stated here.
+func lockedRemedy(agentRunning bool) string {
+	clauses := []string{"stdin is not a TTY, so tvault cannot prompt"}
+	if agentRunning {
+		clauses = append(clauses,
+			"the running tvault agent serves reads only (get/env/run) and never hands out the key, "+
+				"so this command needs the passphrase itself")
+	}
+	clauses = append(clauses,
+		"set TVAULT_PASSPHRASE, point TVAULT_PASSPHRASE_FILE (or agent.passphrase_file) at a 0600 env file, or run in a TTY")
+	if !agentRunning && agent.Supported() {
+		clauses = append(clauses,
+			"starting 'tvault agent' makes read commands prompt-free but never unlocks a write")
+	}
+	clauses = append(clauses,
+		"a child of 'tvault run' or MCP exec inherits no TVAULT_* variable and must supply its own credential")
+	return strings.Join(clauses, "; ")
 }
 
 // resolveProject determines which project to use.

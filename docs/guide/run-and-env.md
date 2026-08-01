@@ -74,6 +74,28 @@ back into an all-secrets read.
 
 `--only`/`--prefix` cannot be combined with `--no-vault` (there are no vault secrets to select).
 
+### What the child does *not* inherit
+
+The child gets the selected values and nothing else from TinyVault: every
+`TVAULT_*` variable is removed from its environment before it starts. A wrapped
+process that leaks or logs its environment cannot leak your passphrase, identity
+key, or agent token along with the two values you gave it.
+
+The consequence to know about is a **nested `tvault`**:
+
+```bash
+tvault run --only API_KEY -- tvault get API_KEY -p demo    # works (served by the agent)
+tvault run --only API_KEY -- tvault set PROBE x -p demo    # "vault is locked" (exit 3)
+```
+
+Reads route through the [agent](/guide/agent) and keep working. Writes do not:
+the agent serves reads only and never hands out the key, and the child inherited
+no passphrase — so `set`, `delete`, `import`, and `rotate` have no credential.
+Run vault writes outside `tvault run`, or pass that one child a credential
+explicitly (`sh -c 'TVAULT_PASSPHRASE=... tvault set …'`), knowing it then holds
+the whole vault rather than the subset you selected. See
+[Troubleshooting](/reference/troubleshooting).
+
 ### Resolving through an environment group
 
 When the active project is part of an [environment group](/guide/env-groups), `--group <name> --env <child>` makes `run` resolve the child's secrets **through the inheritance chain**: the child's own keys are loaded, then any missing keys are filled in from the base environment at run time. No values are copied — inheritance is metadata-only, so the child always sees the base's latest value.

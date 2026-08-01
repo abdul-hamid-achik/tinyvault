@@ -142,6 +142,51 @@ func TestAgentGetSelectedRejectsMalformedSelectors(t *testing.T) {
 	}
 }
 
+// TestAgentServesNoWriteOrKeyOperation pins the boundary the CLI's "vault is
+// locked" advice depends on: the agent is a read accelerator, so it exposes no
+// mutation and no way to obtain the KEK. A same-uid process can already read
+// every secret through this socket, but it cannot silently rewrite or destroy
+// the vault, and it cannot walk away with the key. Adding any of these ops
+// would turn the agent into a full read-write oracle for anything running as
+// the user — and would make `tvault set` inside `tvault run` "work" by
+// deleting that boundary.
+func TestAgentServesNoWriteOrKeyOperation(t *testing.T) {
+	dir, stop := startTestAgent(t, 0)
+	defer stop()
+
+	for name, request := range map[string]string{
+		"set":       `{"v":1,"op":"set","project":"default","key":"DB_URL","value":"attacker"}`,
+		"delete":    `{"v":1,"op":"delete","project":"default","key":"DB_URL"}`,
+		"unlock":    `{"v":1,"op":"unlock","project":"default"}`,
+		"kek":       `{"v":1,"op":"kek"}`,
+		"rotate":    `{"v":1,"op":"rotate"}`,
+		"passwd":    `{"v":1,"op":"passphrase"}`,
+		"createprj": `{"v":1,"op":"createproject","project":"new"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			resp := rawRequest(t, dir, request)
+			if resp.OK {
+				t.Fatalf("agent accepted a non-read operation %q: %+v", name, resp)
+			}
+			if !strings.Contains(resp.Error, "unknown op") {
+				t.Fatalf("op %q was handled rather than rejected as unknown: %+v", name, resp)
+			}
+			if resp.Value != "" || len(resp.Secrets) != 0 {
+				t.Fatalf("op %q returned material: %+v", name, resp)
+			}
+		})
+	}
+
+	// The vault is untouched and the agent still serves reads.
+	c, err := Dial(dir, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if val, gerr := c.Get("default", "DB_URL"); gerr != nil || val != "postgres://x" {
+		t.Fatalf("agent read after rejected writes = %q, %v", val, gerr)
+	}
+}
+
 func TestAgentSocketAndDirPerms(t *testing.T) {
 	dir, stop := startTestAgent(t, 0)
 	defer stop()

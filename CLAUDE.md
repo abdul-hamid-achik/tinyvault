@@ -108,6 +108,15 @@ Security Scan, Build**. All four must be green.
 - CLI routing (`get`/`env`/`run`) tries the agent then falls back to a direct
   unlock; `--no-agent` / `TVAULT_NO_AGENT` force direct. `x/sys` is now a direct
   require for the peer-cred calls (was indirect — no new module).
+- **The agent accelerates reads; it never unlocks a write.** There is no write
+  op and no way to obtain the KEK over the socket, so `set`/`delete`/`import`/
+  `rotate` need the passphrase even while it runs
+  (`TestAgentServesNoWriteOrKeyOperation` pins this). The non-interactive locked
+  error (`lockedRemedy` in `vault_helper.go`) must stay honest about it: never
+  advise starting an agent for a command that needs the key, and keep saying
+  that a `tvault run` / MCP-exec child inherits no `TVAULT_*` and must bring its
+  own credential. Making nested writes "work" by adding a write op or a KEK
+  hand-out trades an integrity boundary for convenience — don't.
 - **`--require-token` honesty:** capability tokens (`tokens_unix.go`) are a
   privilege-separation gate for an **OS-confined** delegate only — they are
   **not** a control against a same-uid process (it can read the token or dial

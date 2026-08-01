@@ -487,6 +487,17 @@ func helpContent() HelpContent {
 					"the command's flags as tvault's flags.",
 			},
 			{
+				Problem: "'vault is locked' from a tvault nested inside 'tvault run' (or MCP exec), " +
+					"even though 'tvault agent' is running and the same command works outside.",
+				Solution: "Two deliberate boundaries meet here. tvault removes every TVAULT_* variable " +
+					"from a child it launches, so the child inherits no passphrase; and the agent " +
+					"serves reads only (get/env/run) and never hands out the key, so it cannot unlock " +
+					"a write. Nested reads keep working through the agent; nested writes need their own " +
+					"credential. Run the write outside 'tvault run', or give the child one explicitly " +
+					"(e.g. 'tvault run -- sh -c \"TVAULT_PASSPHRASE=... tvault set K v\"'), which hands " +
+					"that child the whole vault — prefer moving the write out.",
+			},
+			{
 				Problem: "An MCP tool returned an error like 'not allowed by policy'.",
 				Solution: "The agent does not have access to that project or secret per the " +
 					"~/.tvault/mcp-policy.yaml file. Edit the file (or ask the user to) and " +
@@ -576,7 +587,7 @@ func helpContent() HelpContent {
 			{Slug: "agent", Title: "Patterns for MCP-using AI agents",
 				Description: "What to do on first contact, what to prefer, what to avoid."},
 			{Slug: "troubleshooting", Title: "Passphrase loss, locked vault, migration",
-				Description: "The 8 most common failure modes and how to recover."},
+				Description: "The most common failure modes and how to recover."},
 		},
 	}
 }

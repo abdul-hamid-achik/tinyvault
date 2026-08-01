@@ -26,8 +26,36 @@ Quick fixes for the things people actually hit. For the long-form CLI manual, `t
 The vault is encrypted; reads need it unlocked.
 
 - Interactively: `tvault unlock` (or just run a command — you'll be prompted).
-- Non-interactively (CI, scripts, MCP): set `TVAULT_PASSPHRASE` in the environment. See [Environment Variables](/reference/environment-variables).
+- Non-interactively (CI, scripts, MCP): set `TVAULT_PASSPHRASE` in the environment, or point `TVAULT_PASSPHRASE_FILE` (or `agent.passphrase_file`) at a `0600` env file. See [Environment Variables](/reference/environment-variables).
 - Exit code `6` means the passphrase was wrong; `3` means it's locked and no passphrase was available.
+- A running [agent](/guide/agent) does **not** satisfy this for a write. It serves reads only, so `set` / `delete` / `import` / `rotate` still need the passphrase — see the next section.
+
+## "vault is locked" from a `tvault` nested inside `tvault run`
+
+The same command works on its own but fails with exit code `3` inside `tvault run` (or MCP `vault_run_with_secrets`), even with the [agent](/guide/agent) running:
+
+```bash
+tvault set PROBE x -p demo                                   # works
+tvault run --only API_KEY -- tvault set PROBE x -p demo      # "vault is locked"
+```
+
+This is two deliberate boundaries meeting, not a broken socket:
+
+1. **A launched child inherits no `TVAULT_*` variable.** `tvault run` and MCP exec strip every one of them before starting the child, so the parent's `TVAULT_PASSPHRASE` never reaches it. That is what keeps a subprocess from receiving the key to the whole vault when you handed it two values. See [Security](/reference/security).
+2. **The agent serves reads, not unlocks.** It caches the key and answers `get` / `getall` / `getselected` — it has no write operation and never hands the key out. So `set`, `delete`, `import`, `rotate` and friends need the passphrase whether or not an agent is running.
+
+Together: **nested reads work** (they route through the agent), **nested writes do not**.
+
+Fixes, best first:
+
+- **Move the write out of `tvault run`.** The wrapper exists to inject values into one process; vault administration belongs beside it, not inside it.
+- **Give that one child its own credential, explicitly**, if it truly must write:
+
+  ```bash
+  tvault run --only API_KEY -- sh -c 'TVAULT_PASSPHRASE=... tvault set PROBE x -p demo'
+  ```
+
+  Understand the trade: that child now holds the passphrase to *every* project and version, which is exactly what `--only` was narrowing.
 
 ## "vault not found" / "not initialized"
 

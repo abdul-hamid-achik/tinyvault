@@ -141,6 +141,12 @@ adding the explicitly selected application values. This prevents passphrases,
 identity keys, agent tokens, routing overrides, and future TinyVault controls
 from crossing that process boundary.
 
+Both properties together mean a `tvault` nested inside `tvault run` can read
+through the agent but cannot write: it inherited no passphrase, and the agent
+will not supply one. Give such a child a credential explicitly if it must write,
+understanding that it then holds the whole vault rather than the subset you
+selected. See [Troubleshooting](/reference/troubleshooting).
+
 ### Token honesty
 
 ::: warning Capability tokens are privilege separation, not a same-uid control
