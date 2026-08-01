@@ -3,6 +3,10 @@
   "version": "0.0.0",
   "description": "TinyVault binary for darwin-x64 (tvault — local-first secrets CLI and MCP server)",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abdul-hamid-achik/tinyvault.git"
+  },
   "os": [
     "darwin"
   ],
