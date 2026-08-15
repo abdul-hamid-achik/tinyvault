@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.21.1] - 2026-08-14
+
+### Fixed
+
+- Non-interactive unlock now finds `~/.config/secrets/env` when neither
+  `TVAULT_PASSPHRASE` nor `TVAULT_PASSPHRASE_FILE` / `agent.passphrase_file`
+  is set. GUI-launched MCP hosts (Grok, Cursor, …) do not inherit a login
+  shell, so `tvault get` / `tvault run` from those children used to fail
+  locked even when the conventional 0600 passphrase file existed.
+  `TVAULT_PASSPHRASE_FILE` is now documented on the environment-variables page.
+
 ## [0.21.0] - 2026-08-01
 
 ### Added

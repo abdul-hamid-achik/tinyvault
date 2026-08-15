@@ -23,9 +23,17 @@ const envPassphraseFile = "TVAULT_PASSPHRASE_FILE" //nolint:gosec // G101: a var
 // passphraseFileKey is the variable read out of the resolved file.
 const passphraseFileKey = "TVAULT_PASSPHRASE" //nolint:gosec // G101: a variable name, not a credential
 
+// conventionalPassphraseFile is the well-known env file tvault agent install
+// and launchd/systemd units already document. MCP hosts and GUI-launched
+// harnesses rarely inherit TVAULT_* from a login shell; if this file exists
+// we treat it as the implicit last-resort unlock path so `tvault get` /
+// `tvault run` work without a per-tool env stanza.
+const conventionalPassphraseFile = "~/.config/secrets/env" //nolint:gosec // G101: a path, not a credential
+
 // passphraseFilePath resolves which env file to read, in precedence order:
 // the TVAULT_PASSPHRASE_FILE environment variable, then the config's
-// agent.passphrase_file. It returns "" when neither is set.
+// agent.passphrase_file, then ~/.config/secrets/env when that file exists.
+// It returns "" when none of those apply.
 //
 // A leading ~ is expanded so config.yaml can hold the portable
 // "~/.config/secrets/env" rather than a machine-specific absolute path.
@@ -34,7 +42,29 @@ func passphraseFilePath(cfg Config) string {
 	if path == "" {
 		path = strings.TrimSpace(cfg.Agent.PassphraseFile)
 	}
+	if path == "" {
+		path = conventionalPassphraseFileIfPresent()
+	}
 	return expandHome(path)
+}
+
+func conventionalPassphraseFileIfPresent() string {
+	// Scratch vaults (TVAULT_DIR / --vault) must not inherit the operator's
+	// login passphrase; that turns "locked" into "wrong passphrase" in tests
+	// and isolated fixtures.
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	if getVaultDir() != home+"/"+defaultVaultDir {
+		return ""
+	}
+	candidate := expandHome(conventionalPassphraseFile)
+	info, err := os.Stat(candidate)
+	if err != nil || info.IsDir() {
+		return ""
+	}
+	return candidate
 }
 
 // expandHome turns a leading ~ or ~/ into the user's home directory. A path

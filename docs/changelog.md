@@ -22,6 +22,18 @@ If `tvault` was installed from the retired formula, migrate once with
 
 ## Unreleased
 
+## 0.21.1 — 2026-08-14
+
+### Fixed
+
+- Non-interactive unlock now finds `~/.config/secrets/env` when neither
+  `TVAULT_PASSPHRASE` nor `TVAULT_PASSPHRASE_FILE` / `agent.passphrase_file`
+  is set. GUI-launched MCP hosts do not inherit a login shell, so `tvault get`
+  / `tvault run` from those children used to fail locked even when the
+  conventional 0600 passphrase file existed. Scratch vaults (`TVAULT_DIR` /
+  `--vault`) do not inherit that file. `TVAULT_PASSPHRASE_FILE` is documented
+  on the environment-variables page.
+
 ## 0.21.0 — 2026-08-01
 
 ### Added

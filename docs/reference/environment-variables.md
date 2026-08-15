@@ -14,6 +14,7 @@ There is no generic environment-variable mapping for command flags. Use only the
 | Variable | Reads it | What it does |
 | --- | --- | --- |
 | `TVAULT_PASSPHRASE` | commands that unlock directly; also `init`, `agent start`, `studio`, `mcp` | Vault passphrase for non-interactive unlock; skips the prompt. |
+| `TVAULT_PASSPHRASE_FILE` | same surfaces as `TVAULT_PASSPHRASE` | Path to a `0600` env-style file holding `TVAULT_PASSPHRASE`. Preferred for MCP/launchd (the process inherits a path, not the secret). Falls back to `agent.passphrase_file` in `~/.tvault/config.yaml`, then `~/.config/secrets/env` when that file exists. |
 | `TVAULT_DIR` | every command | Vault directory override. Default `~/.tvault`. |
 | `TVAULT_NO_AGENT` | `get`, `env`, `run` | If set, bypass a running agent and unlock directly (same as `--no-agent`). |
 | `TVAULT_AGENT_TOKEN` | agent-routed `get`, `env`, `run` | Bearer token sent to a `--require-token` agent after the mandatory same-uid check. |
@@ -60,6 +61,23 @@ tvault env --project api > .env
 - Prefer your CI provider's masked-secret mechanism over an exported value, and never `echo` the variable.
 - For passphrase-free CI, consider an identity key instead (see [`TVAULT_IDENTITY_KEY`](#tvault-identity-key)); it scopes access to specific recipients rather than handing over the master passphrase.
 :::
+
+### `TVAULT_PASSPHRASE_FILE`
+
+Points at a `0600` env-style file (`KEY=VALUE`, `export` accepted) that contains `TVAULT_PASSPHRASE`. Use this for MCP servers, launchd, and systemd: the process environment carries a path, not the master passphrase.
+
+```bash
+export TVAULT_PASSPHRASE_FILE="$HOME/.config/secrets/env"
+tvault env --project api
+```
+
+Precedence:
+
+```
+TVAULT_PASSPHRASE   >   TVAULT_PASSPHRASE_FILE   >   agent.passphrase_file   >   ~/.config/secrets/env (if present)
+```
+
+The file is refused if it is group- or world-readable. Set `agent.passphrase_file` in `~/.tvault/config.yaml` when you want the same path without exporting anything into a GUI-launched harness.
 
 If the passphrase is wrong, `tvault` exits with code **6**. If the vault has not been initialized yet, it exits with code **5**.
 

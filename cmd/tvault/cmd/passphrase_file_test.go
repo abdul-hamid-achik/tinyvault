@@ -84,6 +84,7 @@ func TestReadPassphraseFileEmptyValue(t *testing.T) {
 }
 
 func TestPassphraseFilePathPrecedence(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	cfg := Config{Agent: AgentConfig{PassphraseFile: "/from/config"}}
 
 	t.Setenv(envPassphraseFile, "")
@@ -141,6 +142,11 @@ func TestPassphraseFromEnvOrFileFallsBackToFile(t *testing.T) {
 }
 
 func TestPassphraseFromEnvOrFileUnconfiguredIsNotAnError(t *testing.T) {
+	prevVaultDir := vaultDir
+	vaultDir = ""
+	t.Cleanup(func() { vaultDir = prevVaultDir })
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("TVAULT_DIR", "")
 	t.Setenv("TVAULT_PASSPHRASE", "")
 	t.Setenv(envPassphraseFile, "")
 
@@ -150,5 +156,25 @@ func TestPassphraseFromEnvOrFileUnconfiguredIsNotAnError(t *testing.T) {
 	}
 	if got != "" {
 		t.Errorf("passphrase = %q, want empty so the caller can prompt", got)
+	}
+}
+
+func TestPassphraseFilePathDefaultsToConventionalFile(t *testing.T) {
+	home := t.TempDir()
+	prevVaultDir := vaultDir
+	vaultDir = ""
+	t.Cleanup(func() { vaultDir = prevVaultDir })
+	t.Setenv("HOME", home)
+	t.Setenv("TVAULT_DIR", "")
+	t.Setenv(envPassphraseFile, "")
+	path := filepath.Join(home, ".config", "secrets", "env")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("TVAULT_PASSPHRASE=from-default\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := passphraseFilePath(Config{}); got != path {
+		t.Errorf("passphraseFilePath() = %q, want conventional %q", got, path)
 	}
 }
