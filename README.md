@@ -32,7 +32,7 @@ TinyVault is built around value-minimizing agent workflows: search metadata, inj
 - **Versioned secrets** -- every overwrite archives the prior value; `tvault history`, `tvault get --version N`, and `tvault rollback --to N` (also over MCP) let you inspect and restore past values. History survives key rotation.
 - **Local agent (unix)** -- `tvault agent` holds the vault unlocked over a private 0600 socket so daily `get/env/run` skip the passphrase prompt and Argon2id; `tvault hook` wires it into bash/zsh/fish/direnv. Auto-locks when idle.
 - **Relational Search** -- `tvault search` and `vault_search_secrets` for prefix, name glob, time-range, version, and cross-project queries
-- **Interactive Studio** -- `tvault studio` (aliases: `browse`, `ui`): a full-screen terminal UI (Bubble Tea v2) to browse status, projects, secrets, and audit — with a live filter and reveal-on-demand (`r` shows a value, `esc` re-masks). Read-only by default; `--rw` enables audited in-app new/edit/delete
+- **Audit log** -- `tvault audit` lists recent actions (metadata only); the same trail is available over MCP
 - **Output Redaction** -- MCP execution can replace literal secret values in captured output when `redact_output` is enabled; transformed values can bypass it
 - **Access Policy** -- YAML-based allow/deny patterns control what AI agents can access
 - **Zero External Services Required** -- No database server, Docker daemon, account, or hosted control plane -- just a local bbolt file
@@ -129,34 +129,11 @@ tvault get API_KEY --from .env
 
 # Machine-readable feature manifest for AI agents
 tvault docs features
+
+# Recent audit entries (metadata only; never prints values)
+tvault audit
+tvault audit --action secret.read --json
 ```
-
-## Interactive Studio
-
-`tvault studio` opens a full-screen terminal UI for browsing the vault — the
-**human** surface alongside the CLI (scripts) and the MCP server (agents). The
-`browse` and `ui` aliases still work for backwards compatibility.
-
-```bash
-tvault studio                       # browse the current project
-tvault studio --rw                  # enable in-app new/edit/delete (audited)
-tvault studio webapp                # open a specific project
-tvault studio --single-pane         # one pane at a time (small terminals)
-tvault studio --no-anim             # disable animations (SSH / screen readers)
-```
-
-Four panes — **status**, **projects**, **secrets**, **audit** — with vim,
-arrow, and mouse-wheel navigation. Press `/` to filter keys live, `r` to reveal
-the selected value (warm orange = a secret is showing), `R` to reveal all,
-`c` to copy, and `esc` to re-mask. Revealed values live only in memory and
-are wiped on `esc`, on pane change, and on quit.
-
-The studio is **read-only by default** — a stray keystroke can't change
-anything. Launch with `--rw` to enable in-app `n`ew / `e`dit / `d`elete,
-which use the same encryption path as the CLI and are written to the audit
-log just like `tvault set`/`delete`. Browsing metadata works while locked;
-press `u` to unlock in-app. Light/dark theme is auto-detected. Run
-`tvault help studio` for the full keybinding cheat sheet.
 
 ## Projects
 

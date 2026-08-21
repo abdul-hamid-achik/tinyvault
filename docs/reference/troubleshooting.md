@@ -19,7 +19,7 @@ Quick fixes for the things people actually hit. For the long-form CLI manual, `t
 | `4` | Secret or project not found |
 | `5` | Vault not initialized |
 | `6` | Wrong passphrase |
-| `7` | Vault database is in use by another process (e.g. a running `tvault studio`) |
+| `7` | Vault database is in use by another process (e.g. a running `tvault run`) |
 
 ## "Vault is locked" / "wrong passphrase"
 
@@ -79,9 +79,9 @@ The MCP server (`tvault mcp`) speaks JSON-RPC over stdio and **unlocks the vault
 
 The on-disk store ([bbolt](https://github.com/etcd-io/bbolt)) is **single-writer**: only one process can hold the database open at a time.
 
-`tvault mcp` and [`tvault agent`](/guide/agent) **no longer block the CLI** — they cache only the key and reopen the vault per request, releasing the lock between calls, so `set`/`get`/`run`/`import` keep working alongside them. The remaining long-lived holder is **`tvault studio`**, which keeps the vault open for the duration of the interactive session.
+`tvault mcp` and [`tvault agent`](/guide/agent) **do not block the CLI** — they cache only the key and reopen the vault per request, releasing the lock between calls, so `set`/`get`/`run`/`import` keep working alongside them. A long-running command that holds the database (for example `tvault run` wrapping a process that never exits) will still block other writers.
 
-If you hit exit code `7` (or doctor reports *"in use by another process"*), quit the other `tvault studio` window (or whatever foreground process is holding it) and retry. This used to surface as an opaque `open bolt db: timeout`.
+If you hit exit code `7` (or doctor reports *"in use by another process"*), quit the other `tvault` process that is holding the database and retry. This used to surface as an opaque `open bolt db: timeout`.
 
 ## `tvault agent` says "unix-only"
 
@@ -96,10 +96,6 @@ tvault projects share tvault1…          # CLI
 ```
 
 …or use `tvault seal --recipient tvault1…` / `vault_seal_for_recipients` with explicit recipients. See [Sharing](/guide/sharing) and [Committable Secrets](/guide/committable-secrets).
-
-## `tvault studio` won't start
-
-The [studio](/guide/studio) needs an **interactive terminal** — it refuses to run under `TERM=dumb` or when stdout isn't a TTY (e.g. piped, or some CI shells). Run it in a real terminal, or use the CLI/MCP for non-interactive access.
 
 ## "identity export refuses to print"
 

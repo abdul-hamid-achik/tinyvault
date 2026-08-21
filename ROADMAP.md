@@ -1,6 +1,6 @@
 # ROADMAP — making `tvault` a great secrets tool
 
-> Product analysis of TinyVault across TUI, DX, CLI, API, and the
+> Product analysis of TinyVault across DX, CLI, API, and the
 > "manage + share secrets everywhere" vision (docker, bun, .env, ssh, CI,
 > commit-to-repo, agents). Grounded in the codebase; every proposal was
 > adversarially stress-tested for security/feasibility before landing here.
@@ -11,7 +11,7 @@
 ## TL;DR
 
 TinyVault today is an excellent **single-user, single-machine, local-first**
-secrets manager with a strong agent story (MCP) and now a great TUI. The
+secrets manager with a strong agent story (MCP). The
 vision — *share* secrets across people/CI/agents, *commit* them to the repo,
 *pull* them over many transports — is blocked by **two architectural gaps**.
 Everything else is quick wins or builds on these two:
@@ -68,8 +68,7 @@ Ship these first: high value, low risk, no crypto/transport prerequisites.
 | **Audit everywhere** — write audit entries from the CLI/TUI vault path, not just MCP | "Audited mutations", audit timeline, tamper-evidence all depend on it | **S–M** | Today only `internal/mcp` calls `AppendAudit`; `vault.SetSecret`/`DeleteSecret`/`GetSecret` don't. Add it at the vault layer so every surface is covered once. |
 | **Uniform machine output** — a real `--output text\|json`, one JSON envelope, meaningful exit codes | Strengthens the agent/scripting identity | **M** | `env.go`'s hand-rolled JSON (`escapeJSONValue`) doesn't escape control bytes (`\r`, NUL) → invalid JSON; switch to `encoding/json`. Design exit codes to avoid collision with cobra's `64`. |
 | **`tvault doctor` + a typed config file** | Diagnoses setup; anchors DX and feeds TUI/hook toggles | **M** | `root.go` wires viper to `~/.tvault/config.yaml` but binds only 3 flags — a typed config struct is purely additive. All read-only methods doctor needs already exist (`Status`, `SnapshotProjects`). |
-| **TUI: safe, audited mutations** (`set`/`edit`/`delete`/`generate`) behind an explicit `--rw` edit mode | The #1 "what's next" for the studio UI | **L** | Reuses the CLI's DEK path; slots `modeEdit`/`modeConfirm` into the existing `handleKey` switch like `modeUnlock`. Default-off `--rw`. *Requires the audit-everywhere fix to be truly "audited."* |
-| **`.env` drift / diff** | Answers "is my `.env` in sync with the vault?" | **L** | ✅ Shipped as the CLI `tvault diff <file>` (metadata-only by default; `--values` compares values without printing them). A live indicator inside the studio UI is a nice follow-up. |
+| **`.env` drift / diff** | Answers "is my `.env` in sync with the vault?" | **L** | ✅ Shipped as the CLI `tvault diff <file>` (metadata-only by default; `--values` compares values without printing them). |
 | Secret history & rollback | A version *number* existed, but values were overwritten | **L** | ✅ **Landed (later wave, as scoped):** new `secret_versions` bbolt bucket — `SetSecret` archives the prior entry before overwriting (same tx); `GetSecretVersion`/`ListSecretVersions`/`ListSecretVersionEntries`. Surfaced as `tvault history` / `get --version N` / `rollback --to N` and MCP `vault_secret_history` / `vault_rollback_secret` (never return a value). Rollback is non-destructive (monotonic versions). **History survives rotation in the updated vault:** `RekeyProject` re-encrypts current + history atomically on recipient removal; pre-removal snapshots remain readable, and KEK rotation doesn't touch values. `delete` purges history. Tested incl. `TestUnshareReEncryptsHistory`. (Original scope correction: this was deferred from Wave 0 because it needed the storage change — now done.) |
 
 ---
@@ -115,8 +114,8 @@ This is the centerpiece of your vision and the biggest differentiator vs. SOPS+a
 
 ## Competitive positioning (why this wins)
 
-- vs **SOPS+age / git-crypt / sealed-secrets**: they do commit-safe asymmetric secrets but have *no agent story, no TUI, no run-injection, no MCP*. Spine A closes the crypto gap; TinyVault keeps the UX + agent lead.
-- vs **dotenvx**: similar commit-safe `.env` story; TinyVault adds projects, audit, MCP, the TUI, and broker-based injection.
+- vs **SOPS+age / git-crypt / sealed-secrets**: they do commit-safe asymmetric secrets but have *no agent story, no run-injection, no MCP*. Spine A closes the crypto gap; TinyVault keeps the UX + agent lead.
+- vs **dotenvx**: similar commit-safe `.env` story; TinyVault adds projects, audit, MCP, and broker-based injection.
 - vs **Doppler/Infisical/Vault**: they're hosted/server-first. TinyVault stays **local-first + zero-infra**, which is the whole point — don't chase a control plane.
 - **Unique seat:** local-first **+** agent-first (MCP) **+** secrets-as-code (Spine A) **+** use-it-everywhere broker (Spine B). Nobody else sits in all four.
 
@@ -124,8 +123,8 @@ This is the centerpiece of your vision and the biggest differentiator vs. SOPS+a
 
 ## Recommended sequencing
 
-1. **Wave 0 quick wins** — immediate value, unblocks "audited" everything. Start with **audit-everywhere** + **`--output`/exit codes** + **`doctor`/config**, then **TUI mutations**.
+1. **Wave 0 quick wins** — immediate value, unblocks "audited" everything. Start with **audit-everywhere** + **`--output`/exit codes** + **`doctor`/config**.
 2. **Pick the headline spine.** If the priority is *team/CI/commit sharing* → **Spine A (recipients)** is the differentiator. If the priority is *daily local DX across docker/bun/ssh* → **Spine B (agent/broker)** removes the most friction first. They're largely independent and can interleave.
 3. **Transports & integrations (Wave 3)** ride on whichever spine they need (the table marks it).
 
-*First concrete sprint suggestion:* audit-everywhere → `tvault doctor` + config → uniform `--output` → TUI `--rw` mutations. Small, shippable, and every later wave benefits.
+*First concrete sprint suggestion:* audit-everywhere → `tvault doctor` + config → uniform `--output`. Small, shippable, and every later wave benefits.

@@ -107,7 +107,6 @@ If repeated prompts interrupt your local workflow, the optional [local agent](/g
 - [Run and env](/guide/run-and-env) — select keys, combine a `.env` template, or render environment output.
 - [Projects](/guide/projects) — separate applications and environments.
 - [Dotenv workflows](/guide/dotenv) — import, diff, sync, and interpolate existing `.env` files.
-- [Studio](/guide/studio) — browse the vault interactively.
 - [MCP server](/mcp/) — connect an AI agent with a fail-closed policy.
 - [Security and threat model](/reference/security) — understand metadata exposure and trust boundaries.
 - [CLI reference](/cli/) — look up every command and flag.

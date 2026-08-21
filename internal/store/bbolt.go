@@ -24,9 +24,8 @@ var (
 	ErrDuplicateProjectName = errors.New("project name already exists")
 
 	// ErrVaultBusy is returned when bbolt cannot obtain its exclusive lock
-	// within the open timeout — another process (e.g. a running `tvault mcp`
-	// or `tvault studio`) holds the database open. Distinct from a vault that
-	// is merely locked-at-rest.
+	// within the open timeout — another process holds the database open.
+	// Distinct from a vault that is merely locked-at-rest.
 	ErrVaultBusy = errors.New("vault database is in use by another process")
 )
 

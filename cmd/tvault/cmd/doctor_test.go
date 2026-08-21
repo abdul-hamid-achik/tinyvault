@@ -81,12 +81,12 @@ func TestLoadConfig(t *testing.T) {
 	withVaultDir(t, dir)
 
 	// Missing file → zero config, no error.
-	if c, err := loadConfig(); err != nil || c.Browse.AuditLimit != 0 || c.Browse.NoAnim {
+	if c, err := loadConfig(); err != nil || c.Agent.LogLevel != "" || c.Agent.PassphraseFile != "" {
 		t.Errorf("missing config: got %+v, err %v", c, err)
 	}
 
 	// Valid file → parsed.
-	yaml := "browse:\n  no_anim: true\n  single_pane: true\n  audit_limit: 50\n"
+	yaml := "agent:\n  log_level: debug\n  passphrase_file: /tmp/tvault.env\n"
 	if err := os.WriteFile(configPath(), []byte(yaml), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestLoadConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadConfig: %v", err)
 	}
-	if !c.Browse.NoAnim || !c.Browse.SinglePane || c.Browse.AuditLimit != 50 {
+	if c.Agent.LogLevel != "debug" || c.Agent.PassphraseFile != "/tmp/tvault.env" {
 		t.Errorf("parsed config wrong: %+v", c)
 	}
 

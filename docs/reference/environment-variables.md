@@ -1,6 +1,6 @@
 ---
 title: Environment Variables
-description: Reference for the supported TVAULT_* runtime variables — passphrase, vault directory, agent routing, identities, and studio animation control.
+description: Reference for the supported TVAULT_* runtime variables — passphrase, vault directory, agent routing, and identities.
 ---
 
 # Environment Variables
@@ -13,14 +13,13 @@ There is no generic environment-variable mapping for command flags. Use only the
 
 | Variable | Reads it | What it does |
 | --- | --- | --- |
-| `TVAULT_PASSPHRASE` | commands that unlock directly; also `init`, `agent start`, `studio`, `mcp` | Vault passphrase for non-interactive unlock; skips the prompt. |
+| `TVAULT_PASSPHRASE` | commands that unlock directly; also `init`, `agent start`, `mcp` | Vault passphrase for non-interactive unlock; skips the prompt. |
 | `TVAULT_PASSPHRASE_FILE` | same surfaces as `TVAULT_PASSPHRASE` | Path to a `0600` env-style file holding `TVAULT_PASSPHRASE`. Preferred for MCP/launchd (the process inherits a path, not the secret). Falls back to `agent.passphrase_file` in `~/.tvault/config.yaml`, then `~/.config/secrets/env` when that file exists. |
 | `TVAULT_DIR` | every command | Vault directory override. Default `~/.tvault`. |
 | `TVAULT_NO_AGENT` | `get`, `env`, `run` | If set, bypass a running agent and unlock directly (same as `--no-agent`). |
 | `TVAULT_AGENT_TOKEN` | agent-routed `get`, `env`, `run` | Bearer token sent to a `--require-token` agent after the mandatory same-uid check. |
 | `TVAULT_IDENTITY_KEY` | `open`, `decrypt-env`, identity-mode `env` and `run`, `k8s render`, git filters | A **private** identity string (`tvault-key1...`) for passphrase-free decryption when the selected key file is absent. |
 | `TVAULT_IDENTITY` | `open`, git filters | Default identity **name** (not the key). |
-| `TVAULT_NO_ANIM` | `studio` | Disable studio animations. |
 
 ## Vault location
 
@@ -47,7 +46,7 @@ Precedence for the vault directory is:
 
 ### `TVAULT_PASSPHRASE`
 
-Supplies the vault passphrase so a command that opens the vault directly can unlock without an interactive prompt. This includes ordinary direct reads/writes and the `unlock`, `init`, `agent start`, `studio`, and `mcp` commands. Agent-served `get`, `env`, and `run` calls do not need it.
+Supplies the vault passphrase so a command that opens the vault directly can unlock without an interactive prompt. This includes ordinary direct reads/writes and the `unlock`, `init`, `agent start`, and `mcp` commands. Agent-served `get`, `env`, and `run` calls do not need it.
 
 ```bash
 # CI: unlock without a TTY
@@ -161,18 +160,6 @@ Other `--identity` flags do not read `TVAULT_IDENTITY` automatically. For exampl
 `TVAULT_IDENTITY` selects a key by name (it expects a matching `<vault-dir>/identities/<name>.key`). `TVAULT_IDENTITY_KEY` *is* the key material itself, for when the selected file does not exist. Set one or the other depending on whether your runner has a key file on disk.
 :::
 
-## Studio
-
-### `TVAULT_NO_ANIM`
-
-Disables animations in the interactive [studio](/guide/studio). Set it for screen recordings, slow terminals, or accessibility.
-
-```bash
-TVAULT_NO_ANIM=1 tvault studio
-```
-
-Animations are also disabled automatically over ssh. The same setting can be made permanent via `browse.no_anim` in [`config.yaml`](/reference/configuration), and the `--no-anim` flag disables them for one invocation. If `TERM=dumb`, the studio refuses to start rather than merely disabling animation.
-
 ## Exit codes
 
 Scripts that read these variables will want to branch on the process exit code:
@@ -189,7 +176,7 @@ Scripts that read these variables will want to branch on the process exit code:
 
 ## See also
 
-- [Configuration](/reference/configuration) — the `config.yaml` file and the `browse:` block.
+- [Configuration](/reference/configuration) — the `config.yaml` file and the `agent:` block.
 - [CI/CD](/guide/ci-cd) — wiring up passphrase-free and identity-based pipelines.
 - [Sharing Secrets](/guide/sharing) — identities, recipients, live-vault re-keying, and retained-data limits.
 - [Local Agent](/guide/agent) — the unlocked-vault daemon and `--require-token`.

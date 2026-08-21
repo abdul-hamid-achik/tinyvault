@@ -1,6 +1,6 @@
 ---
 title: Configuration & File Layout
-description: How TinyVault uses the studio browse settings in config.yaml, where it stores vault and identity files, and how vault, identity, and project paths are resolved.
+description: How TinyVault uses config.yaml, where it stores vault and identity files, and how vault, identity, and project paths are resolved.
 ---
 
 # Configuration & File Layout
@@ -11,35 +11,32 @@ TinyVault works with zero configuration. A config file is optional, and a missin
 
 ## The config file: `<vault-dir>/config.yaml`
 
-The interactive studio reads a single optional YAML file from the resolved vault directory. Its default path is `~/.tvault/config.yaml`; `--vault <dir>` or `TVAULT_DIR` moves it together with the rest of the vault files.
+TinyVault reads a single optional YAML file from the resolved vault directory. Its default path is `~/.tvault/config.yaml`; `--vault <dir>` or `TVAULT_DIR` moves it together with the rest of the vault files.
 
-A **missing** file is fine — the studio uses built-in defaults. If the file is malformed or unreadable, the studio ignores it and continues with flags/defaults; [`tvault doctor`](/cli/) reports the problem and exits non-zero.
+A **missing** file is fine — built-in defaults apply. If the file is malformed or unreadable, [`tvault doctor`](/cli/) reports the problem and exits non-zero.
 
 ```yaml
 # ~/.tvault/config.yaml
-
-# Defaults for the interactive studio (tvault studio / browse / ui).
-# The key is "browse:" for backwards compatibility with the old command name.
-browse:
-  no_anim: false       # disable studio animations
-  single_pane: false   # use a single-pane layout instead of split panes
-  audit_limit: 100     # how many audit-log entries the studio loads
+agent:
+  passphrase_file: ~/.config/secrets/env
+  log_dir: ""        # empty = $XDG_STATE_HOME/tvault
+  log_level: info
 ```
 
 ### What the typed config parses
 
-Only the `browse:` block is parsed into TinyVault's typed config. It configures the [studio](/guide/studio), the interactive terminal UI.
+Only the `agent:` block is parsed into TinyVault's typed config.
 
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
-| `browse.no_anim` | bool | `false` | Disable studio animations. Animations are also disabled by `TVAULT_NO_ANIM` or an SSH session; `TERM=dumb` makes the studio refuse to start. |
-| `browse.single_pane` | bool | `false` | Render a single-pane layout instead of the split-pane view. |
-| `browse.audit_limit` | int | `100` | How many audit-log entries the studio loads on open. |
+| `agent.passphrase_file` | string | empty | Path to an env-style file containing `TVAULT_PASSPHRASE` for non-interactive unlock (must not be group- or world-readable). |
+| `agent.log_dir` | string | empty | Override agent log directory. Empty means `$XDG_STATE_HOME/tvault`. |
+| `agent.log_level` | string | `info` | One of `debug`, `info`, `warn`, `error`. |
 
-Only the `browse:` block is applied by the typed config loader. Top-level `vault`, `project`, and `verbose` keys do not configure those command flags.
+A leftover `browse:` block from older releases is ignored. Top-level `vault`, `project`, and `verbose` keys do not configure those command flags.
 
-::: tip Studio flags override browse defaults
-An explicitly provided `--no-anim`, `--single-pane`, or `--audit-limit` value overrides the corresponding `browse:` value for that invocation.
+::: tip Flags and environment variables win
+Explicit command-line flags and `TVAULT_*` environment variables override the corresponding `agent:` values.
 :::
 
 ::: warning A broken config is caught by doctor
@@ -226,5 +223,5 @@ esac
 
 - [Environment variables](/reference/environment-variables) — every `TVAULT_*` variable in detail.
 - [MCP Access Policy](/mcp/access-policy) — the schema for `mcp-policy.yaml`.
-- [Studio](/guide/studio) — the interactive UI the `browse:` block configures.
+- [The local agent](/guide/agent) — `agent:` config, socket, and install.
 - [Security](/reference/security) — the threat model behind these defaults.

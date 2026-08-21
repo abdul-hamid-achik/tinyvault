@@ -9,13 +9,14 @@ intent: |
 
   This proves set/get/list/status all work against one scratch vault and emit
   the exact strings users see. Fast unit coverage lives in the cmd tests; this
-  spec is the real-terminal smoke test for the four commands chained together.
+  spec is the real-terminal smoke test for set/get/list/status/audit chained
+  together.
 
 target:
   cmd:
     - "/bin/sh"
     - "-c"
-    - "export TVAULT_DIR=.glyphrun/tmp/cli-core; export TVAULT_PASSPHRASE=glyphpass; ./bin/tvault set DB_URL postgres://glyph -p default && ./bin/tvault get DB_URL -p default && echo && ./bin/tvault list -p default && ./bin/tvault status"
+    - "export TVAULT_DIR=.glyphrun/tmp/cli-core; export TVAULT_PASSPHRASE=glyphpass; ./bin/tvault set DB_URL postgres://glyph -p default && ./bin/tvault get DB_URL -p default && echo && ./bin/tvault list -p default && ./bin/tvault status && echo && ./bin/tvault audit --action secret.write --limit 5"
   cwd: "."
   env:
     TVAULT_DIR: ".glyphrun/tmp/cli-core"
@@ -46,7 +47,7 @@ steps:
 
 outcomes:
   - id: clean_exit
-    description: the chained set/get/list/status sequence exits with status 0
+    description: the chained set/get/list/status/audit sequence exits with status 0
     verify:
       process:
         exitCode: 0
@@ -75,3 +76,8 @@ outcomes:
     verify:
       screen:
         contains: "Current project: default"
+  - id: audit_write
+    description: audit lists the secret.write from set
+    verify:
+      screen:
+        contains: "secret.write"

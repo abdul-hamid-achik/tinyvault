@@ -5,12 +5,12 @@ description: The complete tvault command reference — global flags, exit codes,
 
 # CLI Reference
 
-`tvault` is a single binary, written in Go: a local-first secrets CLI, an MCP server (via the `mcp` subcommand), and an interactive terminal studio. This page documents every command, its usage line, and its command-local flags.
+`tvault` is a single binary, written in Go: a local-first secrets CLI and an MCP server (via the `mcp` subcommand). This page documents every command, its usage line, and its command-local flags.
 
 Run `tvault help` for the long-form manual or `tvault docs` for machine-readable docs aimed at agents. Every command also supports `-h`/`--help`.
 
-::: info Looking for secret generation or an audit subcommand?
-There is **no** `tvault generate` and **no** `tvault audit` command. Secret generation is available only over MCP (`vault_generate_secret`). Auditing is internal — it is surfaced over MCP (`vault_audit_log`) and in the studio, not as a CLI subcommand.
+::: info Looking for secret generation?
+There is **no** `tvault generate` command. Secret generation is available only over MCP (`vault_generate_secret`). Read the audit log with `tvault audit` or over MCP (`vault_audit_log`).
 :::
 
 ## Global flags
@@ -19,7 +19,7 @@ These persistent flags are available on **every** command:
 
 | Flag | Description |
 | --- | --- |
-| `--config <file>` | Compatibility selector for Viper's config input. Current typed studio settings still load from `<vault-dir>/config.yaml`; use `--vault` to relocate them. |
+| `--config <file>` | Compatibility selector for Viper's config input. Typed settings still load from `<vault-dir>/config.yaml`; use `--vault` to relocate them. |
 | `--vault <dir>` | Vault directory (default `~/.tvault`). |
 | `-p`, `--project <name>` | Project to operate on (default: the active project). |
 | `--json` | Emit machine-readable JSON instead of human text. |
@@ -51,6 +51,7 @@ Commands return meaningful exit codes so scripts and agents can branch on *why* 
 | `4` | Secret or project not found. |
 | `5` | Not initialized — run `tvault init`. |
 | `6` | Wrong passphrase (unlock failed). |
+| `7` | Vault database is in use by another process. |
 
 ```bash
 tvault get MISSING_KEY; echo "exit=$?"   # exit=4
@@ -66,7 +67,6 @@ tvault get MISSING_KEY; echo "exit=$?"   # exit=4
 | `delete` | `rm`, `remove` |
 | `projects` | `project`, `p` |
 | `history` | `versions`, `hist` |
-| `studio` | `browse`, `ui` |
 
 `tvault use <project>` is shorthand for `tvault projects use <project>`.
 
@@ -760,29 +760,28 @@ Update the `tvault` binary in place: download the latest release for this OS/arc
 
 ---
 
-## Interactive UI
+## Audit
 
-### `studio`
+### `audit`
 
 ```bash
-tvault studio
-tvault studio api
-tvault studio --rw
-tvault studio --single-pane --no-anim --audit-limit 50
+tvault audit
+tvault audit --limit 20
+tvault audit --action secret.read
+tvault audit --since 2026-01-01T00:00:00Z --json
 ```
 
-Launch the interactive terminal studio. Requires a TTY. **Read-only by default** — the only decryption is an on-demand reveal (audited like `tvault get`). Aliases: `browse`, `ui`.
+List recent audit-log entries (newest first). Metadata only: actions, resource names, timestamps. Secret values are never stored in the log and never printed. **Lock-free** — works on a locked vault.
 
 | Flag | Description |
 | --- | --- |
-| `--single-pane` | Force single-pane mode (small terminals). |
-| `--no-anim` | Disable animations (also `$TVAULT_NO_ANIM`). |
-| `--audit-limit <N>` | Recent audit entries to load (default `100`). |
-| `--rw` | Enable in-app new/edit/delete; read-only by default. |
+| `--limit <N>` | Maximum entries (default `100`, max `1000`). |
+| `--since <RFC3339>` | Only entries at or after this timestamp. |
+| `--until <RFC3339>` | Only entries at or before this timestamp. |
+| `--action <name>` | Only this action (e.g. `secret.read`). |
+| `--resource-type <name>` | Only this resource type (e.g. `secret`). |
 
-::: tip
-`--rw` edits reuse the same audited `SetSecret`/`DeleteSecret` path as the CLI. Rotation and project create/delete stay in the CLI.
-:::
+The same trail is available over MCP as `vault_audit_log` / `vault_audit_log_since`.
 
 ---
 
@@ -820,7 +819,7 @@ tvault help workflow
 tvault help safety --json
 ```
 
-Long-form manual. Topics: `workflow`, `safety`, `recipes`, `output`, `agent`, `troubleshooting`, `studio`, `topics`.
+Long-form manual. Topics: `workflow`, `safety`, `recipes`, `output`, `agent`, `troubleshooting`, `topics`.
 
 | Flag | Description |
 | --- | --- |
@@ -834,7 +833,7 @@ tvault docs run
 tvault docs -t mcp
 ```
 
-Machine-readable docs for agents. Subtopics: `features`, `topics`, `run`, `mcp`, `interpolate`, `sync`, `encrypted-env`, `safety`, `quickstart`, `studio`.
+Machine-readable docs for agents. Subtopics: `features`, `topics`, `run`, `mcp`, `interpolate`, `sync`, `encrypted-env`, `safety`, `quickstart`.
 
 | Flag | Description |
 | --- | --- |

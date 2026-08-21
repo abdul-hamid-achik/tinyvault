@@ -7,7 +7,7 @@ description: How TinyVault works under the hood — its two-tier key hierarchy, 
 
 This page is the deep technical design of TinyVault: the *how* behind the binary. For the conceptual model first, read [Concepts](/guide/concepts); for the threat model and what TinyVault does and does not defend against, read [Security](/reference/security).
 
-TinyVault is a single binary, `tvault`, written in Go. The same binary is the CLI, an interactive terminal [studio](/guide/studio), and (via the `mcp` subcommand) an [MCP server](/mcp/) for AI agents. All three sit on one vault API and one local bbolt database. Secret payloads and key material are encrypted; names, timestamps, versions, audit entries, and configuration metadata are readable. Normal vault operations need no account or hosted backend.
+TinyVault is a single binary, `tvault`, written in Go. The same binary is the CLI and (via the `mcp` subcommand) an [MCP server](/mcp/) for AI agents. Both sit on one vault API and one local bbolt database. Secret payloads and key material are encrypted; names, timestamps, versions, audit entries, and configuration metadata are readable. Normal vault operations need no account or hosted backend.
 
 ## The big picture
 
@@ -28,15 +28,15 @@ TinyVault is a single binary, `tvault`, written in Go. The same binary is the CL
    single bbolt file: ~/.tvault/vault.db  (0600, in a 0700 dir)
                 │
    ┌────────────┼────────────┐
-   ▼            ▼            ▼
-  CLI        studio TUI   MCP server
+   ▼                         ▼
+  CLI                     MCP server
 ```
 
 Three layers sit on top of one storage file:
 
 1. A symmetric key hierarchy that turns your passphrase into the key that encrypts values.
 2. An asymmetric recipient layer that wraps a project key to other people or machines, so secrets can be shared and committed without sharing the passphrase.
-3. A single bbolt file holding encrypted payloads and readable metadata, exposed through one API to three front ends.
+3. A single bbolt file holding encrypted payloads and readable metadata, exposed through one API to the CLI and the MCP server.
 
 ## Two-tier key hierarchy
 
@@ -248,14 +248,13 @@ bbolt is an embedded, single-writer key/value store. There is no daemon, no sock
 `~/.tvault/vault.db` and any `tvault-key1...` private identity must never be committed or backed up unencrypted to a shared location. The public `tvault1...` recipients are the only key material that is safe to share. The commit-safe path for secrets is the v2 `.env.encrypted` format in [Committable secrets](/guide/committable-secrets).
 :::
 
-## Three interfaces, one API
+## Two interfaces, one API
 
-The CLI, the studio TUI, and the MCP server are thin front ends over the same vault API. They share the same crypto, the same storage, and the same audit log. The differences are in surface and policy, not in how secrets are handled underneath.
+The CLI and the MCP server are thin front ends over the same vault API. They share the same crypto, the same storage, and the same audit log. The differences are in surface and policy, not in how secrets are handled underneath.
 
 | Interface | How you reach it | Notes |
 | --- | --- | --- |
-| CLI | `tvault ...` | The primary surface; everything below is also reachable here. |
-| Studio TUI | `tvault studio` (aliases `browse`, `ui`) | Read-only by default; `--rw` enables audited in-app edits. |
+| CLI | `tvault ...` | The primary surface for humans and scripts. |
 | MCP server | `tvault mcp` | For AI agents; uses the same API under an access policy. |
 
 ### Global flags
@@ -264,7 +263,7 @@ Every command accepts the same global persistent flags, plus `-h`/`--help` every
 
 | Flag | Meaning |
 | --- | --- |
-| `--config <file>` | Compatibility selector for Viper input; typed studio settings still load from `<vault-dir>/config.yaml` |
+| `--config <file>` | Compatibility selector for Viper input; typed settings still load from `<vault-dir>/config.yaml` |
 | `--vault <dir>` | Use a specific vault directory |
 | `-p`, `--project <name>` | Operate on a named project |
 | `--json` | Machine-readable JSON output |
@@ -273,15 +272,13 @@ Every command accepts the same global persistent flags, plus `-h`/`--help` every
 
 See [Configuration](/reference/configuration) and [Environment variables](/reference/environment-variables) for the full set of knobs, and [Exit codes](#exit-codes) below for scripting.
 
-### MCP and the studio: same crypto, stricter output
+### MCP: same crypto, stricter output
 
 The MCP server gives an AI agent the same vault API, but under an [access policy](/mcp/access-policy). Two honesty points matter at the architecture level.
 
 ::: danger Output redaction is a safety net, not a control
-When policy enables `redact_output`, the MCP server replaces literal value strings longer than 3 characters in captured subprocess output. Redaction can be disabled and can be evaded by transforming a value (encoding it, splicing it, computing on it). Do not rely on it to keep a value from an agent that can run code. `vault_get_secret` deliberately returns a stored secret in a plaintext field; `vault_run_with_secrets` can also leak raw, short, or transformed values through arbitrary child output. Secret generation lives only over MCP as `vault_generate_secret`; auditing is internal and surfaced as `vault_audit_log` and in the studio — there is no `tvault generate` or `tvault audit` CLI command. See [MCP tools](/mcp/tools).
+When policy enables `redact_output`, the MCP server replaces literal value strings longer than 3 characters in captured subprocess output. Redaction can be disabled and can be evaded by transforming a value (encoding it, splicing it, computing on it). Do not rely on it to keep a value from an agent that can run code. `vault_get_secret` deliberately returns a stored secret in a plaintext field; `vault_run_with_secrets` can also leak raw, short, or transformed values through arbitrary child output. Secret generation lives only over MCP as `vault_generate_secret`. The audit log is read with `tvault audit` or over MCP as `vault_audit_log`. See [MCP tools](/mcp/tools).
 :::
-
-The studio is read-only by default. With no flags it never writes; its only decryption is the on-demand reveal, which is audited exactly like `tvault get`. The `--rw` flag enables audited in-app edits that reuse the CLI's own `SetSecret`/`DeleteSecret` path. See [Studio](/guide/studio).
 
 ### Other plaintext-output surfaces
 

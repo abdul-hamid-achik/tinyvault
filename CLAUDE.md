@@ -3,8 +3,7 @@
 TinyVault is a **single Go binary**: a local-first secrets CLI (`tvault`) plus
 an MCP server (`tvault mcp`, alias `mcp-server`), backed by one local bbolt
 database whose secret payloads and key material are encrypted. No servers, no
-accounts, no cloud. There is also an interactive terminal
-studio UI, `tvault studio` (aliases: `browse`, `ui`).
+accounts, no cloud. There is no interactive TUI; humans use the CLI.
 
 **Read these first — they are the source of truth:**
 - [AGENTS.md](AGENTS.md) — project structure, code conventions, security
@@ -12,6 +11,7 @@ studio UI, `tvault studio` (aliases: `browse`, `ui`).
 - [Architecture](docs/reference/architecture.md) and
   [Security](docs/reference/security.md) — crypto design and threat boundary.
 - [README.md](README.md) — user-facing quickstart and feature list.
+- Docs site: Vercel auto-builds **`main` only** (`docs/vercel.json`). Tags release the CLI; do not promote docs.
 - [ROADMAP.md](ROADMAP.md) — product direction and deferred work.
 
 ## Quick commands (these mirror CI exactly — there is no Makefile/Taskfile)
@@ -127,41 +127,6 @@ Security Scan, Build**. All four must be green.
   it security theater; the recipient/identity model is the answer for real
   delegation. Tokens are out-of-band (0600 file, SIGHUP reload), only their
   SHA-256 is stored, and audit logs a hash prefix (`token_id`), never the token.
-
-## The interactive studio UI (`tvault studio`, aliases `browse`/`ui`)
-
-- Lives in `cmd/tvault/cmd/studio/` — the **only** package that imports
-  `charm.land/*` (Bubble Tea v2 / Lip Gloss v2 / Bubbles v2 / Glamour v2).
-  Strictly the v2 line: no `harmonica`, no `huh`; animations are hand-rolled.
-  `browse` and `ui` remain working aliases for `studio`; the `browse:` config
-  block in `~/.tvault/config.yaml` keeps its name.
-- **Read-only by default** — with no flags it never writes; the only decryption
-  is the on-demand reveal (`r`), audited like `tvault get`. The status pane also
-  reports the agent and its managed service, but **read-only**: it dials the
-  socket and stats the definition, never installs. `tvault agent install` writes
-  a system service, which is deliberately out of a browser's reach. `--rw` enables
-  audited in-app edits (`n`/`e`/`d`) that reuse the CLI's `vault.SetSecret`/
-  `DeleteSecret` path; rotation + project create/delete stay in the CLI.
-- **Invariant — KEK-only, never a held-open DB.** `studio.Session`
-  (`session.go`) caches the KEK and reopens the vault per operation, exactly
-  like the agent. bbolt's lock is process-wide, so holding the database for a
-  whole interactive session would block every other `tvault` on the machine.
-  Every data function takes a `*Session` and goes through `Session.with`; the
-  cmd layer extracts the KEK, closes the vault, and `defer sess.Close()` zeros
-  it. `TestSessionDoesNotHoldTheVaultLock` guards this — keep it passing, and
-  don't "optimize" `with` into a cached handle.
-- **Invariant:** every rendered `View().Content` must be exactly the terminal
-  `width × height` cells, or Bubble Tea's cell-diff renderer corrupts the
-  screen. `layout_test.go` enforces this across all modes — keep it passing.
-- Reveal-map values are wiped on `esc`, pane change, lock, reload, and quit,
-  and a late (epoch-stale) reveal is dropped so it can't resurrect a value.
-- **Verify TUI changes in a real PTY** with glyphrun (the `glyph` CLI, at
-  `~/projects/glyphrun`): `glyph run specs/glyphrun/studio_reveal.yml --format md`.
-  The full e2e suite (reveal, filter, panes, reveal-all, unlock, `--rw` edit,
-  env group status, cycle envs, drift overlay, groups overlay)
-  and two glyphrun gotchas (config-injected passphrase; overlays / single-cell
-  updates not always repainting → drive modals blind) are documented in
-  `specs/glyphrun/README.md`.
 
 ## Documentation site (`docs/` → tinyvault.dev)
 

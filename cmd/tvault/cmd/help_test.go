@@ -45,7 +45,7 @@ func TestEmitHelpJSON(t *testing.T) {
 	}
 	for _, k := range []string{
 		"overview", "lifecycle", "conventions", "output", "safety",
-		"recipes", "agent_guide", "troubleshooting", "studio", "topics",
+		"recipes", "agent_guide", "troubleshooting", "topics",
 	} {
 		if _, ok := doc[k]; !ok {
 			t.Errorf("JSON manifest missing top-level key %q", k)
@@ -54,10 +54,10 @@ func TestEmitHelpJSON(t *testing.T) {
 	if got, want := len(doc["lifecycle"].([]any)), 6; got != want {
 		t.Errorf("lifecycle has %d entries, want %d", got, want)
 	}
-	if got, want := len(doc["recipes"].([]any)), 19; got != want {
+	if got, want := len(doc["recipes"].([]any)), 18; got != want {
 		t.Errorf("recipes has %d entries, want %d", got, want)
 	}
-	if got, want := len(doc["topics"].([]any)), 7; got != want {
+	if got, want := len(doc["topics"].([]any)), 6; got != want {
 		t.Errorf("topics has %d entries, want %d", got, want)
 	}
 	if got, want := len(doc["troubleshooting"].([]any)), 10; got != want {
@@ -67,8 +67,7 @@ func TestEmitHelpJSON(t *testing.T) {
 
 // TestEmitHelpTopicText verifies each topic produces non-empty text.
 func TestEmitHelpTopicText(t *testing.T) {
-	// "browse" and "ui" are kept aliases of the primary "studio" topic.
-	topics := []string{"workflow", "safety", "recipes", "output", "agent", "troubleshooting", "studio", "browse", "topics"}
+	topics := []string{"workflow", "safety", "recipes", "output", "agent", "troubleshooting", "topics"}
 	for _, topic := range topics {
 		t.Run(topic, func(t *testing.T) {
 			out := &bytes.Buffer{}
@@ -101,9 +100,6 @@ func TestEmitHelpTopicJSON(t *testing.T) {
 		{topic: "output", shapeIsArray: false, wantKeys: []string{"json_usage", "env_formats", "golden_rule"}},
 		{topic: "agent", shapeIsArray: false, wantKeys: []string{"discover", "preferred_order", "anti_patterns", "when_to_ask_for_help"}},
 		{topic: "troubleshooting", shapeIsArray: true, firstItemKey: "problem"},
-		{topic: "studio", shapeIsArray: false, wantKeys: []string{"what_it_is", "what_it_is_not", "panes", "keys", "when_to_use", "security"}},
-		// "browse" is a kept alias and must resolve to the same shape as "studio".
-		{topic: "browse", shapeIsArray: false, wantKeys: []string{"what_it_is", "what_it_is_not", "panes", "keys", "when_to_use", "security"}},
 		{topic: "topics", shapeIsArray: true, firstItemKey: "slug"},
 	}
 	for _, tc := range cases {
@@ -154,25 +150,6 @@ func TestEmitHelpUnknownTopic(t *testing.T) {
 	}
 }
 
-// TestEmitHelpStudioAlias verifies the "browse" topic is a kept alias
-// of the primary "studio" topic: both must resolve and produce the
-// identical output in text and JSON form.
-func TestEmitHelpStudioAlias(t *testing.T) {
-	for _, asJSON := range []bool{false, true} {
-		studio := &bytes.Buffer{}
-		if err := emitHelp(studio, "studio", asJSON); err != nil {
-			t.Fatalf("emitHelp studio (json=%v): %v", asJSON, err)
-		}
-		browse := &bytes.Buffer{}
-		if err := emitHelp(browse, "browse", asJSON); err != nil {
-			t.Fatalf("emitHelp browse alias (json=%v): %v", asJSON, err)
-		}
-		if studio.String() != browse.String() {
-			t.Errorf("browse alias output differs from studio (json=%v)", asJSON)
-		}
-	}
-}
-
 // TestRunHelpIsCobraWired verifies that 'tvault help' produces our
 // manual, not cobra's auto-generated help. runHelp writes to
 // os.Stdout, so we capture it.
@@ -192,7 +169,7 @@ func TestRunHelpIsCobraWired(t *testing.T) {
 // silently changing shape (which would break agents that rely on it).
 func TestHelpContentStableTopicCount(t *testing.T) {
 	c := helpContent()
-	if got, want := len(c.Topics), 7; got != want {
+	if got, want := len(c.Topics), 6; got != want {
 		t.Errorf("Topics has %d entries, want %d (this is part of the agent contract)", got, want)
 	}
 }

@@ -88,23 +88,13 @@ cmd/tvault/
     rotate.go                # tvault key rotate
     mcp_server.go            # tvault mcp (alias: mcp-server) (stdio MCP transport)
     ci.go                    # tvault ci init --mode=passphrase|identity (generate CI workflow files)
-    studio.go                # tvault studio (aliases: browse, ui) (cobra wiring + TTY checks; calls studio pkg)
     doctor.go                # tvault doctor (read-only setup diagnostics; --json)
     selfupdate.go            # tvault self-update (alias: upgrade) — checksum-verified in-place binary update
-    audit_helper.go          # recordAudit(): CLI/TUI audit logging (MCP-vocab actions)
-    config_helper.go         # typed ~/.tvault/config.yaml (browse: defaults)
+    audit.go                 # tvault audit (lock-free metadata log; --action/--since/--json)
+    audit_helper.go          # recordAudit(): CLI audit logging (MCP-vocab actions)
+    config_helper.go         # typed ~/.tvault/config.yaml (agent: defaults)
     completion.go            # Shell completion
     output.go                # Color output helpers (Success, Error, Warning, Info)
-    studio/                  # The interactive studio UI (the ONLY package importing charm.land/*)
-      run.go                 # Run(): builds the model, runs the Bubble Tea v2 program
-      model.go               # tea.Model: state, Init/Update, key handling
-      view.go                # View(): responsive 4-pane layout, panes, overlays
-      styles.go              # themeStyles: catppuccin light/dark, picked at runtime
-      keymap.go              # key.Binding set; implements help.KeyMap
-      data.go                # read-only loaders wrapping internal/vault + tea.Cmd msgs
-      anim.go                # pure-Go easing + animation gating (no harmonica)
-      help.go                # in-app help markdown, glamour-rendered
-      *_test.go              # model/data/styles/keymap/layout tests + glyphrun dump helper
 
 internal/
   crypto/
@@ -192,17 +182,7 @@ internal/
     validation.go            # Input validation (keys, project names)
 
 specs/
-  glyphrun/                  # End-to-end PTY specs for `tvault studio` (glyphrun)
-    studio_reveal.yml        # reveal one value (r) + re-mask (esc) + clean quit
-    studio_filter.yml        # live key filter (/) narrows the list
-    studio_panes.yml         # pane focus 1-4 tracks the footer hint
-    studio_reveal_all.yml    # reveal every value (R) + re-mask
-    studio_unlock.yml        # locked start → in-app unlock (u) → reveal
-    studio_rw_edit.yml       # --rw: create (n) + delete (d) a secret end-to-end
-    studio_env_group.yml     # status pane shows env group + inheritance
-    studio_cycle_env.yml     # g cycles envs; ← inherited marker; project annotations
-    studio_drift_overlay.yml # D shows env drift table; esc closes
-    studio_groups_overlay.yml # G lists all env groups; esc closes
+  glyphrun/                  # End-to-end PTY specs for CLI commands (glyphrun)
 glyphrun.config.yml          # glyphrun runtime: env, terminal, passphrase redaction
 ```
 
@@ -356,25 +336,14 @@ Before every commit:
 | `golang.org/x/sys`                       | unix peer-credential check for the agent (now a direct require; was indirect — no new module) |
 | `github.com/modelcontextprotocol/go-sdk` | MCP server SDK                           |
 | `go.yaml.in/yaml/v3`                     | YAML parsing (access policy)             |
-| `charm.land/bubbletea/v2`                | TUI runtime (`tvault studio` only)          |
-| `charm.land/lipgloss/v2`                 | TUI styling/layout (`tvault studio` only)   |
-| `charm.land/bubbles/v2`                  | TUI components: textinput, spinner, help, viewport, key |
-| `charm.land/glamour/v2`                  | Markdown rendering for the in-app help pane |
 | `charm.land/log/v2`                      | Structured agent logging (`internal/logging`) |
 
-The studio UI is a `cmd/` subcommand, **not** an `internal/` package — it
-imports the `charm.land/*` **TUI** libraries (bubbletea, lipgloss, bubbles,
-glamour) that are otherwise absent from the project. Those libraries are pulled
-in **only** by `tvault studio` (aliases: `browse`, `ui`); no other command links
-them at runtime. The stack is strictly the v2 line (no `harmonica`, no `huh`):
-animations are hand-rolled easing.
-
-`charm.land/log/v2` is the one exception to "only studio imports charm.land":
-it is a logging library, not a TUI one, and `internal/logging` uses it for the
+`charm.land/log/v2` is a logging library used by `internal/logging` for the
 agent. It must stay on the **v2** line. `github.com/charmbracelet/log` v1 is
 *not* a substitute — it requires `lipgloss` v1, which pulls an `x/cellbuf` that
 does not compile against the `x/ansi` the v2 packages pin. That combination
-fails the build, so do not "simplify" the import.
+fails the build, so do not "simplify" the import. Do not add Charm TUI
+libraries (bubbletea, lipgloss, bubbles, glamour).
 
 ## Where things live
 
@@ -382,7 +351,7 @@ fails the build, so do not "simplify" the import.
 - **Architecture and threat model:** [Architecture](docs/reference/architecture.md) and [Security](docs/reference/security.md)
 - **Roadmap:** [ROADMAP.md](ROADMAP.md)
 - **Quickstart and feature list:** [README.md](README.md)
-- **Documentation site:** `docs/` (VitePress + Bun) → **[tinyvault.dev](https://tinyvault.dev)**, deployed on Vercel; auto-deploys on push to `main` that touches `docs/` (Vercel root dir `docs/`). Local dev: `cd docs && bun run docs:dev`; gate with `bun run docs:build`.
+- **Documentation site:** `docs/` (VitePress + Bun) → **[tinyvault.dev](https://tinyvault.dev)**. Vercel Root Directory is `docs/`. Git auto-builds **`main` only**, and only when `docs/`, lockfiles, or `docs/vercel.json` change. Feature branches do not create Preview deployments. Do not `vercel promote`; `main` is the docs release. CLI release is a separate tag pipeline. Local: `cd docs && bun run docs:dev`; gate with `bun run docs:build`.
 - **Contributing guide:** [CONTRIBUTING.md](CONTRIBUTING.md)
 - **CI:** `.github/workflows/ci.yml` (test, lint, govulncheck, build)
 - **Release:** `.github/workflows/release.yml` (GoReleaser on `v*` tags)

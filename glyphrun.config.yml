@@ -1,11 +1,10 @@
 # Glyphrun configuration for tinyvault.
 #
 # Glyphrun (https://github.com/abdul-hamid-achik/glyphrun) runs terminal
-# behavior specs in a real PTY. We use it to exercise `tvault studio` (aliases:
-# browse, ui) — the Bubble Tea v2 terminal UI — end-to-end in a real terminal,
-# complementing the fast model-only Go tests in cmd/tvault/cmd/studio.
+# behavior specs in a real PTY. Specs under specs/glyphrun/cli_*.yml
+# exercise the tvault CLI end-to-end.
 #
-# Run with:  glyph run specs/glyphrun/studio_reveal.yml --format md
+# Run with:  glyph run specs/glyphrun/cli_core.yml --format md
 version: 1
 
 defaultEnvironment: local

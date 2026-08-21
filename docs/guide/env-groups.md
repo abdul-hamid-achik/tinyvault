@@ -242,18 +242,6 @@ tvault decrypt-env -i ci/migration.sealed --identity ci-key --section production
 
 Without `--section`, the full multi-environment plaintext is returned. See [Committable secrets](/guide/committable-secrets) for the v2 format and identity model.
 
-## In the studio
-
-When the active project is part of an environment group, the [studio](/guide/studio) adds three bindings and annotates the panes:
-
-| Key | Action |
-|-----|--------|
-| `g` | Cycle to the next environment in the group (loads its secrets). |
-| `D` | Show a drift overlay — the key-set diff across all environments. |
-| `G` | List all env groups with their environments and inheritance. |
-
-The Secrets pane marks inherited keys with `←` and pinned keys with `◈`. The Projects pane annotates grouped projects with their env name (e.g. `·production`, `·preview`).
-
 ## Over MCP
 
 The same surface is available to AI agents over MCP — discover it with `tvault docs features`. The env-group tools are metadata- or ciphertext-only: `vault_env_group_*` manage membership, `vault_env_diff` reports drift, `vault_env_promote` copies values (audited), `vault_env_inherit` / `vault_env_pin` / `vault_env_unpin` / `vault_env_inherited` manage inheritance, and `vault_env_seal` produces a recipient-sealed blob. None of them return a raw secret value. See the [MCP tools reference](/mcp/tools).
@@ -275,5 +263,4 @@ Env-group commands use the standard TinyVault exit codes:
 - [Projects](/guide/projects) — create the projects you link as environments.
 - [Concepts](/guide/concepts) — KEK, per-project DEKs, and why each environment keeps its own key.
 - [Committable secrets](/guide/committable-secrets) — the v2 blob format that `env seal` produces.
-- [Interactive studio](/guide/studio) — the `g` / `D` / `G` bindings for grouped projects.
 - [CLI reference](/cli/) — every `env` subcommand and flag.

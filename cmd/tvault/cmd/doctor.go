@@ -138,7 +138,7 @@ func checkVault(dir string) []doctorCheck {
 			// The db file exists but bbolt's lock is held elsewhere — don't
 			// mis-report this as "not initialized" (the historical bug).
 			return []doctorCheck{{Name: "vault", Status: statusWarn,
-				Detail: "in use by another tvault process (db is open — e.g. a running 'tvault mcp' or 'tvault studio')"}}
+				Detail: "in use by another tvault process (db is open — e.g. a running 'tvault run')"}}
 		}
 		return []doctorCheck{{Name: "vault", Status: statusWarn, Detail: "not initialized — run 'tvault init'"}}
 	}
@@ -208,12 +208,12 @@ func checkEnvironment() []doctorCheck {
 
 func checkTerminal() doctorCheck {
 	if os.Getenv("TERM") == "dumb" {
-		return doctorCheck{Name: "terminal", Status: statusWarn, Detail: "TERM=dumb — 'tvault studio' will refuse to start"}
+		return doctorCheck{Name: "terminal", Status: statusWarn, Detail: "TERM=dumb — interactive passphrase prompts may fail; set TVAULT_PASSPHRASE"}
 	}
 	if !term.IsTerminal(int(os.Stdout.Fd())) {
-		return doctorCheck{Name: "terminal", Status: statusInfo, Detail: "not a TTY — 'tvault studio' needs an interactive terminal"}
+		return doctorCheck{Name: "terminal", Status: statusInfo, Detail: "not a TTY — unlock-requiring commands need TVAULT_PASSPHRASE or the agent"}
 	}
-	return doctorCheck{Name: "terminal", Status: statusOK, Detail: "interactive TTY ('tvault studio' OK)"}
+	return doctorCheck{Name: "terminal", Status: statusOK, Detail: "interactive TTY"}
 }
 
 func shortID(id string) string {

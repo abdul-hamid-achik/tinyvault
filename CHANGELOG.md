@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `tvault audit` lists recent vault audit-log entries (metadata only:
+  action, resource, timestamp). Lock-free; filter with `--action`,
+  `--resource-type`, `--since`, `--until`, `--limit`. `--json` available.
+
+### Removed
+
+- `tvault studio` (aliases `browse`, `ui`) and the Bubble Tea TUI. Browse
+  and mutate with the CLI (`status`, `list`, `search`, `get`, `set`,
+  `delete`, `audit`, `env group`, `diff`) or MCP. Charm TUI libraries
+  (`bubbletea`, `lipgloss`, `bubbles`, `glamour`) are no longer
+  dependencies; `charm.land/log/v2` remains for the agent.
+
 ## [0.21.1] - 2026-08-14
 
 ### Fixed

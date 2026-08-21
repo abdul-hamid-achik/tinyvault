@@ -10,9 +10,9 @@ import (
 // recordAudit writes a best-effort audit entry from the CLI. It uses the
 // same action vocabulary as the MCP server (secret.read / secret.write /
 // secret.delete / project.create / project.delete) so the audit log is
-// uniform no matter which surface — CLI, TUI, or MCP — performed the
+// uniform no matter which surface — CLI or MCP — performed the
 // action. Previously only the MCP server logged, so `tvault get/set/delete`
-// were invisible in the audit log (and in the studio's Audit pane).
+// were invisible in the audit log.
 //
 // Errors are intentionally ignored: audit is a safety net and must never
 // block or fail a command. Writing audit does not require the vault to be

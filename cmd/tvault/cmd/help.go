@@ -29,7 +29,6 @@ import (
 //	tvault help output           --json, --format, exit codes
 //	tvault help agent           patterns for MCP-using agents
 //	tvault help troubleshooting passphrase loss, locked vault, etc.
-//	tvault help studio          the interactive terminal studio UI
 var helpCmd = &cobra.Command{
 	Use:   "help [topic]",
 	Short: "Read the CLI user manual (human + agent readable)",
@@ -49,7 +48,6 @@ Topics:
   output           --json, --format options, exit codes
   agent            patterns for MCP-using AI agents
   troubleshooting  passphrase loss, locked vault, migration
-  studio           the interactive terminal UI (aliases: browse, ui)
 
 Without a topic, prints the full tour.`,
 	Args: cobra.MaximumNArgs(1),
@@ -80,19 +78,7 @@ type HelpContent struct {
 	Recipes      []HelpRecipe `json:"recipes"`
 	AgentGuide   HelpAgent    `json:"agent_guide"`
 	Troubleshoot []HelpItem   `json:"troubleshooting"`
-	Studio       HelpStudio   `json:"studio"`
 	Topics       []HelpTopic  `json:"topics"`
-}
-
-// HelpStudio documents the interactive terminal studio UI (tvault studio;
-// the browse and ui aliases still work).
-type HelpStudio struct {
-	WhatItIs    string   `json:"what_it_is"`
-	WhatItIsNot string   `json:"what_it_is_not"`
-	Panes       []string `json:"panes"`
-	Keys        []string `json:"keys"`
-	WhenToUse   string   `json:"when_to_use"`
-	Security    string   `json:"security"`
 }
 
 // HelpStep is one step in the vault lifecycle.
@@ -212,7 +198,7 @@ func helpContent() HelpContent {
 				"-p <name>        short for --project",
 				"--json          emit machine-readable JSON output",
 				"--verbose, -v   enable verbose logging on stderr",
-				"--config <file>  compatibility selector for Viper input; typed studio config still uses <vault-dir>/config.yaml",
+				"--config <file>  compatibility selector for Viper input; typed config still uses <vault-dir>/config.yaml",
 				"--no-vault      (run only) skip vault secrets, use only --env-file values",
 				"--yes, -y       (delete/restore) skip confirmation prompt",
 			},
@@ -231,7 +217,7 @@ func helpContent() HelpContent {
 				"4   secret or project not found",
 				"5   vault not initialized (run 'tvault init')",
 				"6   unlock failed (wrong passphrase)",
-				"7   vault database is in use by another process (e.g. a running 'tvault mcp'/'tvault studio')",
+				"7   vault database is in use by another process (e.g. a running 'tvault run')",
 			},
 			Filesystem: []string{
 				"~/.tvault/vault.db                 bbolt vault; encrypted payloads, readable metadata (0600)",
@@ -319,8 +305,8 @@ func helpContent() HelpContent {
 			},
 			{
 				Name:        "Generate a random secret",
-				Commands:    []string{"tvault generate 32 --charset base64 --key API_KEY"},
-				Description: "Generated value is stored but never returned. Audit log records the action.",
+				Commands:    []string{"# There is no tvault generate CLI command.", "# MCP: vault_generate_secret stores a random value and returns only metadata."},
+				Description: "Secret generation is MCP-only. The tool never returns the value; use vault_run_with_secrets or tvault get afterward if a process needs it.",
 			},
 			{
 				Name:        "Pull vault -> .env (CI artifact)",
@@ -416,22 +402,15 @@ func helpContent() HelpContent {
 			},
 			{
 				Name:     "Read the audit log",
-				Commands: []string{"tvault studio   # Audit pane"},
-				Description: "Audit entries (who read/wrote what, and when) are read in the studio's Audit pane, " +
-					"or over MCP via vault_audit_log / vault_audit_log_since. There is no `tvault audit` CLI command.",
+				Commands: []string{"tvault audit", "tvault audit --action secret.read --json"},
+				Description: "Audit entries (who read/wrote what, and when) are metadata-only. " +
+					"The same trail is also available over MCP via vault_audit_log / vault_audit_log_since.",
 			},
 			{
 				Name:     "Run the MCP server for an agent",
 				Commands: []string{"TVAULT_PASSPHRASE=... tvault mcp"},
 				Description: "Add to .claude/settings.local.json or your MCP host config. The server " +
 					"speaks JSON-RPC over stdio; configure env={TVAULT_PASSPHRASE: ...}.",
-			},
-			{
-				Name:     "Open the interactive studio",
-				Commands: []string{"tvault studio", "tvault studio --rw", "tvault studio --project webapp --no-anim"},
-				Description: "Read-only by default — explore, filter, and reveal values " +
-					"behind a key press without exposing them to the terminal scrollback. " +
-					"Pass --rw for audited in-app new/edit/delete. (browse and ui are aliases.)",
 			},
 		},
 
@@ -444,7 +423,7 @@ func helpContent() HelpContent {
 				"1. 'tvault docs features' -- discover what is available",
 				"2. 'tvault search' or 'vault_search_secrets' -- find the key you need",
 				"3. 'tvault run' or 'vault_run_with_secrets' -- pass the value to a trusted command without first requesting a direct read; command output can still leak it",
-				"4. 'vault_audit_log_since' (MCP) or the studio Audit pane -- confirm the action was recorded",
+				"4. 'tvault audit' or 'vault_audit_log_since' (MCP) -- confirm the action was recorded",
 			},
 			AntiPatterns: []string{
 				"Do not call 'tvault get KEY' in a loop just to enumerate secrets; use 'tvault list'.",
@@ -532,50 +511,7 @@ func helpContent() HelpContent {
 			},
 		},
 
-		Studio: HelpStudio{
-			WhatItIs: "tvault studio is a full-screen terminal UI for browsing the vault, read-only by " +
-				"default (the browse and ui aliases run the same thing). Four panes (status, projects, " +
-				"secrets, audit) give you vault health, the project list with secret counts, the current " +
-				"project's keys, and recent audit activity — all at once. It is built on the Bubble Tea v2 / " +
-				"Lip Gloss v2 (charm.land) stack with a light/dark theme auto-detected from your terminal background.",
-			WhatItIsNot: "By default it is NOT an editor — it only reads, so a stray keystroke can't change " +
-				"anything. Pass --rw to enable in-app edits (n new, e edit, d delete); they use the SAME " +
-				"encryption path as the CLI and are written to the audit log just like 'tvault set/delete'. " +
-				"Rotation and project create/delete still go through the CLI. The only decryption the " +
-				"studio performs is the on-demand reveal (and the prefill when editing), audited like 'tvault get'.",
-			Panes: []string{
-				"1 Status   — unlocked/locked, current project, secret + project counts, last write, vault id",
-				"2 Projects — every project with its secret count; the vault's current project is marked",
-				"3 Secrets  — the selected project's keys (the main view); values masked until revealed",
-				"4 Audit    — the most recent audit-log entries, newest first",
-			},
-			Keys: []string{
-				"↑/↓ or j/k     navigate within the focused pane (mouse wheel scrolls too)",
-				"←/→ or h/l     move between panes (1/2/3/4 jump; tab/⇧tab cycle)",
-				"⏎              open the highlighted project's secrets",
-				"/              live-filter the current project's keys",
-				"r              reveal the selected value (R reveals all)",
-				"esc            re-mask every revealed value (also exits the filter)",
-				"c              copy the selected value to the clipboard",
-				"n / e / d      (--rw only) new / edit / delete a secret — audited",
-				"u / L          unlock (in-app passphrase prompt) / lock the vault",
-				"^r / ^l        reload from disk / redraw",
-				"? / q          toggle in-app help / quit",
-			},
-			WhenToUse: "Use the studio when you want to SEE the vault — explore what's there, check which " +
-				"project is current, filter keys, or peek at a value during a screen-share without it " +
-				"hitting scrollback. Use the CLI (or MCP) for everything scripted or mutating: set, run, " +
-				"sync, rotate, and anything an agent does.",
-			Security: "Revealed values live only in memory, only while shown, and are wiped on esc, on " +
-				"pane change, and on quit. They never touch disk and never appear in the audit log " +
-				"(only the fact that a reveal happened is recorded). The warm-orange reveal color is a " +
-				"deliberate 'a secret is showing' signal. Browsing metadata works while the vault is " +
-				"locked; revealing a value requires unlocking first.",
-		},
-
 		Topics: []HelpTopic{
-			{Slug: "studio", Title: "The interactive terminal UI",
-				Description: "What the studio is and isn't, the four panes, the full keybinding cheat sheet, and the reveal security model. (Aliases: browse, ui.)"},
 			{Slug: "workflow", Title: "Lifecycle and day-to-day usage",
 				Description: "init -> set -> run, projects, sync, backup, rotate, MCP."},
 			{Slug: "safety", Title: "Encryption, redaction, .env safety",
@@ -621,12 +557,10 @@ func emitHelp(w io.Writer, topic string, asJSON bool) error {
 			return enc.Encode(c.AgentGuide)
 		case "troubleshooting":
 			return enc.Encode(c.Troubleshoot)
-		case "studio", "browse": // browse is a kept alias for studio
-			return enc.Encode(c.Studio)
 		case "topics":
 			return enc.Encode(c.Topics)
 		default:
-			return fmt.Errorf("unknown topic %q (try: workflow, safety, recipes, output, agent, troubleshooting, studio, topics)", topic)
+			return fmt.Errorf("unknown topic %q (try: workflow, safety, recipes, output, agent, troubleshooting, topics)", topic)
 		}
 	}
 
@@ -641,10 +575,7 @@ func emitHelp(w io.Writer, topic string, asJSON bool) error {
 		writeRecipes(w, c)
 		writeAgentGuide(w, c)
 		writeTroubleshoot(w, c)
-		writeStudio(w, c)
 		writeTopicsList(w, c)
-	case "studio", "browse": // browse is a kept alias for studio
-		writeStudio(w, c)
 	case "workflow":
 		writeLifecycle(w, c)
 	case "safety":
@@ -660,26 +591,9 @@ func emitHelp(w io.Writer, topic string, asJSON bool) error {
 	case "topics":
 		writeTopicsList(w, c)
 	default:
-		return fmt.Errorf("unknown topic %q (try: workflow, safety, recipes, output, agent, troubleshooting, studio, topics)", topic)
+		return fmt.Errorf("unknown topic %q (try: workflow, safety, recipes, output, agent, troubleshooting, topics)", topic)
 	}
 	return nil
-}
-
-func writeStudio(w io.Writer, c HelpContent) {
-	fmt.Fprintln(w, "Interactive studio (tvault studio)")
-	fmt.Fprintln(w, "----------------------------")
-	fmt.Fprintf(w, "\n%s\n", c.Studio.WhatItIs)
-	fmt.Fprintf(w, "\nWhat it is NOT:\n  %s\n", c.Studio.WhatItIsNot)
-	fmt.Fprintln(w, "\nPanes:")
-	for _, p := range c.Studio.Panes {
-		fmt.Fprintf(w, "  %s\n", p)
-	}
-	fmt.Fprintln(w, "\nKeys:")
-	for _, k := range c.Studio.Keys {
-		fmt.Fprintf(w, "  %s\n", k)
-	}
-	fmt.Fprintf(w, "\nWhen to use it:\n  %s\n", c.Studio.WhenToUse)
-	fmt.Fprintf(w, "\nSecurity:\n  %s\n\n", c.Studio.Security)
 }
 
 func writeOverview(w io.Writer, c HelpContent) {

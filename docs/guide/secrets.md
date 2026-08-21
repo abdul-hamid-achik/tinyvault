@@ -180,7 +180,7 @@ These persistent flags work on every command on this page:
 
 | Flag | Purpose |
 | --- | --- |
-| `--config <file>` | Compatibility selector for Viper input; it does not relocate the typed studio config. |
+| `--config <file>` | Compatibility selector for Viper input; it does not relocate typed config. |
 | `--vault <dir>` | Use a specific vault directory. |
 | `-p`, `--project <name>` | Operate on this project instead of the active one. |
 | `--json` | Emit machine-readable JSON. |

@@ -349,7 +349,7 @@ Filtered audit query for narrowing by time, action, or resource type.
 - **Policy gate:** any `access_mode`.
 
 ::: info Auditing has no CLI subcommand
-There is no `tvault audit` command. The audit trail is internal; you read it over MCP with these two tools, or browse it in the [interactive studio](/guide/studio).
+The same trail is available on the CLI as `tvault audit`.
 :::
 
 ---

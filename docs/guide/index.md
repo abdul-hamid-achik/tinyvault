@@ -5,7 +5,7 @@ description: Choose the TinyVault guide for your goal, from the first local vaul
 
 # TinyVault guides
 
-TinyVault stores secret values locally and makes them available through a CLI, a terminal studio, and an MCP server. Start with the quickstart, then follow the workflow that matches what you are trying to do.
+TinyVault stores secret values locally and makes them available through a CLI and an MCP server. Start with the quickstart, then follow the workflow that matches what you are trying to do.
 
 ## Start here
 
@@ -35,7 +35,6 @@ TinyVault stores secret values locally and makes them available through a CLI, a
 
 ## Choose an interface
 
-- [Studio](/guide/studio) — browse the vault in a terminal UI.
 - [Local agent](/guide/agent) — keep the vault available between CLI commands on Unix.
 - [MCP server](/mcp/) — connect an AI agent through a disk-controlled policy.
 - [AI agent workflow](/guide/for-ai-agents) — find and use keys while minimizing plaintext in model context.
@@ -43,7 +42,7 @@ TinyVault stores secret values locally and makes them available through a CLI, a
 ## Operate TinyVault
 
 - [Key management](/guide/key-management) — back up, restore, and rotate key material.
-- [Configuration](/reference/configuration) — configure the vault and studio.
+- [Configuration](/reference/configuration) — configure the vault and agent.
 - [Environment variables](/reference/environment-variables) — non-interactive and CI inputs.
 - [Troubleshooting](/reference/troubleshooting) — diagnose common failures.
 - [CLI reference](/cli/) — look up commands and flags.

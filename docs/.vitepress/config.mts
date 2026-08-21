@@ -86,7 +86,7 @@ export default defineConfig({
             'X25519 recipient sharing with project re-keying',
             'Transparent git filters for commit-safe secrets',
             'Versioned secrets with rollback',
-            'Interactive terminal studio (TUI)',
+            'CLI audit log',
           ],
         },
         {
@@ -181,7 +181,6 @@ export default defineConfig({
           text: 'Interfaces',
           collapsed: false,
           items: [
-            { text: 'Interactive Studio', link: '/guide/studio' },
             { text: 'Local Agent', link: '/guide/agent' },
             { text: 'For AI Agents', link: '/guide/for-ai-agents' },
           ],

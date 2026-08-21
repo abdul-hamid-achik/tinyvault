@@ -1,13 +1,13 @@
 ---
 title: Core Concepts
-description: The mental model behind TinyVault — the local vault database, per-command unlocking, per-project DEK isolation, identities and recipients, the audit log, and the three interfaces.
+description: The mental model behind TinyVault — the local vault database, per-command unlocking, per-project DEK isolation, identities and recipients, the audit log, and the CLI and MCP surfaces.
 ---
 
 # Core Concepts
 
 This page is the mental model for TinyVault. It is a concept map, not a command reference — each idea links to the page that covers it in depth. Read it once and the rest of the docs will click into place.
 
-TinyVault is a single binary, `tvault`, written in Go. The same binary is your CLI, an interactive terminal studio, and (via the `mcp` subcommand) an MCP server for AI agents. It is language-agnostic—secrets can be injected as environment variables into any process—and all three surfaces use one local bbolt database. Normal vault operations need no account or hosted backend.
+TinyVault is a single binary, `tvault`, written in Go. The same binary is your CLI and (via the `mcp` subcommand) an MCP server for AI agents. It is language-agnostic—secrets can be injected as environment variables into any process—and both surfaces use one local bbolt database. Normal vault operations need no account or hosted backend.
 
 ## The vault
 
@@ -19,8 +19,8 @@ tvault init                 # create the vault and set your passphrase
 
 You can point `tvault` at a different vault directory with the `--vault` flag or the `TVAULT_DIR` environment variable. The resolution order is `--vault` > `TVAULT_DIR` > `~/.tvault`.
 
-::: info One file, three interfaces
-The CLI, the [studio TUI](/guide/studio), and the [MCP server](/mcp/) all talk to the same vault API. There is no daemon coordinating them and no separate datastore — they read and write the same `vault.db`. On Unix, the optional [local agent](/guide/agent) can hold the unlocked key in memory so repeated commands skip the prompt, but it never holds the database open.
+::: info One file, two interfaces
+The CLI and the [MCP server](/mcp/) talk to the same vault API. There is no daemon coordinating them and no separate datastore — they read and write the same `vault.db`. On Unix, the optional [local agent](/guide/agent) can hold the unlocked key in memory so repeated commands skip the prompt, but it never holds the database open.
 :::
 
 ## Lock and unlock
@@ -113,16 +113,16 @@ TinyVault records many explicit secret and project operations in an audit bucket
 
 You read the audit log in two places:
 
-- In the [studio TUI](/guide/studio), which surfaces recent entries (how many is configurable via `browse.audit_limit`).
+- From the CLI with `tvault audit` (metadata only; lock-free).
 - Over [MCP](/mcp/) with the `vault_audit_log` tool, so an agent host can review what was accessed.
 
-::: warning There is no `tvault audit` command
-Auditing is internal. It is surfaced in the studio and over MCP — there is **no** `tvault audit` CLI subcommand, regardless of what older help text may suggest. Likewise, secret **generation** exists only over MCP (`vault_generate_secret`); there is no `tvault generate` command.
+::: warning There is no `tvault generate` command
+Secret **generation** exists only over MCP (`vault_generate_secret`). The audit log is a CLI command (`tvault audit`) and an MCP tool.
 :::
 
-## The three interfaces
+## The two interfaces
 
-The same vault is reachable three ways. Pick the one that fits the caller.
+The same vault is reachable two ways. Pick the one that fits the caller.
 
 ### CLI
 
@@ -131,19 +131,10 @@ The default interface for humans and scripts: `tvault <command>` with the global
 ```bash
 tvault set API_KEY --from-env .env       # import without putting the value in argv
 tvault run -- ./server                   # inject secrets as env for one process
+tvault audit                             # recent actions, metadata only
 ```
 
 See the [full CLI reference](/cli/).
-
-### Studio (terminal UI)
-
-An interactive browser for your vault. Read-only by default — with no flags it never writes, and the only decryption is the on-demand reveal (`r`), which is audited like `tvault get`. Pass `--rw` to enable audited in-app edits.
-
-```bash
-tvault studio                            # aliases: tvault browse, tvault ui
-```
-
-See the [Studio guide](/guide/studio).
 
 ### MCP server
 

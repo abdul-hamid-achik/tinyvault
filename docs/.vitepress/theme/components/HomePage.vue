@@ -255,13 +255,13 @@ onBeforeUnmount(() => {
     <section class="tv-surfaces" aria-labelledby="tv-surfaces-title">
       <div class="tv-section-intro tv-section-intro--split">
         <div>
-          <p class="tv-kicker">One vault, three surfaces</p>
+          <p class="tv-kicker">One vault, two surfaces</p>
           <h2 id="tv-surfaces-title">Use the interface that fits the caller.</h2>
         </div>
         <p>
-          The CLI, terminal studio, and MCP server all use the same storage,
-          encryption, project boundaries, and audit trail. There is no sync layer
-          to drift and no second database to secure.
+          The CLI and MCP server use the same storage, encryption, project
+          boundaries, and audit trail. There is no sync layer to drift and no
+          second database to secure.
         </p>
       </div>
 
@@ -272,24 +272,13 @@ onBeforeUnmount(() => {
             <p class="tv-surface__label">Humans + scripts</p>
             <h3>CLI</h3>
           </div>
-          <p>Store, search, inject, sync, seal, share, rotate, and roll back from one composable command.</p>
+          <p>Store, search, inject, sync, seal, share, rotate, audit, and roll back from one composable command.</p>
           <code>tvault run -- npm start</code>
           <span class="tv-surface__arrow" aria-hidden="true">↗</span>
         </a>
 
-        <a class="tv-surface" href="/guide/studio">
-          <span class="tv-surface__number">02</span>
-          <div>
-            <p class="tv-surface__label">Humans + terminals</p>
-            <h3>Studio</h3>
-          </div>
-          <p>Browse projects, metadata, versions, and audit history in a read-only-by-default terminal UI.</p>
-          <code>tvault studio</code>
-          <span class="tv-surface__arrow" aria-hidden="true">↗</span>
-        </a>
-
         <a class="tv-surface" href="/mcp/">
-          <span class="tv-surface__number">03</span>
+          <span class="tv-surface__number">02</span>
           <div>
             <p class="tv-surface__label">Agents + automations</p>
             <h3>MCP</h3>

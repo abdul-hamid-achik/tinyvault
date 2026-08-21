@@ -58,7 +58,6 @@ Available subcommands:
   committable-secrets  Commit secrets to a repo (git filters / v2 files)
   safety           Threat model and safety properties
   quickstart       Five-line getting-started
-  studio           The interactive terminal UI (aliases: browse, ui)
   codemap          Codemap integration surface (rotation impact, seals, audit)
 
 Any topic or feature can also be named directly, e.g.
@@ -74,7 +73,7 @@ var (
 func init() {
 	rootCmd.AddCommand(docsCmd)
 	docsCmd.Flags().StringVarP(&docsTopicFlag, "topic", "t", "", "Topic to print (alias for the first positional argument)")
-	docsCmd.AddCommand(docsFeaturesCmd, docsTopicsCmd, docsRunCmd, docsMCPCmd, docsInterpolateCmd, docsSyncCmd, docsEncryptedEnvCmd, docsSafetyCmd, docsQuickstartCmd, docsStudioCmd, docsCodemapCmd)
+	docsCmd.AddCommand(docsFeaturesCmd, docsTopicsCmd, docsRunCmd, docsMCPCmd, docsInterpolateCmd, docsSyncCmd, docsEncryptedEnvCmd, docsSafetyCmd, docsQuickstartCmd, docsCodemapCmd)
 }
 
 func runDocs(_ *cobra.Command, args []string) error {
@@ -216,15 +215,6 @@ var docsQuickstartCmd = &cobra.Command{
 	},
 }
 
-var docsStudioCmd = &cobra.Command{
-	Use:     "studio",
-	Aliases: []string{"browse", "ui"},
-	Short:   "The interactive terminal UI",
-	RunE: func(_ *cobra.Command, _ []string) error {
-		return printTopic(fullCatalog(), "studio")
-	},
-}
-
 var docsCodemapCmd = &cobra.Command{
 	Use:   "codemap",
 	Short: "Codemap integration surface",
@@ -283,7 +273,7 @@ func fullCatalog() docsCatalog {
 				Name:        "relational-search",
 				Summary:     "Read-only relational search over secrets and projects (values never indexed, never returned in search results).",
 				Commands:    []string{"tvault search", "tvault projects list"},
-				Description: "Composable filters: key glob, project, prefix, time window, version. Backed by the SQL-shaped tabular store (bbolt under the hood, no FTS, no derived index). The audit log is read over MCP (vault_audit_log / vault_audit_log_since) or in the studio Audit pane -- there is no `tvault audit` CLI command.",
+				Description: "Composable filters: key glob, project, prefix, time window, version. Backed by the SQL-shaped tabular store (bbolt under the hood, no FTS, no derived index). The audit log is read with `tvault audit` or over MCP (vault_audit_log / vault_audit_log_since).",
 			},
 			{
 				Name:        "agent-discoverability",
@@ -341,11 +331,11 @@ func fullCatalog() docsCatalog {
 				Description: "Secret values are never re-encrypted; only the DEK wrapping changes. Old encrypted .env files are invalidated by design.",
 			},
 			{
-				Name:        "interactive-studio",
-				Summary:     "Full-screen terminal UI for browsing the vault (status, projects, secrets, audit); read-only by default, --rw for edits.",
-				Commands:    []string{"tvault studio", "tvault studio --rw", "tvault studio --project webapp", "tvault studio --single-pane", "tvault studio --no-anim"},
-				SeeAlso:     []string{"tvault help studio"},
-				Description: "The interactive studio (aliases: browse, ui), built on the Bubble Tea v2 / Lip Gloss v2 (charm.land) stack. Read-only by default; pass --rw to enable audited in-app edits (n new, e edit, d delete) that use the same encryption path as the CLI. Browse project and secret metadata while locked; unlock in-app with 'u' to reveal a value behind a key press ('r'), which re-masks on 'esc' / pane change / quit. Vim + arrow + mouse-wheel navigation, live key filter, light/dark theme auto-detected from the terminal background. Env-group features: 'g' cycles environments within a group, 'D' shows an env drift overlay (key-set diff across envs), 'G' lists all env groups with inheritance; the Secrets pane marks inherited keys with ← and the Projects pane annotates grouped projects with their env name. Animations disable on --no-anim, $TVAULT_NO_ANIM, or over SSH.",
+				Name:        "audit-log",
+				Summary:     "Read the vault audit trail from the CLI (metadata only; no secret values).",
+				Commands:    []string{"tvault audit", "tvault audit --action secret.read", "tvault audit --since 2026-01-01T00:00:00Z --json"},
+				SeeAlso:     []string{"tvault docs relational-search"},
+				Description: "`tvault audit` lists recent audit entries newest-first. It is lock-free and never decrypts values. Filter with --action, --resource-type, --since, --until, and --limit. The same trail is available over MCP as vault_audit_log / vault_audit_log_since.",
 			},
 			{
 				Name:        "secret-sharing",
@@ -365,7 +355,7 @@ func fullCatalog() docsCatalog {
 				Name:        "diagnostics",
 				Summary:     "Read-only setup diagnostics + a typed config file.",
 				Commands:    []string{"tvault doctor", "tvault doctor --json"},
-				Description: "`tvault doctor` checks the vault directory + permissions, vault validity, lock state, project/secret counts, the config and MCP-policy files, environment, and terminal — without unlocking. Exit code is non-zero if any check fails (warnings don't fail), so scripts can gate on it. Optional ~/.tvault/config.yaml supplies a `browse:` block (no_anim, single_pane, audit_limit) as defaults for the interactive studio; explicit flags win.",
+				Description: "`tvault doctor` checks the vault directory + permissions, vault validity, lock state, project/secret counts, the config and MCP-policy files, environment, and terminal — without unlocking. Exit code is non-zero if any check fails (warnings don't fail), so scripts can gate on it. Optional ~/.tvault/config.yaml supplies an `agent:` block (passphrase_file, log_dir, log_level); explicit flags and environment variables win.",
 			},
 			{
 				Name:        "agent-and-hooks",
@@ -470,10 +460,10 @@ func fullCatalog() docsCatalog {
 			},
 
 			{
-				Slug:        "studio",
-				Title:       "tvault studio",
-				Description: "Launches a full-screen terminal UI for browsing the vault, read-only by default (aliases: browse, ui). Four panes — status, projects, secrets, audit — with vim/arrow/mouse-wheel navigation and a live key filter. Press 'r' to reveal the selected value (warm-orange = a secret is showing), 'esc' to re-mask; revealed values live only in memory and are wiped on esc, pane change, and quit. The vault can be browsed (metadata only) while locked; press 'u' to unlock in-app. Pass --rw to enable audited in-app new/edit/delete (n/e/d), using the same encryption path as the CLI. Env-group features: 'g' cycles environments, 'D' shows env drift, 'G' lists all groups; inherited keys show ← in the Secrets pane. Built on Bubble Tea v2 / Lip Gloss v2.",
-				Example:     "  tvault studio\n  tvault studio --rw                 # enable in-app new/edit/delete\n  tvault studio webapp               # open a specific project\n  tvault studio --single-pane        # small terminals\n  tvault studio --no-anim            # disable animations (SSH/screen-reader friendly)",
+				Slug:        "audit",
+				Title:       "tvault audit",
+				Description: "List recent vault audit-log entries from the CLI. Metadata only (action, resource, timestamp); secret values are never stored in the log or printed. Lock-free: works on a locked vault. Filter with --action, --resource-type, --since, --until, --limit. JSON via --json. The same trail is queryable over MCP with vault_audit_log and vault_audit_log_since.",
+				Example:     "  tvault audit\n  tvault audit --action secret.read --limit 20\n  tvault audit --since 2026-01-01T00:00:00Z --json",
 			},
 			{
 				Slug:        "codemap",

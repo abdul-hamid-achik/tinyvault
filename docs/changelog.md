@@ -22,6 +22,18 @@ If `tvault` was installed from the retired formula, migrate once with
 
 ## Unreleased
 
+### Added
+
+- `tvault audit` lists recent vault audit-log entries (metadata only:
+  action, resource, timestamp). Lock-free; filter with `--action`,
+  `--resource-type`, `--since`, `--until`, `--limit`. `--json` available.
+
+### Removed
+
+- `tvault studio` (aliases `browse`, `ui`) and the Bubble Tea TUI. Browse
+  and mutate with the CLI (`status`, `list`, `search`, `get`, `set`,
+  `delete`, `audit`, `env group`, `diff`) or MCP.
+
 ## 0.21.1 — 2026-08-14
 
 ### Fixed
@@ -256,7 +268,7 @@ If `tvault` was installed from the retired formula, migrate once with
 
 **Added**
 
-- **Environment groups in studio** — env-name annotations (`·production`, `·preview`) for grouped projects, `g` cycles between environments in a group, inherited (`←`) and pinned (`◈`) markers with inheritance-aware reveal/copy, `D` opens a key-set drift overlay across environments (no decryption needed), and `G` opens a groups list overlay. All read-only (work without `--rw`) and metadata-only (work when locked). See [Studio](/guide/studio).
+- **Environment groups in studio** — env-name annotations (`·production`, `·preview`) for grouped projects, `g` cycles between environments in a group, inherited (`←`) and pinned (`◈`) markers with inheritance-aware reveal/copy, `D` opens a key-set drift overlay across environments (no decryption needed), and `G` opens a groups list overlay. All read-only (work without `--rw`) and metadata-only (work when locked).
 
 ## 0.14.0 — 2026-06-25
 

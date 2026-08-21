@@ -55,7 +55,7 @@ tvault run --prefix STRIPE_ -- your-command
 
 ### 4. Review the result
 
-Check the command's exit status and returned metadata. Use `vault_audit_log_since` when you need to review recently recorded vault activity.
+Check the command's exit status and returned metadata. Use `tvault audit` or `vault_audit_log_since` when you need to review recently recorded vault activity.
 
 ## The two raw-value exceptions
 

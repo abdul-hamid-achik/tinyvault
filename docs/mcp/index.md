@@ -152,7 +152,7 @@ Two prompts scaffold common flows:
 ## Operational notes
 
 - The MCP server and direct CLI commands can share the vault because the server reopens it per request instead of holding the bbolt lock continuously.
-- A running studio session does hold the database open and can cause a database-in-use error.
+- A long-running command that holds the database open (for example `tvault run` wrapping a process that never exits) can cause a database-in-use error.
 - Policy decisions happen in the server process, not in model instructions.
 - Audit rows are operational metadata, not a tamper-proof external log. Do not place secrets in key names, command strings, or paths.
 

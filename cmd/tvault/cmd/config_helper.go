@@ -9,22 +9,15 @@ import (
 
 // Config is the typed view of ~/.tvault/config.yaml for settings that the
 // global viper flag-binding (vault / project / verbose, wired in root.go)
-// does not cover. Today that is the `browse:` block (the key is kept as
-// `browse:` for backwards compatibility), which supplies defaults for the
-// interactive studio's flags (`tvault studio`, aliases `browse`/`ui`).
+// does not cover. Today that is the `agent:` block.
 //
 //	# ~/.tvault/config.yaml
-//	browse:
-//	  no_anim: false
-//	  single_pane: false
-//	  audit_limit: 100
 //	agent:
 //	  passphrase_file: ~/.config/secrets/env
 //	  log_dir: ""        # empty = $XDG_STATE_HOME/tvault
 //	  log_level: info
 type Config struct {
-	Browse BrowseConfig `yaml:"browse"`
-	Agent  AgentConfig  `yaml:"agent"`
+	Agent AgentConfig `yaml:"agent"`
 }
 
 // AgentConfig holds settings for `tvault agent` and the service definitions
@@ -42,15 +35,6 @@ type AgentConfig struct {
 	LogDir string `yaml:"log_dir"`
 	// LogLevel is one of debug, info, warn, error. Empty means info.
 	LogLevel string `yaml:"log_level"`
-}
-
-// BrowseConfig holds default settings for `tvault studio` (under the
-// `browse:` config key, kept for backwards compatibility). Explicit
-// command-line flags always win over these.
-type BrowseConfig struct {
-	NoAnim     bool `yaml:"no_anim"`
-	SinglePane bool `yaml:"single_pane"`
-	AuditLimit int  `yaml:"audit_limit"`
 }
 
 func configPath() string { return filepath.Join(getVaultDir(), "config.yaml") }

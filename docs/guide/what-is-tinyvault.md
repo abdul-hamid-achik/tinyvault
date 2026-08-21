@@ -5,7 +5,7 @@ description: Decide whether TinyVault's local-first, single-binary approach fits
 
 # What is TinyVault?
 
-TinyVault is a local-first secrets manager for developers and AI-assisted workflows. One `tvault` binary stores encrypted secret values in a local database, injects selected values into any process that reads environment variables, and exposes the same vault through a CLI, terminal studio, and MCP server.
+TinyVault is a local-first secrets manager for developers and AI-assisted workflows. One `tvault` binary stores encrypted secret values in a local database, injects selected values into any process that reads environment variables, and exposes the same vault through a CLI and an MCP server.
 
 Normal vault operations require no hosted TinyVault account or service. You decide when encrypted artifacts or plaintext exports leave the machine.
 
@@ -37,13 +37,12 @@ The owner passphrase has no recovery path. Restoring the complete owner view the
 
 See [Security and threat model](/reference/security) for the full boundary and [Architecture](/reference/architecture) for the key hierarchy.
 
-## Three ways to use the same vault
+## Two ways to use the same vault
 
 - The [CLI](/cli/) supports scripts, process injection, import/export, sharing, and operations.
-- [Studio](/guide/studio) provides an interactive terminal browser and optional editing mode.
 - The [MCP server](/mcp/) gives an AI agent policy-scoped tools and value-minimizing workflows.
 
-All three surfaces use the same local database. There is no separate MCP or studio copy to synchronize.
+Both surfaces use the same local database. There is no separate MCP copy to synchronize.
 
 ## Start with one working flow
 
