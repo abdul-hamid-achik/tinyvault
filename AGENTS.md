@@ -90,6 +90,7 @@ cmd/tvault/
     ci.go                    # tvault ci init --mode=passphrase|identity (generate CI workflow files)
     doctor.go                # tvault doctor (read-only setup diagnostics; --json)
     selfupdate.go            # tvault self-update (alias: upgrade) — checksum-verified in-place binary update
+    generate.go              # tvault generate KEY (stores random value; never prints it)
     audit.go                 # tvault audit (lock-free metadata log; --action/--since/--json)
     audit_helper.go          # recordAudit(): CLI audit logging (MCP-vocab actions)
     config_helper.go         # typed ~/.tvault/config.yaml (agent: defaults)
@@ -99,6 +100,7 @@ cmd/tvault/
 internal/
   crypto/
     crypto.go                # AES-256-GCM encrypt/decrypt, Argon2id key derivation
+    generate.go              # GenerateRandomString (CLI generate + MCP vault_generate_secret)
     recipient.go             # X25519 recipient layer: WrapDEK/UnwrapDEK, Identity (Spine A)
     crypto_test.go           # Comprehensive crypto tests
   agent/                     # local unlock-once agent (unix only — build-tagged)

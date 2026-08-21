@@ -116,8 +116,8 @@ You read the audit log in two places:
 - From the CLI with `tvault audit` (metadata only; lock-free).
 - Over [MCP](/mcp/) with the `vault_audit_log` tool, so an agent host can review what was accessed.
 
-::: warning There is no `tvault generate` command
-Secret **generation** exists only over MCP (`vault_generate_secret`). The audit log is a CLI command (`tvault audit`) and an MCP tool.
+::: info Generation never prints the value
+`tvault generate KEY` and MCP `vault_generate_secret` store a random secret and return only metadata (`key`, `length`, `charset`, `stored`). Use `tvault run` / `vault_run_with_secrets` when a process needs the value.
 :::
 
 ## The two interfaces

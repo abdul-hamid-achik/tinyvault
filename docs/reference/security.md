@@ -116,8 +116,8 @@ Treat redaction as a last line of defense against accidents, not as a barrier ag
 
 See [MCP tools](/mcp/tools) for the full tool list and [Access policy](/mcp/access-policy) for how to constrain what an agent can reach.
 
-::: info There is no `tvault generate` command
-Secret generation is MCP-only (`vault_generate_secret`). The audit log is read with `tvault audit` and over MCP (`vault_audit_log` / `vault_audit_log_since`).
+::: info Generation never returns the value
+`tvault generate` and MCP `vault_generate_secret` store a random secret and return only metadata. The audit log is read with `tvault audit` and over MCP (`vault_audit_log` / `vault_audit_log_since`).
 :::
 
 ## The local agent security model

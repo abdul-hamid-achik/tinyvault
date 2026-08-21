@@ -2,13 +2,11 @@ package mcp
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
-	"encoding/hex"
 	"fmt"
-	"math/big"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/abdul-hamid-achik/tinyvault/internal/crypto"
 )
 
 type generateSecretInput struct {
@@ -24,11 +22,6 @@ type generateSecretOutput struct {
 	Charset string `json:"charset"`
 	Stored  bool   `json:"stored"`
 }
-
-const (
-	charsetAlphanumeric = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	charsetASCII        = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}|;:,.<>?"
-)
 
 func (s *VaultMCPServer) registerGenerateTools() {
 	sdkmcp.AddTool(s.server, &sdkmcp.Tool{
@@ -55,16 +48,13 @@ func (s *VaultMCPServer) handleGenerateSecret(_ context.Context, _ *sdkmcp.CallT
 	if length <= 0 {
 		length = 32
 	}
-	if length > 256 {
-		return nil, generateSecretOutput{}, fmt.Errorf("length must be at most 256")
-	}
 
 	charset := input.Charset
 	if charset == "" {
 		charset = "alphanumeric"
 	}
 
-	value, err := generateRandomString(length, charset)
+	value, err := crypto.GenerateRandomString(length, charset)
 	if err != nil {
 		return nil, generateSecretOutput{}, fmt.Errorf("generate secret: %w", err)
 	}
@@ -81,44 +71,4 @@ func (s *VaultMCPServer) handleGenerateSecret(_ context.Context, _ *sdkmcp.CallT
 		Charset: charset,
 		Stored:  true,
 	}, nil
-}
-
-func generateRandomString(length int, charset string) (string, error) {
-	switch charset {
-	case "hex":
-		b := make([]byte, (length+1)/2)
-		if _, err := rand.Read(b); err != nil {
-			return "", err
-		}
-		return hex.EncodeToString(b)[:length], nil
-	case "base64":
-		b := make([]byte, length)
-		if _, err := rand.Read(b); err != nil {
-			return "", err
-		}
-		encoded := base64.URLEncoding.EncodeToString(b)
-		if len(encoded) > length {
-			encoded = encoded[:length]
-		}
-		return encoded, nil
-	case "alphanumeric":
-		return randomFromCharset(length, charsetAlphanumeric)
-	case "ascii":
-		return randomFromCharset(length, charsetASCII)
-	default:
-		return "", fmt.Errorf("unsupported charset %q (use alphanumeric, hex, base64, or ascii)", charset)
-	}
-}
-
-func randomFromCharset(length int, charset string) (string, error) {
-	charsetLen := big.NewInt(int64(len(charset)))
-	result := make([]byte, length)
-	for i := range result {
-		n, err := rand.Int(rand.Reader, charsetLen)
-		if err != nil {
-			return "", err
-		}
-		result[i] = charset[n.Int64()]
-	}
-	return string(result), nil
 }

@@ -331,6 +331,13 @@ func fullCatalog() docsCatalog {
 				Description: "Secret values are never re-encrypted; only the DEK wrapping changes. Old encrypted .env files are invalidated by design.",
 			},
 			{
+				Name:        "generate-secret",
+				Summary:     "Generate a cryptographically random secret, store it, and return only metadata (never the value).",
+				Commands:    []string{"tvault generate SESSION_SECRET", "tvault generate API_KEY --length 48 --charset hex"},
+				SeeAlso:     []string{"tvault docs mcp"},
+				Description: "`tvault generate KEY` stores a random value using alphanumeric (default), hex, base64, or ascii. Length defaults to 32, max 256. stdout is empty in text mode; --json emits {key, length, charset, stored: true}. The MCP tool vault_generate_secret does the same for agents. Neither surface returns the generated value.",
+			},
+			{
 				Name:        "audit-log",
 				Summary:     "Read the vault audit trail from the CLI (metadata only; no secret values).",
 				Commands:    []string{"tvault audit", "tvault audit --action secret.read", "tvault audit --since 2026-01-01T00:00:00Z --json"},

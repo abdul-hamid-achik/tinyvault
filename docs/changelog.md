@@ -27,6 +27,9 @@ If `tvault` was installed from the retired formula, migrate once with
 - `tvault audit` lists recent vault audit-log entries (metadata only:
   action, resource, timestamp). Lock-free; filter with `--action`,
   `--resource-type`, `--since`, `--until`, `--limit`. `--json` available.
+- `tvault generate KEY` stores a cryptographically random secret and
+  prints only metadata. The value is never printed. Same generator as
+  MCP `vault_generate_secret`.
 
 ### Removed
 

@@ -138,8 +138,7 @@ sitemap use www). It is **git-connected**: any push to `main` that touches
 `docs/`, `bun run docs:build`, output `.vitepress/dist`). Iterate locally with
 `cd docs && bun run docs:dev`; gate with `bun run docs:build` (it fails on dead
 links). Theme + config live in `docs/.vitepress/` ("Vault Amber"). Content is
-verified against the real binary — there is **no `tvault generate` and no
-`tvault audit`** command despite older help-text mentions.
+verified against the real binary.
 
 ## Committing
 

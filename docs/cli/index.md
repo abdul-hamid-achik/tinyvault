@@ -10,7 +10,7 @@ description: The complete tvault command reference — global flags, exit codes,
 Run `tvault help` for the long-form manual or `tvault docs` for machine-readable docs aimed at agents. Every command also supports `-h`/`--help`.
 
 ::: info Looking for secret generation?
-There is **no** `tvault generate` command. Secret generation is available only over MCP (`vault_generate_secret`). Read the audit log with `tvault audit` or over MCP (`vault_audit_log`).
+`tvault generate KEY` stores a random value and prints only metadata. The MCP tool `vault_generate_secret` does the same for agents. Read the audit log with `tvault audit` or over MCP (`vault_audit_log`).
 :::
 
 ## Global flags
@@ -103,6 +103,21 @@ Run read-only diagnostics over the vault and configuration. Exits non-zero if an
 ---
 
 ## Secrets
+
+### `generate`
+
+```bash
+tvault generate SESSION_SECRET
+tvault generate API_KEY --length 48 --charset hex
+tvault generate TOKEN --json
+```
+
+Generate a cryptographically random secret, store it, and print **only metadata** (`key`, `length`, `charset`, `stored`). The value is never written to stdout or stderr. Use `tvault run` or `tvault get` when a process needs it.
+
+| Flag | Description |
+| --- | --- |
+| `--length <N>` | Length in characters (default `32`, max `256`). |
+| `--charset <name>` | `alphanumeric` (default), `hex`, `base64`, or `ascii`. |
 
 ### `set`
 

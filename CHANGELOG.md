@@ -11,6 +11,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `tvault audit` lists recent vault audit-log entries (metadata only:
   action, resource, timestamp). Lock-free; filter with `--action`,
   `--resource-type`, `--since`, `--until`, `--limit`. `--json` available.
+- `tvault generate KEY` stores a cryptographically random secret and
+  prints only metadata (`key`, `length`, `charset`, `stored`). The
+  value is never printed. Same generator as MCP `vault_generate_secret`.
 
 ### Removed
 

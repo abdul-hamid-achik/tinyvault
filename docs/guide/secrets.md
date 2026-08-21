@@ -49,7 +49,12 @@ Every `set` archives the prior value before overwriting it, in the same transact
 
 ### Generating random secrets
 
-There is **no** `tvault generate` command. Random secret generation is available only over MCP, via the `vault_generate_secret` tool, so an AI agent can create and store a strong value without a human ever seeing it. See [MCP Tools](/mcp/tools).
+`tvault generate <key>` stores a cryptographically random value and prints only metadata. The value is never printed. The MCP tool `vault_generate_secret` does the same for agents.
+
+```bash
+tvault generate SESSION_SECRET
+tvault generate API_KEY --length 48 --charset hex
+```
 
 ## Reading secrets
 

@@ -277,7 +277,7 @@ See [Configuration](/reference/configuration) and [Environment variables](/refer
 The MCP server gives an AI agent the same vault API, but under an [access policy](/mcp/access-policy). Two honesty points matter at the architecture level.
 
 ::: danger Output redaction is a safety net, not a control
-When policy enables `redact_output`, the MCP server replaces literal value strings longer than 3 characters in captured subprocess output. Redaction can be disabled and can be evaded by transforming a value (encoding it, splicing it, computing on it). Do not rely on it to keep a value from an agent that can run code. `vault_get_secret` deliberately returns a stored secret in a plaintext field; `vault_run_with_secrets` can also leak raw, short, or transformed values through arbitrary child output. Secret generation lives only over MCP as `vault_generate_secret`. The audit log is read with `tvault audit` or over MCP as `vault_audit_log`. See [MCP tools](/mcp/tools).
+When policy enables `redact_output`, the MCP server replaces literal value strings longer than 3 characters in captured subprocess output. Redaction can be disabled and can be evaded by transforming a value (encoding it, splicing it, computing on it). Do not rely on it to keep a value from an agent that can run code. `vault_get_secret` deliberately returns a stored secret in a plaintext field; `vault_run_with_secrets` can also leak raw, short, or transformed values through arbitrary child output. Secret generation (`tvault generate` / `vault_generate_secret`) stores a random value and returns only metadata. The audit log is read with `tvault audit` or over MCP as `vault_audit_log`. See [MCP tools](/mcp/tools).
 :::
 
 ### Other plaintext-output surfaces

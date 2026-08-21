@@ -305,8 +305,8 @@ func helpContent() HelpContent {
 			},
 			{
 				Name:        "Generate a random secret",
-				Commands:    []string{"# There is no tvault generate CLI command.", "# MCP: vault_generate_secret stores a random value and returns only metadata."},
-				Description: "Secret generation is MCP-only. The tool never returns the value; use vault_run_with_secrets or tvault get afterward if a process needs it.",
+				Commands:    []string{"tvault generate SESSION_SECRET", "tvault generate API_KEY --length 48 --charset hex"},
+				Description: "Stores a cryptographically random value and prints only metadata. The value is never printed; use tvault run or tvault get when a process needs it.",
 			},
 			{
 				Name:        "Pull vault -> .env (CI artifact)",

@@ -164,9 +164,7 @@ Generates a cryptographically random secret and stores it directly — the value
 - **Returns:** `{ key, length, charset, stored: true }`. The generated value stays in the vault.
 - **Policy gate:** `CanWrite`; project and secret globs.
 
-::: info Generation is MCP-only
-There is no `tvault generate` CLI command. Random secret generation exists only over MCP, via this tool. To use a generated value afterward, run it with `vault_run_with_secrets` or export it with `vault_export_env`.
-:::
+The CLI equivalent is `tvault generate KEY`. Neither surface returns the generated value. To use it afterward, run it with `vault_run_with_secrets` / `tvault run` or export with `vault_export_env`.
 
 ---
 

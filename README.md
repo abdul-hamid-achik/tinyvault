@@ -33,6 +33,7 @@ TinyVault is built around value-minimizing agent workflows: search metadata, inj
 - **Local agent (unix)** -- `tvault agent` holds the vault unlocked over a private 0600 socket so daily `get/env/run` skip the passphrase prompt and Argon2id; `tvault hook` wires it into bash/zsh/fish/direnv. Auto-locks when idle.
 - **Relational Search** -- `tvault search` and `vault_search_secrets` for prefix, name glob, time-range, version, and cross-project queries
 - **Audit log** -- `tvault audit` lists recent actions (metadata only); the same trail is available over MCP
+- **Generate** -- `tvault generate KEY` stores a random secret and prints only metadata (never the value)
 - **Output Redaction** -- MCP execution can replace literal secret values in captured output when `redact_output` is enabled; transformed values can bypass it
 - **Access Policy** -- YAML-based allow/deny patterns control what AI agents can access
 - **Zero External Services Required** -- No database server, Docker daemon, account, or hosted control plane -- just a local bbolt file
@@ -75,7 +76,7 @@ tvault init
 
 # Store some secrets
 tvault set DATABASE_URL "postgres://user:pass@localhost/mydb"
-tvault set API_KEY "sk-abc123"
+tvault generate API_KEY --length 32
 
 # Retrieve a secret
 tvault get DATABASE_URL
