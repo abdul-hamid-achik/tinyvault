@@ -15,6 +15,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   prints only metadata (`key`, `length`, `charset`, `stored`). The
   value is never printed. Same generator as MCP `vault_generate_secret`.
 
+### Fixed
+
+- `tvault env --format json` and `tvault export --format json` encode the
+  whole object with `encoding/json` instead of concatenating escaped
+  strings. Values with control bytes (`\r`, NUL, …) produce valid JSON;
+  `&`, `<`, and `>` stay literal (no HTML escaping). `tvault get --json`
+  uses the same encoder.
+
 ### Removed
 
 - `tvault studio` (aliases `browse`, `ui`) and the Bubble Tea TUI. Browse

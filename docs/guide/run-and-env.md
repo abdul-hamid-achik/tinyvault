@@ -176,7 +176,7 @@ Select a format with `-f`/`--format`. The default is `shell`.
 | --- | --- |
 | `shell` (default) | `export KEY=value` lines (shell-quoted). |
 | `dotenv` | `KEY=value` lines for a `.env` file. |
-| `json` | A flat JSON object of key/value pairs. |
+| `json` | A flat JSON object of key/value pairs. Control bytes are escaped; `&`, `<`, and `>` stay literal. |
 | `yaml` | A flat YAML mapping. |
 | `k8s-secret` | A Kubernetes `Secret` manifest (base64 `data:`). Requires `--name`. |
 | `pulumi-config` | `pulumi config set --secret KEY VALUE` lines (shell-quoted). Optional `--stack`. |

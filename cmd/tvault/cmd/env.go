@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"bytes"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -238,17 +236,7 @@ func runEnv(_ *cobra.Command, _ []string) error {
 			fmt.Printf("%s=%s\n", k, escaped)
 		}
 	case "json":
-		fmt.Println("{")
-		for i, k := range keys {
-			v := secrets[k]
-			escaped := escapeJSONValue(v)
-			if i < len(keys)-1 {
-				fmt.Printf("  \"%s\": \"%s\",\n", k, escaped)
-			} else {
-				fmt.Printf("  \"%s\": \"%s\"\n", k, escaped)
-			}
-		}
-		fmt.Println("}")
+		return writeJSON(secrets)
 	case "yaml":
 		for _, k := range keys {
 			v := secrets[k]
@@ -325,25 +313,6 @@ func escapeDotenvValue(s string) string {
 	escaped = strings.ReplaceAll(escaped, "\"", "\\\"")
 	escaped = strings.ReplaceAll(escaped, "\n", "\\n")
 	return "\"" + escaped + "\""
-}
-
-// escapeJSONValue returns s escaped for embedding between double quotes in
-// JSON. It uses encoding/json so ALL control bytes (\r, \b, \f, NUL, …)
-// are escaped — the previous hand-rolled version only handled \ " \n \t,
-// which produced invalid JSON for values containing other control bytes.
-// HTML escaping is disabled so values like connection strings keep their
-// literal & < > characters.
-func escapeJSONValue(s string) string {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	//nolint:errcheck // encoding a string into a bytes.Buffer cannot fail
-	enc.Encode(s)
-	out := strings.TrimRight(buf.String(), "\n")
-	if len(out) >= 2 { // strip the surrounding quotes Encode adds
-		return out[1 : len(out)-1]
-	}
-	return out
 }
 
 func escapeYAMLValue(s string) string {

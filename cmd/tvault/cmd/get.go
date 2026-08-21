@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -70,9 +69,7 @@ func runGet(_ *cobra.Command, args []string) error {
 			return err
 		}
 		if jsonOutput {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(map[string]string{"key": key, "value": value, "source": getFromFile})
+			return writeJSON(map[string]string{"key": key, "value": value, "source": getFromFile})
 		}
 		fmt.Print(value)
 		return nil
@@ -85,9 +82,7 @@ func runGet(_ *cobra.Command, args []string) error {
 	if getVersion == 0 && getGroup == "" && getEnv == "" {
 		if value, ok := agentGetSecret(projectName, key); ok {
 			if jsonOutput {
-				enc := json.NewEncoder(os.Stdout)
-				enc.SetIndent("", "  ")
-				return enc.Encode(map[string]any{"key": key, "value": value})
+				return writeJSON(map[string]any{"key": key, "value": value})
 			}
 			fmt.Print(value)
 			return nil
@@ -108,10 +103,7 @@ func runGet(_ *cobra.Command, args []string) error {
 		}
 		recordAudit(v, "secret.read", "secret", key, map[string]any{"group": getGroup, "env": getEnv, "source": source})
 		if jsonOutput {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			out := map[string]any{"key": key, "value": value, "source": source}
-			return enc.Encode(out)
+			return writeJSON(map[string]any{"key": key, "value": value, "source": source})
 		}
 		if getShowSource {
 			fmt.Fprintf(os.Stderr, "# inherited from %s\n", source)
@@ -138,13 +130,11 @@ func runGet(_ *cobra.Command, args []string) error {
 	}
 
 	if jsonOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
 		out := map[string]any{"key": key, "value": value}
 		if getVersion > 0 {
 			out["version"] = getVersion
 		}
-		return enc.Encode(out)
+		return writeJSON(out)
 	}
 
 	fmt.Print(value)

@@ -73,18 +73,11 @@ func runExport(_ *cobra.Command, _ []string) error {
 		}
 		output = strings.Join(lines, "\n") + "\n"
 	case "json":
-		var lines []string
-		lines = append(lines, "{")
-		for i, k := range keys {
-			escaped := escapeJSONValue(secrets[k])
-			comma := ","
-			if i == len(keys)-1 {
-				comma = ""
-			}
-			lines = append(lines, fmt.Sprintf("  \"%s\": \"%s\"%s", k, escaped, comma)) //nolint:gocritic // sprintfQuotedString: %q would add Go escaping, not JSON escaping
+		encoded, err := marshalJSON(secrets)
+		if err != nil {
+			return fmt.Errorf("failed to encode json: %w", err)
 		}
-		lines = append(lines, "}")
-		output = strings.Join(lines, "\n") + "\n"
+		output = string(encoded)
 	case "yaml":
 		var lines []string
 		for _, k := range keys {

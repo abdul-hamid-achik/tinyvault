@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -58,38 +59,94 @@ func TestEscapeDotenvValue(t *testing.T) {
 	}
 }
 
-func TestEscapeJSONValue(t *testing.T) {
-	tests := []struct {
-		in, want string
-	}{
-		{"plain", "plain"},
-		{"with\"quote", `with\"quote`},
-		{"with\\back", `with\\back`},
-		{"with\nnewline", `with\nnewline`},
-		{"with\ttab", `with\ttab`},
-		{"with\rcarriage", `with\rcarriage`}, // control byte: must be escaped (was a bug)
-		{"amp&lt<gt>", "amp&lt<gt>"},         // & < > kept literal (no HTML escaping)
-	}
-	for _, tt := range tests {
-		got := escapeJSONValue(tt.in)
-		if got != tt.want {
-			t.Errorf("escapeJSONValue(%q) = %q, want %q", tt.in, got, tt.want)
-		}
+// jsonSecretsForRoundTrip is the fixture used by env/export JSON tests:
+// control bytes (\r, NUL, \t, \n), HTML-sensitive chars, and unsorted keys.
+func jsonSecretsForRoundTrip() map[string]string {
+	return map[string]string{
+		"Z_LAST":  "z",
+		"A_FIRST": "a",
+		"CTRL":    "line1\r\nline2\tend\x00nul",
+		"AMP":     "a&b<c>d",
 	}
 }
 
-// TestEnvJSONValidForControlBytes guards that `tvault env --format json`
-// emits VALID JSON even when a value contains control bytes.
-func TestEnvJSONValidForControlBytes(t *testing.T) {
-	frag := escapeJSONValue("line1\r\nline2\tend")
-	doc := []byte(`{"K":"` + frag + `"}`)
-	var m map[string]string
-	if err := json.Unmarshal(doc, &m); err != nil {
-		t.Fatalf("env json fragment produced invalid JSON: %v (%s)", err, doc)
+func storeJSONRoundTripSecrets(t *testing.T, vaultPath string) map[string]string {
+	t.Helper()
+	secrets := jsonSecretsForRoundTrip()
+	v := openTestVault(t, vaultPath)
+	for k, val := range secrets {
+		if err := v.SetSecret("default", k, val); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if m["K"] != "line1\r\nline2\tend" {
-		t.Errorf("round-trip mismatch: %q", m["K"])
+	v.Close()
+	return secrets
+}
+
+func assertJSONRoundTrip(t *testing.T, raw []byte, want map[string]string) {
+	t.Helper()
+	var got map[string]string
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, raw)
 	}
+	for k, wantVal := range want {
+		if got[k] != wantVal {
+			t.Errorf("%s: got %q, want %q", k, got[k], wantVal)
+		}
+	}
+	body := string(raw)
+	if strings.Contains(body, `\u0026`) {
+		t.Errorf("HTML-escaped ampersand:\n%s", body)
+	}
+}
+
+// TestRunEnvJSONRoundTripControlBytes drives `tvault env --format json`
+// through the real command path, including \r, NUL, and & < >.
+func TestRunEnvJSONRoundTripControlBytes(t *testing.T) {
+	vaultPath, restore := setupVaultForCommandTest(t)
+	defer restore()
+	want := storeJSONRoundTripSecrets(t, vaultPath)
+
+	oldFormat := envFormat
+	envFormat = "json"
+	defer func() { envFormat = oldFormat }()
+
+	out := captureStdout(t, func() {
+		if err := runEnv(nil, nil); err != nil {
+			t.Fatalf("runEnv: %v", err)
+		}
+	})
+	assertJSONRoundTrip(t, out, want)
+}
+
+// TestRunExportJSONRoundTripControlBytes is the export equivalent,
+// covering stdout and -o.
+func TestRunExportJSONRoundTripControlBytes(t *testing.T) {
+	vaultPath, restore := setupVaultForCommandTest(t)
+	defer restore()
+	want := storeJSONRoundTripSecrets(t, vaultPath)
+
+	oldFormat, oldOut := exportFormat, exportOutput
+	defer func() { exportFormat, exportOutput = oldFormat, oldOut }()
+
+	exportFormat, exportOutput = "json", ""
+	out := captureStdout(t, func() {
+		if err := runExport(nil, nil); err != nil {
+			t.Fatalf("runExport stdout: %v", err)
+		}
+	})
+	assertJSONRoundTrip(t, out, want)
+
+	outPath := filepath.Join(t.TempDir(), "secrets.json")
+	exportOutput = outPath
+	if err := runExport(nil, nil); err != nil {
+		t.Fatalf("runExport -o: %v", err)
+	}
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertJSONRoundTrip(t, data, want)
 }
 
 func TestEscapeYAMLValue(t *testing.T) {

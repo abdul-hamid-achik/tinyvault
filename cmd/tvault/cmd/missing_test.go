@@ -267,6 +267,9 @@ func TestRunGetJSON(t *testing.T) {
 	if err := v.SetSecret("default", "FOO", "bar"); err != nil {
 		t.Fatal(err)
 	}
+	if err := v.SetSecret("default", "CTRL", "line1\r\nline2\x00&x"); err != nil {
+		t.Fatal(err)
+	}
 	v.Close()
 
 	oldJSON := jsonOutput
@@ -284,6 +287,22 @@ func TestRunGetJSON(t *testing.T) {
 	}
 	if doc["key"] != "FOO" || doc["value"] != "bar" {
 		t.Errorf("got %v, want FOO/bar", doc)
+	}
+
+	ctrlOut := captureStdout(t, func() {
+		if err := runGet(nil, []string{"CTRL"}); err != nil {
+			t.Fatalf("runGet CTRL: %v", err)
+		}
+	})
+	var ctrl map[string]string
+	if err := json.Unmarshal(ctrlOut, &ctrl); err != nil {
+		t.Fatalf("CTRL unmarshal: %v\nbody: %s", err, ctrlOut)
+	}
+	if ctrl["value"] != "line1\r\nline2\x00&x" {
+		t.Errorf("CTRL value = %q", ctrl["value"])
+	}
+	if strings.Contains(string(ctrlOut), `\u0026`) {
+		t.Errorf("HTML-escaped ampersand:\n%s", ctrlOut)
 	}
 }
 

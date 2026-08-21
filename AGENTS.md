@@ -77,7 +77,7 @@ cmd/tvault/
     gitfilter.go             # tvault git-filter install/track/status/checkout + clean/smudge (Spine A)
     k8s.go                   # tvault seal --format k8s + tvault k8s render (commit-safe SealedSecret — Spine A)
     env_group.go             # tvault env group/diff/promote/inherit/pin/unpin/inherited/seal (environment profiles)
-    json_helper.go           # writeJSON(): shared --json encoder
+    json_helper.go           # writeJSON()/marshalJSON(): shared --json encoder (SetEscapeHTML false)
     docs.go                  # tvault docs (machine-readable feature manifest)
     npm/                     # npm distribution (@thelacanians/tinyvault)
       cli/                   # main package: cli.js shim + package.json (spawns the platform binary)
