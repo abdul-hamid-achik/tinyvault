@@ -93,8 +93,6 @@ func (s *VaultMCPServer) handleCreateProject(_ context.Context, _ *sdkmcp.CallTo
 		return nil, createProjectOutput{}, fmt.Errorf("create project: %w", err)
 	}
 
-	s.audit("project.create", "project", input.Name, nil)
-
 	return nil, createProjectOutput{Name: input.Name, Created: true}, nil
 }
 
@@ -109,8 +107,6 @@ func (s *VaultMCPServer) handleDeleteProject(_ context.Context, _ *sdkmcp.CallTo
 	if err := s.vault.DeleteProject(input.Name); err != nil {
 		return nil, deleteProjectOutput{}, fmt.Errorf("delete project: %w", err)
 	}
-
-	s.audit("project.delete", "project", input.Name, nil)
 
 	return nil, deleteProjectOutput{Name: input.Name, Deleted: true}, nil
 }

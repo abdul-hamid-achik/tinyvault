@@ -116,8 +116,9 @@ func Create(dir, passphrase string) (*Vault, error) {
 		path:  dir,
 	}
 
-	// Create default project.
-	if _, err := v.CreateProject("default", "Default project"); err != nil {
+	// Create default project. Init is not a user mutation — skip the audit row
+	// so a fresh vault's log starts empty.
+	if _, err := v.createProject("default", "Default project", false); err != nil {
 		v.Close()
 		return nil, fmt.Errorf("create default project: %w", err)
 	}

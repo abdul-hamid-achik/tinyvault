@@ -109,7 +109,7 @@ See [Sharing](/guide/sharing) for the full workflow.
 
 ## The audit log
 
-TinyVault records many explicit secret and project operations in an audit bucket, including MCP reads, writes, deletes, generation, execution, exports, and project mutations. It is an operational trail, not exhaustive process telemetry: unlocking, passphrase rotation, direct passphrase-based `tvault env`, and some value-comparison paths are not recorded.
+TinyVault records secret and project primitives in an audit bucket at the vault layer, so CLI, MCP, and the agent share one trail. Generation, execution, exports, sharing, and env-group mutations are logged at those surfaces. It is an operational trail, not exhaustive process telemetry: unlocking, passphrase rotation, and bulk passphrase-based `tvault env` are not recorded as per-key reads.
 
 You read the audit log in two places:
 

@@ -101,7 +101,7 @@ The server is a thin policy-and-redaction layer over the same vault API the CLI 
 
 `vault_get_secret` is the single tool that deliberately returns a stored secret in a dedicated plaintext field, gated by `max_reads_per_session`. `vault_run_with_secrets` can still carry raw, short, or transformed values back through arbitrary child-process output, especially when redaction is disabled; the warning below is the controlling caveat.
 
-Explicit MCP handlers for `secret.read`, `secret.write`, `secret.delete`, `secret.generate`, `secret.exec`, `secret.export`, `project.create`, and `project.delete` write to the audit log, which is queryable over MCP via `vault_audit_log`. The trail is not exhaustive: unlocking, passphrase rotation, direct passphrase-based `tvault env`, and some value comparisons are not recorded.
+Get, set, delete, project create/delete, rollback, and history write the audit log in the vault layer, so CLI, MCP, and the agent share one trail. Surface handlers still log generate, exec, export, share, and env-group mutations. The trail is not exhaustive: unlocking, passphrase rotation, and bulk passphrase-based `tvault env` are not recorded as per-key reads. Query it with `tvault audit` or MCP `vault_audit_log`.
 
 ::: warning Redaction is a safety net, not a control
 When policy enables `redact_output`, `vault_run_with_secrets` post-processes subprocess output and replaces literal occurrences of secret values longer than 3 characters with `[REDACTED:KEY]`. This can catch accidental leakage to stdout/stderr. It does **not** stop:

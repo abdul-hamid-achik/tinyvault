@@ -669,13 +669,11 @@ func (v *Vault) Promote(groupName, fromEnv, toEnv string, keys []string, all, dr
 			ToVersion:   newEntry.Version,
 		})
 
-		// Audit the promote.
-		//nolint:errcheck // audit is best-effort
-		v.AppendAudit(makeAuditEntry("secret.promote", "secret", key, map[string]any{
+		v.recordOpAudit("secret.promote", "secret", key, map[string]any{
 			"group":    groupName,
 			"from_env": fromEnv,
 			"to_env":   toEnv,
-		}))
+		})
 	}
 
 	return result, nil
@@ -712,11 +710,10 @@ func (v *Vault) SetInheritance(groupName, envName, fromEnv string) (*EnvGroup, e
 		return nil, err
 	}
 
-	//nolint:errcheck // audit is best-effort
-	v.AppendAudit(makeAuditEntry("env.inherit", "env_group", groupName, map[string]any{
+	v.recordOpAudit("env.inherit", "env_group", groupName, map[string]any{
 		"env":  envName,
 		"from": fromEnv,
-	}))
+	})
 
 	return group, nil
 }
@@ -746,6 +743,9 @@ func (v *Vault) ResolveKey(groupName, envName, key string) (value, sourceEnv str
 
 	childVal, childErr := v.getSecretInternal(childProject, key)
 	if childErr == nil {
+		v.recordOpAudit("secret.read", "secret", key, map[string]any{
+			"group": groupName, "env": envName, "source": envName,
+		})
 		return childVal, envName, nil
 	}
 
@@ -758,6 +758,9 @@ func (v *Vault) ResolveKey(groupName, envName, key string) (value, sourceEnv str
 			}
 			baseVal, baseErr := v.getSecretInternal(baseProject, key)
 			if baseErr == nil {
+				v.recordOpAudit("secret.read", "secret", key, map[string]any{
+					"group": groupName, "env": envName, "source": inh.From,
+				})
 				return baseVal, inh.From, nil
 			}
 		}
@@ -849,11 +852,10 @@ func (v *Vault) PinKey(groupName, envName, key string) error {
 		return err
 	}
 
-	//nolint:errcheck // audit is best-effort
-	v.AppendAudit(makeAuditEntry("secret.pin", "secret", key, map[string]any{
+	v.recordOpAudit("secret.pin", "secret", key, map[string]any{
 		"group": groupName,
 		"env":   envName,
-	}))
+	})
 
 	return nil
 }
@@ -894,15 +896,18 @@ func (v *Vault) UnpinKey(groupName, envName, key string) error {
 		return err
 	}
 
-	if err := v.DeleteSecret(project, key); err != nil {
+	proj, err := v.store.GetProjectByName(project)
+	if err != nil {
+		return mapStoreError(err)
+	}
+	if err := mapStoreError(v.store.DeleteSecret(proj.ID, key)); err != nil {
 		return err
 	}
 
-	//nolint:errcheck // audit is best-effort
-	v.AppendAudit(makeAuditEntry("secret.unpin", "secret", key, map[string]any{
+	v.recordOpAudit("secret.unpin", "secret", key, map[string]any{
 		"group": groupName,
 		"env":   envName,
-	}))
+	})
 
 	return nil
 }
@@ -982,17 +987,6 @@ func (v *Vault) ListInherited(groupName, envName string) ([]InheritedKey, error)
 	}
 
 	return result, nil
-}
-
-// makeAuditEntry creates an AuditEntry with the current timestamp.
-func makeAuditEntry(action, resourceType, name string, metadata map[string]any) *store.AuditEntry {
-	return &store.AuditEntry{
-		Action:       action,
-		ResourceType: resourceType,
-		ResourceName: name,
-		Timestamp:    time.Now().UTC(),
-		Metadata:     metadata,
-	}
 }
 
 // ErrGroupNotFound is returned when an environment group cannot be found.

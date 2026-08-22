@@ -170,12 +170,11 @@ func (a *agentState) doGet(req Request, scope tokenScope, uid uint32, pid int, t
 		if !scope.allows(project) {
 			return errScope(project)
 		}
-		s, e := v.GetSecret(project, req.Key)
+		s, e := v.GetSecretWithMeta(project, req.Key, agentAuditExtra(uid, pid, tokID))
 		if e != nil {
 			return e
 		}
 		val = s
-		auditRead(v, project, req.Key, uid, pid, tokID)
 		return nil
 	}); err != nil {
 		return errResp(err.Error())
@@ -266,14 +265,20 @@ func errScope(project string) error {
 // audit failure must never block the response (and never includes a value).
 // tokID, when non-empty, is a hash prefix of the capability token (never the
 // token itself).
-func auditRead(v *vault.Vault, project, key string, uid uint32, pid int, tokID string) {
-	meta := map[string]any{"via": "agent", "project": project, "peer_uid": uid}
+func agentAuditExtra(uid uint32, pid int, tokID string) map[string]any {
+	meta := map[string]any{"via": "agent", "peer_uid": uid}
 	if pid > 0 {
 		meta["peer_pid"] = pid
 	}
 	if tokID != "" {
 		meta["token_id"] = tokID
 	}
+	return meta
+}
+
+func auditRead(v *vault.Vault, project, key string, uid uint32, pid int, tokID string) {
+	meta := agentAuditExtra(uid, pid, tokID)
+	meta["project"] = project
 	//nolint:errcheck // audit is best-effort
 	v.AppendAudit(&store.AuditEntry{
 		Action:       "secret.read",

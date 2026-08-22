@@ -15,6 +15,10 @@ const configCurrentProject = "current_project"
 
 // CreateProject creates a new project with a random DEK encrypted by the vault KEK.
 func (v *Vault) CreateProject(name, description string) (*store.Project, error) {
+	return v.createProject(name, description, true)
+}
+
+func (v *Vault) createProject(name, description string, audit bool) (*store.Project, error) {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
@@ -56,7 +60,9 @@ func (v *Vault) CreateProject(name, description string) (*store.Project, error) 
 	if err := v.store.CreateProject(project); err != nil {
 		return nil, mapStoreError(err)
 	}
-
+	if audit {
+		v.recordOpAudit("project.create", "project", project.Name, nil)
+	}
 	return project, nil
 }
 
@@ -78,7 +84,11 @@ func (v *Vault) DeleteProject(name string) error {
 	if err != nil {
 		return mapStoreError(err)
 	}
-	return mapStoreError(v.store.DeleteProject(project.ID))
+	if err := mapStoreError(v.store.DeleteProject(project.ID)); err != nil {
+		return err
+	}
+	v.recordOpAudit("project.delete", "project", name, nil)
+	return nil
 }
 
 // SetCurrentProject stores the current project name in the vault config.

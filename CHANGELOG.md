@@ -15,6 +15,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   prints only metadata (`key`, `length`, `charset`, `stored`). The
   value is never printed. Same generator as MCP `vault_generate_secret`.
 
+### Changed
+
+- Get, set, delete, project create/delete, rollback, and history now
+  write the audit log in the vault layer, so CLI, MCP, and the agent
+  share one trail without duplicate rows. Secret values are never stored
+  in the log.
+
 ### Fixed
 
 - `tvault env --format json` and `tvault export --format json` encode the

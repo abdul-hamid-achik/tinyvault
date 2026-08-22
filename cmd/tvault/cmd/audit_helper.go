@@ -7,12 +7,10 @@ import (
 	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
 )
 
-// recordAudit writes a best-effort audit entry from the CLI. It uses the
-// same action vocabulary as the MCP server (secret.read / secret.write /
-// secret.delete / project.create / project.delete) so the audit log is
-// uniform no matter which surface — CLI or MCP — performed the
-// action. Previously only the MCP server logged, so `tvault get/set/delete`
-// were invisible in the audit log.
+// recordAudit writes a best-effort audit entry from the CLI for
+// surface-specific actions (generate, share, env-group, identity reads).
+// Primitive get/set/delete/create/rollback/history are recorded inside
+// the vault layer so CLI, MCP, and the agent share one trail.
 //
 // Errors are intentionally ignored: audit is a safety net and must never
 // block or fail a command. Writing audit does not require the vault to be

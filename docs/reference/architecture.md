@@ -250,7 +250,7 @@ bbolt is an embedded, single-writer key/value store. There is no daemon, no sock
 
 ## Two interfaces, one API
 
-The CLI and the MCP server are thin front ends over the same vault API. They share the same crypto, the same storage, and the same audit log. The differences are in surface and policy, not in how secrets are handled underneath.
+The CLI and the MCP server are thin front ends over the same vault API. They share the same crypto, the same storage, and the same audit log — get/set/delete and the other primitives write that log in the vault layer, so every surface is covered once. The differences are in surface and policy, not in how secrets are handled underneath.
 
 | Interface | How you reach it | Notes |
 | --- | --- | --- |

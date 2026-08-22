@@ -441,7 +441,7 @@ Compares a `.env` file on disk against the project and reports the drift.
 
 - **Inputs:** `file` (required), `project` (optional), `compare_values` (optional).
 - **Returns:** the key sets `only_in_vault`, `only_in_file`, and `in_both`; with `compare_values`, each shared key also gets a `same` / `differs` verdict. **Never the values themselves.**
-- **Policy gate:** any `access_mode`; project and per-key secret globs. When value comparison runs, the tool writes one aggregate `secret.read` audit row for the comparison rather than one row per key.
+- **Policy gate:** any `access_mode`; project and per-key secret globs. When value comparison runs, each compared key is recorded as `secret.read` (same as `tvault diff --values`).
 
 ### `vault_sync_env`
 

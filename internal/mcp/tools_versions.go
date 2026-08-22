@@ -80,7 +80,6 @@ func (s *VaultMCPServer) handleSecretHistory(_ context.Context, _ *sdkmcp.CallTo
 			UpdatedAt: v.UpdatedAt,
 		})
 	}
-	s.audit("secret.read", "secret", input.Key, map[string]any{"project": project, "source": "history"})
 	return nil, out, nil
 }
 
@@ -100,10 +99,5 @@ func (s *VaultMCPServer) handleRollbackSecret(_ context.Context, _ *sdkmcp.CallT
 	if err != nil {
 		return nil, rollbackSecretOutput{}, fmt.Errorf("rollback: %w", err)
 	}
-	s.audit("secret.rollback", "secret", input.Key, map[string]any{
-		"project":      project,
-		"from_version": input.ToVersion,
-		"new_version":  newVersion,
-	})
 	return nil, rollbackSecretOutput{RolledBack: true, RolledBackFrom: input.ToVersion, NewVersion: newVersion}, nil
 }

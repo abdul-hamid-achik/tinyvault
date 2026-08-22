@@ -46,7 +46,6 @@ func runHistory(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("history for %q: %w", key, err)
 	}
-	recordAudit(v, "secret.read", "secret", key, map[string]any{"project": project, "source": "history"})
 
 	if jsonOutput {
 		type ver struct {

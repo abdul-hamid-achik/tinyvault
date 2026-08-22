@@ -92,7 +92,7 @@ cmd/tvault/
     selfupdate.go            # tvault self-update (alias: upgrade) — checksum-verified in-place binary update
     generate.go              # tvault generate KEY (stores random value; never prints it)
     audit.go                 # tvault audit (lock-free metadata log; --action/--since/--json)
-    audit_helper.go          # recordAudit(): CLI audit logging (MCP-vocab actions)
+    audit_helper.go          # recordAudit(): CLI surface-specific audit (generate, share, env groups)
     config_helper.go         # typed ~/.tvault/config.yaml (agent: defaults)
     completion.go            # Shell completion
     output.go                # Color output helpers (Success, Error, Warning, Info)
@@ -124,10 +124,12 @@ internal/
     query_test.go            # Relational query tests
   vault/
     vault.go                 # Create, Open, Unlock, Lock, RotatePassphrase, KEK()
-    project.go               # CreateProject, ListProjects, SetCurrentProject
+    project.go               # CreateProject, ListProjects, SetCurrentProject (create/delete audited)
+    audit.go                 # recordOpAudit / makeAuditEntry (best-effort, never values)
     secret.go                # SetSecret, GetSecret, ListSecrets, DeleteSecret,
                              # GetAllSecrets, ListSecretMetadata,
                              # ListSecretVersions, GetSecretVersionValue, RollbackSecret
+                             # (those primitives write the audit log)
     query.go                 # Relational query layer (Search, CountSecrets,
                              # SearchProjects, ListAudit, SnapshotProjects)
     sharing.go               # ShareProject/UnshareProject (live-vault DEK re-key on removal),

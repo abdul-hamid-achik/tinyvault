@@ -31,6 +31,18 @@ If `tvault` was installed from the retired formula, migrate once with
   prints only metadata. The value is never printed. Same generator as
   MCP `vault_generate_secret`.
 
+### Changed
+
+- Get, set, delete, project create/delete, rollback, and history now
+  write the audit log in the vault layer, so CLI, MCP, and the agent
+  share one trail without duplicate rows.
+
+### Fixed
+
+- `tvault env --format json` and `tvault export --format json` encode the
+  whole object with `encoding/json`. Control bytes produce valid JSON;
+  `&`, `<`, and `>` stay literal.
+
 ### Removed
 
 - `tvault studio` (aliases `browse`, `ui`) and the Bubble Tea TUI. Browse

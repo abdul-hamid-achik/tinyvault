@@ -273,17 +273,12 @@ func TestListAudit(t *testing.T) {
 	v := setupQueryVault(t)
 	defer v.Close()
 
-	// setupQueryVault inserts 8 secrets; each SetSecret should write
-	// an audit entry. (Actually SetSecret does not call AppendAudit
-	// in the vault layer; only MCP handlers do. So we expect 0.)
-	// Test that ListAudit works regardless of the count.
-	entries, err := v.ListAudit(store.AuditFilter{Limit: 10})
+	// setupQueryVault inserts 8 secrets; each SetSecret writes secret.write.
+	entries, err := v.ListAudit(store.AuditFilter{Action: "secret.write", Limit: 20})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Zero or more; we only assert that the call returns without
-	// error and the result is non-nil.
-	if entries == nil {
-		t.Error("ListAudit returned nil slice; expected empty slice")
+	if len(entries) < 8 {
+		t.Errorf("ListAudit secret.write = %d, want at least 8", len(entries))
 	}
 }

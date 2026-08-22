@@ -49,11 +49,21 @@ func (v *Vault) SetSecret(projectName, key, value string) error {
 		UpdatedAt:      now,
 	}
 
-	return mapStoreError(v.store.SetSecret(project.ID, key, entry))
+	if err := mapStoreError(v.store.SetSecret(project.ID, key, entry)); err != nil {
+		return err
+	}
+	v.recordOpAudit("secret.write", "secret", key, map[string]any{"project": projectName})
+	return nil
 }
 
 // GetSecret decrypts and returns a secret value.
 func (v *Vault) GetSecret(projectName, key string) (string, error) {
+	return v.GetSecretWithMeta(projectName, key, nil)
+}
+
+// GetSecretWithMeta is GetSecret with extra audit metadata merged into the
+// secret.read row (agent peer credentials, diff provenance, …). extra may be nil.
+func (v *Vault) GetSecretWithMeta(projectName, key string, extra map[string]any) (string, error) {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
@@ -61,28 +71,12 @@ func (v *Vault) GetSecret(projectName, key string) (string, error) {
 		return "", err
 	}
 
-	project, err := v.store.GetProjectByName(projectName)
-	if err != nil {
-		return "", mapStoreError(err)
-	}
-
-	entry, err := v.store.GetSecret(project.ID, key)
-	if err != nil {
-		return "", mapStoreError(err)
-	}
-
-	dek, err := v.getDecryptedDEK(project.ID)
+	value, err := v.getSecretInternal(projectName, key)
 	if err != nil {
 		return "", err
 	}
-
-	plaintext, err := crypto.Decrypt(dek, entry.EncryptedValue)
-	crypto.ZeroBytes(dek)
-	if err != nil {
-		return "", fmt.Errorf("decrypt secret: %w", err)
-	}
-
-	return string(plaintext), nil
+	v.recordOpAudit("secret.read", "secret", key, mergeAuditMeta(map[string]any{"project": projectName}, extra))
+	return value, nil
 }
 
 // ListSecrets returns the key names of all secrets in a project.
@@ -103,7 +97,11 @@ func (v *Vault) DeleteSecret(projectName, key string) error {
 		return mapStoreError(err)
 	}
 
-	return mapStoreError(v.store.DeleteSecret(project.ID, key))
+	if err := mapStoreError(v.store.DeleteSecret(project.ID, key)); err != nil {
+		return err
+	}
+	v.recordOpAudit("secret.delete", "secret", key, map[string]any{"project": projectName})
+	return nil
 }
 
 // GetAllSecrets decrypts and returns all secrets for a project as a map.
@@ -237,7 +235,11 @@ func (v *Vault) ListSecretVersions(projectName, key string) ([]store.SecretVersi
 		return nil, mapStoreError(err)
 	}
 	versions, err := v.store.ListSecretVersions(project.ID, key)
-	return versions, mapStoreError(err)
+	if err != nil {
+		return nil, mapStoreError(err)
+	}
+	v.recordOpAudit("secret.read", "secret", key, map[string]any{"project": projectName, "source": "history"})
+	return versions, nil
 }
 
 // GetSecretVersionValue decrypts and returns the plaintext of a specific
@@ -266,6 +268,9 @@ func (v *Vault) GetSecretVersionValue(projectName, key string, version int) (str
 	if err != nil {
 		return "", fmt.Errorf("decrypt secret: %w", err)
 	}
+	v.recordOpAudit("secret.read", "secret", key, map[string]any{
+		"project": projectName, "version": version, "source": "version",
+	})
 	return string(plaintext), nil
 }
 
@@ -311,6 +316,11 @@ func (v *Vault) RollbackSecret(projectName, key string, toVersion int) (int, err
 	if err := v.store.SetSecret(project.ID, key, newEntry); err != nil {
 		return 0, mapStoreError(err)
 	}
+	v.recordOpAudit("secret.rollback", "secret", key, map[string]any{
+		"project":      projectName,
+		"from_version": toVersion,
+		"new_version":  newEntry.Version,
+	})
 	return newEntry.Version, nil
 }
 

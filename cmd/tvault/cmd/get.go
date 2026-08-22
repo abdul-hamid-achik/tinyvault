@@ -101,7 +101,6 @@ func runGet(_ *cobra.Command, args []string) error {
 		if rErr != nil {
 			return fmt.Errorf("failed to resolve secret: %w", rErr)
 		}
-		recordAudit(v, "secret.read", "secret", key, map[string]any{"group": getGroup, "env": getEnv, "source": source})
 		if jsonOutput {
 			return writeJSON(map[string]any{"key": key, "value": value, "source": source})
 		}
@@ -120,13 +119,11 @@ func runGet(_ *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to get secret version %d: %w", getVersion, err)
 		}
-		recordAudit(v, "secret.read", "secret", key, map[string]any{"project": project, "version": getVersion, "source": "version"})
 	} else {
 		value, err = v.GetSecret(project, key)
 		if err != nil {
 			return fmt.Errorf("failed to get secret: %w", err)
 		}
-		recordAudit(v, "secret.read", "secret", key, map[string]any{"project": project})
 	}
 
 	if jsonOutput {

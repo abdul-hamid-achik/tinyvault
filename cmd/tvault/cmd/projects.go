@@ -173,7 +173,6 @@ func runProjectsCreate(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create project: %w", err)
 	}
-	recordAudit(v, "project.create", "project", project.Name, nil)
 
 	Success("Project '%s' created", project.Name)
 	fmt.Fprintln(os.Stderr)
@@ -202,7 +201,6 @@ func runProjectsDelete(_ *cobra.Command, args []string) error {
 	if err := v.DeleteProject(name); err != nil {
 		return fmt.Errorf("failed to delete project: %w", err)
 	}
-	recordAudit(v, "project.delete", "project", name, nil)
 
 	Success("Project '%s' deleted", name)
 	return nil

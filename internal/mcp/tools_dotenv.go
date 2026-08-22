@@ -136,7 +136,6 @@ func (s *VaultMCPServer) handleDiffEnv(_ context.Context, _ *sdkmcp.CallToolRequ
 		var allSame bool
 		out.ValueDiffs, allSame = s.diffValues(project, out.InBoth, fileVals)
 		out.InSync = out.InSync && allSame
-		s.audit("secret.read", "secret", "", map[string]any{"project": project, "source": "diff", "compared": len(out.InBoth)})
 	}
 
 	return nil, out, nil
@@ -179,7 +178,7 @@ func (s *VaultMCPServer) diffValues(project string, inBoth []string, fileVals ma
 	diffs := make(map[string]string, len(inBoth))
 	allSame := true
 	for _, k := range inBoth {
-		vv, err := s.vault.GetSecret(project, k)
+		vv, err := s.vault.GetSecretWithMeta(project, k, map[string]any{"source": "diff"})
 		switch {
 		case err != nil:
 			diffs[k] = "error"

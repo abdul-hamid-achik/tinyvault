@@ -134,8 +134,6 @@ func (s *VaultMCPServer) handleGetSecret(_ context.Context, _ *sdkmcp.CallToolRe
 			return nil, getSecretOutput{}, fmt.Errorf("resolve secret: %w", err)
 		}
 
-		s.audit("secret.read", "secret", input.Key, map[string]any{"group": input.Group, "env": input.Env, "source": source})
-
 		return nil, getSecretOutput{
 			Key:     input.Key,
 			Value:   value,
@@ -159,8 +157,6 @@ func (s *VaultMCPServer) handleGetSecret(_ context.Context, _ *sdkmcp.CallToolRe
 	if err != nil {
 		return nil, getSecretOutput{}, fmt.Errorf("get secret: %w", err)
 	}
-
-	s.audit("secret.read", "secret", input.Key, map[string]any{"project": project})
 
 	return nil, getSecretOutput{
 		Key:     input.Key,
@@ -186,8 +182,6 @@ func (s *VaultMCPServer) handleSetSecret(_ context.Context, _ *sdkmcp.CallToolRe
 		return nil, setSecretOutput{}, fmt.Errorf("set secret: %w", err)
 	}
 
-	s.audit("secret.write", "secret", input.Key, map[string]any{"project": project})
-
 	return nil, setSecretOutput{Key: input.Key}, nil
 }
 
@@ -207,8 +201,6 @@ func (s *VaultMCPServer) handleDeleteSecret(_ context.Context, _ *sdkmcp.CallToo
 	if err := s.vault.DeleteSecret(project, input.Key); err != nil {
 		return nil, deleteSecretOutput{}, fmt.Errorf("delete secret: %w", err)
 	}
-
-	s.audit("secret.delete", "secret", input.Key, map[string]any{"project": project})
 
 	return nil, deleteSecretOutput{Key: input.Key, Deleted: true}, nil
 }

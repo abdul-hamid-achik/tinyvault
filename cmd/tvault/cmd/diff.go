@@ -115,12 +115,11 @@ func runDiff(_ *cobra.Command, args []string) error {
 	if diffValues {
 		res.ValueDiffs = make(map[string]string, len(res.InBoth))
 		for _, k := range res.InBoth {
-			vv, gerr := v.GetSecret(project, k)
+			vv, gerr := v.GetSecretWithMeta(project, k, map[string]any{"source": "diff"})
 			if gerr != nil {
 				res.ValueDiffs[k] = "error"
 				continue
 			}
-			recordAudit(v, "secret.read", "secret", k, map[string]any{"project": project, "source": "diff"})
 			if vv == fileKeys[k] {
 				res.ValueDiffs[k] = "same"
 			} else {

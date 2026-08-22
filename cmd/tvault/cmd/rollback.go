@@ -48,11 +48,6 @@ func runRollback(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("rollback %q to v%d: %w", key, rollbackToVersion, err)
 	}
-	recordAudit(v, "secret.rollback", "secret", key, map[string]any{
-		"project":      project,
-		"from_version": rollbackToVersion,
-		"new_version":  newVersion,
-	})
 
 	if jsonOutput {
 		return writeJSON(map[string]any{
