@@ -82,6 +82,9 @@ func (s *VaultMCPServer) handleListProjects(_ context.Context, _ *sdkmcp.CallToo
 }
 
 func (s *VaultMCPServer) handleCreateProject(_ context.Context, _ *sdkmcp.CallToolRequest, input createProjectInput) (*sdkmcp.CallToolResult, createProjectOutput, error) {
+	if err := s.denyAgentWrite(); err != nil {
+		return nil, createProjectOutput{}, err
+	}
 	if !s.policy.CanWrite() {
 		return nil, createProjectOutput{}, fmt.Errorf("write operations are not allowed by policy (access_mode: %s)", s.policy.AccessMode)
 	}
@@ -97,6 +100,9 @@ func (s *VaultMCPServer) handleCreateProject(_ context.Context, _ *sdkmcp.CallTo
 }
 
 func (s *VaultMCPServer) handleDeleteProject(_ context.Context, _ *sdkmcp.CallToolRequest, input deleteProjectInput) (*sdkmcp.CallToolResult, deleteProjectOutput, error) {
+	if err := s.denyAgentWrite(); err != nil {
+		return nil, deleteProjectOutput{}, err
+	}
 	if !s.policy.CanWrite() {
 		return nil, deleteProjectOutput{}, fmt.Errorf("write operations are not allowed by policy (access_mode: %s)", s.policy.AccessMode)
 	}

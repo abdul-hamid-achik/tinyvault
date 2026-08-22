@@ -15,12 +15,14 @@ You need:
 
 1. an initialized vault;
 2. `tvault` available to the MCP host (`npm install -g @thelacanians/tinyvault`, `brew install --cask abdul-hamid-achik/tap/tvault`, or a GitHub release binary);
-3. `TVAULT_PASSPHRASE` in the server process's environment; and
+3. either `TVAULT_PASSPHRASE` in the server process, **or** a running [`tvault agent`](/guide/agent) on the same machine; and
 4. an access policy for anything beyond fail-closed metadata access.
 
-`tvault mcp` cannot prompt for a passphrase because stdin carries MCP messages. Supply the passphrase through the host's secret/environment configuration or a launcher that retrieves it from an OS credential store. Do not commit it in an MCP configuration file.
+`tvault mcp` cannot prompt for a passphrase because stdin carries MCP messages. If a local agent is already unlocked, the MCP server uses it for secret **reads** and does not need `TVAULT_PASSPHRASE` in the host config. Writes still need the passphrase — the agent is read-only. Otherwise supply the passphrase through the host's environment or a credential-store launcher. Do not commit it in an MCP configuration file.
 
-The server validates the passphrase at startup, caches the derived key, and reopens the database only for each vault request. Restart it after rotating the passphrase.
+`--connect auto` (default) prefers a passphrase when one is set, otherwise the agent. `--connect unix://PATH` pins the agent socket. `--connect none` or `--no-agent` always unlocks with a passphrase.
+
+When started with a passphrase, the server validates it, caches the derived key, and reopens the database only for each vault request. Restart it after rotating the passphrase.
 
 ## Connect an MCP host
 
@@ -57,7 +59,7 @@ useful for hosts where you do not want a global install:
 }
 ```
 
-Make sure the host process inherits `TVAULT_PASSPHRASE`. GUI applications often do not inherit your interactive shell environment, so use the host's environment controls or a credential-store launcher in that case.
+If you already run `tvault agent start`, GUI hosts do not need `TVAULT_PASSPHRASE` in their config. Otherwise the host process must inherit the passphrase; GUI applications often do not inherit your interactive shell environment.
 
 `tvault mcp-server` remains an alias for compatibility.
 

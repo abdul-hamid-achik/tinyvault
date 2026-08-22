@@ -84,6 +84,9 @@ func (s *VaultMCPServer) handleSecretHistory(_ context.Context, _ *sdkmcp.CallTo
 }
 
 func (s *VaultMCPServer) handleRollbackSecret(_ context.Context, _ *sdkmcp.CallToolRequest, input rollbackSecretInput) (*sdkmcp.CallToolResult, rollbackSecretOutput, error) {
+	if err := s.denyAgentWrite(); err != nil {
+		return nil, rollbackSecretOutput{}, err
+	}
 	if !s.policy.CanWrite() {
 		return nil, rollbackSecretOutput{}, fmt.Errorf("write access is disabled by policy")
 	}

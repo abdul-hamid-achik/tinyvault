@@ -178,7 +178,7 @@ func (s *VaultMCPServer) diffValues(project string, inBoth []string, fileVals ma
 	diffs := make(map[string]string, len(inBoth))
 	allSame := true
 	for _, k := range inBoth {
-		vv, err := s.vault.GetSecretWithMeta(project, k, map[string]any{"source": "diff"})
+		vv, err := s.readSecretMeta(project, k, map[string]any{"source": "diff"})
 		switch {
 		case err != nil:
 			diffs[k] = "error"
@@ -202,8 +202,13 @@ func (s *VaultMCPServer) handleSyncEnv(_ context.Context, _ *sdkmcp.CallToolRequ
 	if !s.policy.CanAccessProject(project) {
 		return nil, syncEnvOutput{}, fmt.Errorf("project %q is not allowed by policy", project)
 	}
-	if dir != tvsync.Pull && !s.policy.CanWrite() {
-		return nil, syncEnvOutput{}, fmt.Errorf("write access is disabled by policy (push/mirror require it)")
+	if dir != tvsync.Pull {
+		if werr := s.denyAgentWrite(); werr != nil {
+			return nil, syncEnvOutput{}, werr
+		}
+		if !s.policy.CanWrite() {
+			return nil, syncEnvOutput{}, fmt.Errorf("write access is disabled by policy (push/mirror require it)")
+		}
 	}
 	path := input.Path
 	if path == "" {
@@ -256,7 +261,7 @@ func (s *VaultMCPServer) handleExportEnvEncrypted(_ context.Context, _ *sdkmcp.C
 		return nil, exportEnvEncryptedOutput{}, fmt.Errorf("project %q has no recipients; share it first (vault_share_project) or use vault_seal_for_recipients with explicit recipients", project)
 	}
 
-	all, err := s.vault.GetAllSecrets(project)
+	all, err := s.readAllSecrets(project)
 	if err != nil {
 		return nil, exportEnvEncryptedOutput{}, fmt.Errorf("get secrets: %w", err)
 	}

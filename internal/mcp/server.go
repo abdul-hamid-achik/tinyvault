@@ -8,6 +8,7 @@ import (
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/abdul-hamid-achik/tinyvault/internal/agent"
 	"github.com/abdul-hamid-achik/tinyvault/internal/crypto"
 	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
 )
@@ -38,6 +39,7 @@ type VaultMCPServer struct {
 	reopen  bool
 	dir     string
 	kek     []byte
+	agent   *agent.Client // optional; used for decrypts when kek is nil
 	vaultMu sync.Mutex
 	reads   atomic.Int64
 }
@@ -89,9 +91,20 @@ func NewReopeningVaultMCPServer(dir string, kek []byte, policy *AccessPolicy) *V
 	s := newVaultMCPServer(policy)
 	s.reopen = true
 	s.dir = dir
-	s.kek = make([]byte, len(kek))
-	copy(s.kek, kek)
+	if len(kek) > 0 {
+		s.kek = make([]byte, len(kek))
+		copy(s.kek, kek)
+	}
 	s.server.AddReceivingMiddleware(s.vaultMiddleware)
+	return s
+}
+
+// NewAgentMCPServer is the production path when the host has no passphrase
+// but a local tvault agent is reachable. Decrypts go through the agent
+// (read-only); metadata uses a locked vault open. Writes fail with ErrLocked.
+func NewAgentMCPServer(dir string, client *agent.Client, policy *AccessPolicy) *VaultMCPServer {
+	s := NewReopeningVaultMCPServer(dir, nil, policy)
+	s.agent = client
 	return s
 }
 
@@ -176,20 +189,26 @@ func (s *VaultMCPServer) vaultMiddleware(next sdkmcp.MethodHandler) sdkmcp.Metho
 		s.vaultMu.Lock()
 		defer s.vaultMu.Unlock()
 
-		if s.kek == nil {
+		if len(s.kek) == 0 && s.agent == nil {
 			return nil, fmt.Errorf("mcp server is shutting down")
 		}
 		v, err := vault.Open(s.dir)
 		if err != nil {
 			return nil, err
 		}
-		defer v.Close()
-		if err := v.UnlockWithKEK(s.kek); err != nil {
-			return nil, fmt.Errorf("unlock: %w (passphrase rotated? restart 'tvault mcp')", err)
+		if len(s.kek) > 0 {
+			if err := v.UnlockWithKEK(s.kek); err != nil {
+				_ = v.Close()
+				return nil, fmt.Errorf("unlock: %w (passphrase rotated? restart 'tvault mcp')", err)
+			}
 		}
-
 		s.vault = v
-		defer func() { s.vault = nil }()
+		defer func() {
+			if s.vault != nil {
+				_ = s.vault.Close()
+				s.vault = nil
+			}
+		}()
 		return next(ctx, method, req)
 	}
 }

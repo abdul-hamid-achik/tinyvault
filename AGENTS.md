@@ -89,7 +89,7 @@ cmd/tvault/
     projects.go / use.go     # tvault projects list/create / tvault use PROJECT
     backup.go                # tvault backup <path> / tvault restore <path> (restore is a separate command)
     rotate.go                # tvault key rotate
-    mcp_server.go            # tvault mcp (alias: mcp-server) (stdio MCP transport)
+    mcp_server.go            # tvault mcp (alias: mcp-server); --connect auto|none|unix:// agent reads
     ci.go                    # tvault ci init --mode=passphrase|identity (generate CI workflow files)
     doctor.go                # tvault doctor (read-only setup diagnostics; --json)
     selfupdate.go            # tvault self-update (alias: upgrade) — checksum-verified in-place binary update
@@ -150,6 +150,8 @@ internal/
     identity_test.go         # New/List/Load round-trip + name validation
   mcp/
     server.go                # VaultMCPServer, tool registration, Run(); reopen-per-request middleware
+                             # (KEK cache or agent-backed reads via NewAgentMCPServer)
+    reads.go                 # readSecret/readAllSecrets: vault or local agent when KEK is absent
     reopen_test.go           # coexistence: server doesn't hold the bbolt lock; reopens per request
     tools_projects.go        # vault_list/create/delete_project
     tools_secrets.go         # vault_list/get/set/delete_secret
@@ -299,11 +301,14 @@ Using `github.com/modelcontextprotocol/go-sdk` v1.6.1:
 - Production: `mcp.StdioTransport{}` for stdio mode
 - **Reopen-per-request invariant.** `tvault mcp` (`NewReopeningVaultMCPServer`)
   must NOT hold the vault open — bbolt is single-writer and that would block the
-  CLI. It caches the KEK and reopens+unlocks per request via
+  CLI. With a passphrase it caches the KEK and reopens+unlocks per request via
   `Server.AddReceivingMiddleware` (`vaultMiddleware`, gating `tools/call` +
   `resources/read` through `methodNeedsVault`), serialized by a mutex, exactly
-  like the agent. Don't "optimize" it into a held-open vault. `NewVaultMCPServer`
-  (held-open) stays for tests only.
+  like the agent. Without a passphrase, `NewAgentMCPServer` serves decrypts
+  through the local agent (read-only) and opens the vault locked for metadata;
+  it must release the bbolt lock before any agent round-trip. Don't "optimize"
+  either path into a held-open vault. `NewVaultMCPServer` (held-open) stays for
+  tests only. `--connect auto|none|unix://PATH` selects the backend.
 
 ## Commit Checklist
 
@@ -322,7 +327,7 @@ Before every commit:
 
 | Variable               | Description                                                                |
 |------------------------|----------------------------------------------------------------------------|
-| `TVAULT_PASSPHRASE`    | Vault passphrase (CI/CD, scripts, MCP server — skips interactive prompt).  |
+| `TVAULT_PASSPHRASE`    | Vault passphrase (CI/CD, scripts, MCP writes — skips interactive prompt). MCP reads can use a running agent instead. |
 | `TVAULT_NO_AGENT`      | Bypass a running `tvault agent` and unlock the vault directly.             |
 | `TVAULT_AGENT_TOKEN`   | Capability token for a `--require-token` agent (privilege separation; same-uid is NOT a threat it defends — see [token honesty](docs/reference/security.md#token-honesty)). |
 | `TVAULT_IDENTITY_KEY`  | Private identity (`tvault-key1…`) for passphrase-free decrypt in CI/ssh/agents (`resolveIdentity`); a local key file takes precedence + warns. Never echoed in errors. |

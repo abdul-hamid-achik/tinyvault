@@ -32,6 +32,9 @@ func (s *VaultMCPServer) registerGenerateTools() {
 }
 
 func (s *VaultMCPServer) handleGenerateSecret(_ context.Context, _ *sdkmcp.CallToolRequest, input generateSecretInput) (*sdkmcp.CallToolResult, generateSecretOutput, error) {
+	if err := s.denyAgentWrite(); err != nil {
+		return nil, generateSecretOutput{}, err
+	}
 	if !s.policy.CanWrite() {
 		return nil, generateSecretOutput{}, fmt.Errorf("write operations are not allowed by policy (access_mode: %s)", s.policy.AccessMode)
 	}
@@ -59,7 +62,7 @@ func (s *VaultMCPServer) handleGenerateSecret(_ context.Context, _ *sdkmcp.CallT
 		return nil, generateSecretOutput{}, fmt.Errorf("generate secret: %w", err)
 	}
 
-	if err := s.vault.SetSecret(project, input.Key, value); err != nil {
+	if err := s.writeLockedHint(s.vault.SetSecret(project, input.Key, value)); err != nil {
 		return nil, generateSecretOutput{}, fmt.Errorf("store secret: %w", err)
 	}
 

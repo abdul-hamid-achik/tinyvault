@@ -14,7 +14,7 @@ import (
 
 // Client talks to a running agent, one request per connection.
 type Client struct {
-	dir     string
+	socket  string
 	timeout time.Duration
 	token   string
 }
@@ -34,16 +34,21 @@ func dialUnix(path string, timeout time.Duration) (net.Conn, error) {
 // Dial returns a client if an agent socket is reachable under dir, else an
 // error (the caller falls back to direct vault access).
 func Dial(dir string, timeout time.Duration) (*Client, error) {
-	conn, err := dialUnix(socketPath(dir), timeout)
+	return DialSocket(socketPath(dir), timeout)
+}
+
+// DialSocket returns a client for an explicit unix socket path.
+func DialSocket(socket string, timeout time.Duration) (*Client, error) {
+	conn, err := dialUnix(socket, timeout)
 	if err != nil {
 		return nil, err
 	}
 	_ = conn.Close()
-	return &Client{dir: dir, timeout: timeout}, nil
+	return &Client{socket: socket, timeout: timeout}, nil
 }
 
 func (c *Client) roundTrip(req Request) (Response, error) {
-	conn, err := dialUnix(socketPath(c.dir), c.timeout)
+	conn, err := dialUnix(c.socket, c.timeout)
 	if err != nil {
 		return Response{}, err
 	}

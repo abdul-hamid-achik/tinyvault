@@ -187,6 +187,9 @@ func (s *VaultMCPServer) handlePreviewEnvImport(_ context.Context, _ *sdkmcp.Cal
 }
 
 func (s *VaultMCPServer) handleImportEnvFiles(_ context.Context, _ *sdkmcp.CallToolRequest, input importEnvFilesInput) (*sdkmcp.CallToolResult, importEnvFilesOutput, error) {
+	if err := s.denyAgentWrite(); err != nil {
+		return nil, importEnvFilesOutput{}, err
+	}
 	if !s.policy.CanWrite() {
 		return nil, importEnvFilesOutput{}, fmt.Errorf("write operations are not allowed by policy (access_mode: %s)", s.policy.AccessMode)
 	}
@@ -224,7 +227,7 @@ func (s *VaultMCPServer) handleImportEnvFiles(_ context.Context, _ *sdkmcp.CallT
 			continue
 		}
 
-		if err := s.vault.SetSecret(project, entry.Key, entry.Value); err != nil {
+		if err := s.writeLockedHint(s.vault.SetSecret(project, entry.Key, entry.Value)); err != nil {
 			return nil, importEnvFilesOutput{}, fmt.Errorf("set secret %s: %w", entry.Key, err)
 		}
 

@@ -153,7 +153,7 @@ func (s *VaultMCPServer) handleGetSecret(_ context.Context, _ *sdkmcp.CallToolRe
 		return nil, getSecretOutput{}, fmt.Errorf("secret value read limit reached for this MCP session")
 	}
 
-	value, err := s.vault.GetSecret(project, input.Key)
+	value, err := s.readSecret(project, input.Key)
 	if err != nil {
 		return nil, getSecretOutput{}, fmt.Errorf("get secret: %w", err)
 	}
@@ -166,6 +166,9 @@ func (s *VaultMCPServer) handleGetSecret(_ context.Context, _ *sdkmcp.CallToolRe
 }
 
 func (s *VaultMCPServer) handleSetSecret(_ context.Context, _ *sdkmcp.CallToolRequest, input setSecretInput) (*sdkmcp.CallToolResult, setSecretOutput, error) {
+	if err := s.denyAgentWrite(); err != nil {
+		return nil, setSecretOutput{}, err
+	}
 	if !s.policy.CanWrite() {
 		return nil, setSecretOutput{}, fmt.Errorf("write operations are not allowed by policy (access_mode: %s)", s.policy.AccessMode)
 	}
@@ -178,7 +181,7 @@ func (s *VaultMCPServer) handleSetSecret(_ context.Context, _ *sdkmcp.CallToolRe
 		return nil, setSecretOutput{}, fmt.Errorf("secret %q is not allowed by policy", input.Key)
 	}
 
-	if err := s.vault.SetSecret(project, input.Key, input.Value); err != nil {
+	if err := s.writeLockedHint(s.vault.SetSecret(project, input.Key, input.Value)); err != nil {
 		return nil, setSecretOutput{}, fmt.Errorf("set secret: %w", err)
 	}
 
@@ -186,6 +189,9 @@ func (s *VaultMCPServer) handleSetSecret(_ context.Context, _ *sdkmcp.CallToolRe
 }
 
 func (s *VaultMCPServer) handleDeleteSecret(_ context.Context, _ *sdkmcp.CallToolRequest, input deleteSecretInput) (*sdkmcp.CallToolResult, deleteSecretOutput, error) {
+	if err := s.denyAgentWrite(); err != nil {
+		return nil, deleteSecretOutput{}, err
+	}
 	if !s.policy.CanWrite() {
 		return nil, deleteSecretOutput{}, fmt.Errorf("write operations are not allowed by policy (access_mode: %s)", s.policy.AccessMode)
 	}
@@ -198,7 +204,7 @@ func (s *VaultMCPServer) handleDeleteSecret(_ context.Context, _ *sdkmcp.CallToo
 		return nil, deleteSecretOutput{}, fmt.Errorf("secret %q is not allowed by policy", input.Key)
 	}
 
-	if err := s.vault.DeleteSecret(project, input.Key); err != nil {
+	if err := s.writeLockedHint(s.vault.DeleteSecret(project, input.Key)); err != nil {
 		return nil, deleteSecretOutput{}, fmt.Errorf("delete secret: %w", err)
 	}
 

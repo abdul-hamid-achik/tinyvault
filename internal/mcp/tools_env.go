@@ -65,7 +65,7 @@ func (s *VaultMCPServer) handleExportEnv(_ context.Context, _ *sdkmcp.CallToolRe
 			return nil, exportEnvOutput{}, fmt.Errorf("resolve secrets: %w", err)
 		}
 	} else {
-		allSecrets, err = s.vault.GetAllSecrets(project)
+		allSecrets, err = s.readAllSecrets(project)
 		if err != nil {
 			return nil, exportEnvOutput{}, fmt.Errorf("get secrets: %w", err)
 		}

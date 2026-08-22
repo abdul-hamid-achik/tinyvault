@@ -111,6 +111,9 @@ func (s *VaultMCPServer) handleGetCurrentProject(_ context.Context, _ *sdkmcp.Ca
 }
 
 func (s *VaultMCPServer) handleSetCurrentProject(_ context.Context, _ *sdkmcp.CallToolRequest, input setCurrentProjectInput) (*sdkmcp.CallToolResult, setCurrentProjectOutput, error) {
+	if err := s.denyAgentWrite(); err != nil {
+		return nil, setCurrentProjectOutput{}, err
+	}
 	if !s.policy.CanWrite() {
 		return nil, setCurrentProjectOutput{}, fmt.Errorf("write access is disabled by policy")
 	}

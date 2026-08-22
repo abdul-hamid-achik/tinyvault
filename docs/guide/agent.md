@@ -36,12 +36,13 @@ nohup tvault agent start >/dev/null 2>&1 &
 
 The agent runs in the **foreground** and never daemonizes itself. Background it with `&`, `nohup`, a systemd `Type=simple` unit, or a launchd agent.
 
-Once it is running, `get`, `env`, and `run` automatically route through it:
+Once it is running, `get`, `env`, `run`, `ssh`, `docker`, and `tvault mcp` automatically route reads through it:
 
 ```bash
 tvault get DATABASE_URL     # no prompt, no Argon2id
 tvault env --format shell   # same
 tvault run -- npm start     # same
+tvault mcp                  # GUI hosts need no TVAULT_PASSPHRASE for reads
 ```
 
 If no agent is running, these commands fall back to a direct unlock (which prompts), so nothing breaks when the agent is off.

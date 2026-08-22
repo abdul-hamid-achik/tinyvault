@@ -76,6 +76,9 @@ func (s *VaultMCPServer) registerSharingTools() {
 // decodes the recipient, and runs op against the resolved project. It is the
 // shared core of share/unshare so the two handlers stay thin.
 func (s *VaultMCPServer) recipientOp(recipient, project string, op func(project string, pub []byte) error) (string, error) {
+	if err := s.denyAgentWrite(); err != nil {
+		return "", err
+	}
 	if !s.policy.CanWrite() {
 		return "", fmt.Errorf("write access is disabled by policy")
 	}

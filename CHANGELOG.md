@@ -22,6 +22,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   CLI: BuildKit `--secret id=KEY,env=KEY` mounts, compose `${KEY}`
   interpolation, and `docker run -e KEY` (name only). Values stay off
   the docker command line.
+- `tvault mcp --connect auto|none|unix://PATH` can serve secret reads
+  through a running local agent, so GUI hosts need not put
+  `TVAULT_PASSPHRASE` in their config. Writes still need the passphrase.
 
 ### Changed
 

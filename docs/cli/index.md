@@ -849,9 +849,14 @@ TinyVault speaks MCP through the same binary. See the [MCP overview](/mcp/) and 
 
 ```bash
 tvault mcp
+tvault mcp --connect unix://$HOME/.tvault/agent.sock
 ```
 
-Start the MCP server over stdio. Loads `~/.tvault/mcp-policy.yaml` and serves the agent-facing tools, resources, and prompts. Your MCP host (Claude Code, Claude Desktop, or any MCP client) usually launches this for you rather than you running it by hand. It unlocks the vault from `TVAULT_PASSPHRASE` (there is no prompt over stdio). Alias: `mcp-server`. No command-local flags.
+Start the MCP server over stdio. Loads `~/.tvault/mcp-policy.yaml` and serves the agent-facing tools, resources, and prompts. Your MCP host usually launches this for you. If a local `tvault agent` is running, secret **reads** go through it and `TVAULT_PASSPHRASE` is not required; writes still need the passphrase. `--connect auto` (default) prefers a passphrase when set, otherwise the agent; `unix://PATH` pins the socket; `none` (or `--no-agent`) forces a passphrase unlock. Alias: `mcp-server`.
+
+| Flag | Description |
+| --- | --- |
+| `--connect auto` / `none` / `unix://PATH` | How to unlock: agent auto-detect, passphrase only, or an explicit agent socket. |
 
 ::: warning MCP output redaction is a safety net, not a control
 When policy enables `redact_output`, redaction replaces literal values longer than three characters and can be evaded by shortening or transforming a value (e.g. base64). It is a last line of defense, not access control. `vault_get_secret` deliberately returns plaintext, and `vault_run_with_secrets` can carry plaintext through arbitrary child output.

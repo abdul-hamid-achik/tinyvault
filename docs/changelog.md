@@ -37,6 +37,8 @@ If `tvault` was installed from the retired formula, migrate once with
 - `tvault docker build` / `compose` / `run` / `init` wraps the Docker
   CLI: BuildKit secret mounts, compose interpolation, and
   `docker run -e KEY` (name only). Values stay off the docker command line.
+- `tvault mcp --connect` can serve secret reads through a running local
+  agent so GUI hosts need not store `TVAULT_PASSPHRASE`.
 
 ### Changed
 

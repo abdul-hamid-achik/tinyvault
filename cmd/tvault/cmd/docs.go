@@ -266,8 +266,8 @@ func fullCatalog() docsCatalog {
 			{
 				Name:        "mcp",
 				Summary:     "MCP server over stdio with 49 tools, 2 prompts, 3 resources.",
-				Commands:    []string{"tvault mcp", "tvault mcp-server"},
-				Description: "Value-minimizing workflows keep raw values out of most tool results: vault_run_with_secrets injects env vars, vault_export_env writes to disk and returns the path, and vault_generate_secret returns non-secret generation metadata but not the generated value. Explicit raw-value tools such as vault_get_secret and vault_set_secret remain policy-gated. (`mcp-server` remains a backward-compatible alias.)",
+				Commands:    []string{"tvault mcp", "tvault mcp --connect auto", "tvault mcp-server"},
+				Description: "Value-minimizing workflows keep raw values out of most tool results: vault_run_with_secrets injects env vars, vault_export_env writes to disk and returns the path, and vault_generate_secret returns non-secret generation metadata but not the generated value. Explicit raw-value tools such as vault_get_secret and vault_set_secret remain policy-gated. `--connect auto` uses a running local agent for secret reads when TVAULT_PASSPHRASE is unset (writes still need the passphrase). (`mcp-server` remains a backward-compatible alias.)",
 			},
 			{
 				Name:        "relational-search",
@@ -436,7 +436,7 @@ func fullCatalog() docsCatalog {
 			{
 				Slug:        "mcp",
 				Title:       "MCP server",
-				Description: "Starts a Model Context Protocol server on stdio. Add to your MCP host config with command=tvault args=[mcp] env={TVAULT_PASSPHRASE:...}. Explicit access policies must contain every security field; empty allowlists and a zero read cap deny access. Prefer value-minimizing workflows such as vault_run_with_secrets and the write-gated vault_export_env over the deliberately plaintext-returning vault_get_secret. Environment inheritance checks both child and base project policy.",
+				Description: "Starts a Model Context Protocol server on stdio. Add to your MCP host config with command=tvault args=[mcp]. If a local agent is running, secret reads do not need TVAULT_PASSPHRASE (`--connect auto`, or unix://PATH); writes still need the passphrase. Explicit access policies must contain every security field; empty allowlists and a zero read cap deny access. Prefer value-minimizing workflows such as vault_run_with_secrets and the write-gated vault_export_env over the deliberately plaintext-returning vault_get_secret. Environment inheritance checks both child and base project policy.",
 			},
 			{
 				Slug:        "self-update",

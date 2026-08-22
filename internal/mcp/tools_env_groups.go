@@ -205,7 +205,7 @@ func (s *VaultMCPServer) resolveAllWithInheritanceMCP(group *vault.EnvGroup, env
 	if accessErr := s.requireEnvProjectAccess(group, envName); accessErr != nil {
 		return nil, accessErr
 	}
-	secrets, err := s.vault.GetAllSecrets(childProject)
+	secrets, err := s.readAllSecrets(childProject)
 	if err != nil {
 		return nil, fmt.Errorf("get secrets for %s: %w", childProject, err)
 	}
@@ -215,7 +215,7 @@ func (s *VaultMCPServer) resolveAllWithInheritanceMCP(group *vault.EnvGroup, env
 			if err != nil {
 				return nil, err
 			}
-			baseSecrets, err := s.vault.GetAllSecrets(baseProject)
+			baseSecrets, err := s.readAllSecrets(baseProject)
 			if err != nil {
 				return nil, fmt.Errorf("get secrets for %s: %w", baseProject, err)
 			}
@@ -317,6 +317,9 @@ func (s *VaultMCPServer) registerEnvGroupTools() {
 }
 
 func (s *VaultMCPServer) handleEnvGroupCreate(_ context.Context, _ *sdkmcp.CallToolRequest, input envGroupCreateInput) (*sdkmcp.CallToolResult, envGroupOutput, error) {
+	if err := s.denyAgentWrite(); err != nil {
+		return nil, envGroupOutput{}, err
+	}
 	if !s.policy.CanWrite() {
 		return nil, envGroupOutput{}, fmt.Errorf("write operations are not allowed by policy")
 	}
@@ -403,6 +406,9 @@ func (s *VaultMCPServer) handleEnvDiff(_ context.Context, _ *sdkmcp.CallToolRequ
 }
 
 func (s *VaultMCPServer) handleEnvPromote(_ context.Context, _ *sdkmcp.CallToolRequest, input envPromoteInput) (*sdkmcp.CallToolResult, envPromoteOutput, error) {
+	if err := s.denyAgentWrite(); err != nil {
+		return nil, envPromoteOutput{}, err
+	}
 	if !s.policy.CanWrite() {
 		return nil, envPromoteOutput{}, fmt.Errorf("write operations are not allowed by policy")
 	}
@@ -462,7 +468,7 @@ func (s *VaultMCPServer) buildSealBody(
 			continue
 		}
 
-		secrets, gErr := s.vault.GetAllSecrets(e.Project)
+		secrets, gErr := s.readAllSecrets(e.Project)
 		if gErr != nil {
 			return "", nil, nil, fmt.Errorf("get secrets for %s: %w", e.Project, gErr)
 		}
@@ -574,6 +580,9 @@ func (s *VaultMCPServer) handleEnvSeal(_ context.Context, _ *sdkmcp.CallToolRequ
 }
 
 func (s *VaultMCPServer) handleEnvInherit(_ context.Context, _ *sdkmcp.CallToolRequest, input envInheritInput) (*sdkmcp.CallToolResult, envInheritOutput, error) {
+	if err := s.denyAgentWrite(); err != nil {
+		return nil, envInheritOutput{}, err
+	}
 	if !s.policy.CanWrite() {
 		return nil, envInheritOutput{}, fmt.Errorf("write operations are not allowed by policy")
 	}
@@ -711,6 +720,9 @@ type envGroupAddInput struct {
 }
 
 func (s *VaultMCPServer) handleEnvGroupAdd(_ context.Context, _ *sdkmcp.CallToolRequest, input envGroupAddInput) (*sdkmcp.CallToolResult, envGroupOutput, error) {
+	if err := s.denyAgentWrite(); err != nil {
+		return nil, envGroupOutput{}, err
+	}
 	if !s.policy.CanWrite() {
 		return nil, envGroupOutput{}, fmt.Errorf("write operations are not allowed by policy")
 	}
@@ -742,6 +754,9 @@ type envGroupRemoveInput struct {
 }
 
 func (s *VaultMCPServer) handleEnvGroupRemove(_ context.Context, _ *sdkmcp.CallToolRequest, input envGroupRemoveInput) (*sdkmcp.CallToolResult, envGroupOutput, error) {
+	if err := s.denyAgentWrite(); err != nil {
+		return nil, envGroupOutput{}, err
+	}
 	if !s.policy.CanWrite() {
 		return nil, envGroupOutput{}, fmt.Errorf("write operations are not allowed by policy")
 	}
@@ -770,6 +785,9 @@ type envGroupDeleteInput struct {
 }
 
 func (s *VaultMCPServer) handleEnvGroupDelete(_ context.Context, _ *sdkmcp.CallToolRequest, input envGroupDeleteInput) (*sdkmcp.CallToolResult, struct{}, error) {
+	if err := s.denyAgentWrite(); err != nil {
+		return nil, struct{}{}, err
+	}
 	if !s.policy.CanWrite() {
 		return nil, struct{}{}, fmt.Errorf("write operations are not allowed by policy")
 	}
@@ -799,6 +817,9 @@ type envPinInput struct {
 }
 
 func (s *VaultMCPServer) requireEnvKeyWriteAccess(groupName, envName, key string) error {
+	if err := s.denyAgentWrite(); err != nil {
+		return err
+	}
 	if !s.policy.CanWrite() {
 		return fmt.Errorf("write operations are not allowed by policy")
 	}

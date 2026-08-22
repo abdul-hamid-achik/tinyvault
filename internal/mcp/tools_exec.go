@@ -96,9 +96,20 @@ func (s *VaultMCPServer) handleRunWithSecrets(ctx context.Context, _ *sdkmcp.Cal
 			return nil, runResult{}, fmt.Errorf("resolve secrets: %w", err)
 		}
 	} else {
-		allSecrets, err = s.vault.GetAllSecrets(project)
-		if err != nil {
-			return nil, runResult{}, fmt.Errorf("get secrets: %w", err)
+		if len(input.Secrets) > 0 || input.Prefix != "" {
+			var missing []string
+			allSecrets, missing, err = s.readSelectedSecrets(project, input.Secrets, input.Prefix)
+			if err != nil {
+				return nil, runResult{}, fmt.Errorf("get secrets: %w", err)
+			}
+			if len(missing) > 0 {
+				return nil, runResult{}, fmt.Errorf("secret %q not found in project %q", missing[0], project)
+			}
+		} else {
+			allSecrets, err = s.readAllSecrets(project)
+			if err != nil {
+				return nil, runResult{}, fmt.Errorf("get secrets: %w", err)
+			}
 		}
 	}
 

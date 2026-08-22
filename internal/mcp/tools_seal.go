@@ -60,7 +60,7 @@ func (s *VaultMCPServer) handleSealForRecipients(_ context.Context, _ *sdkmcp.Ca
 		return nil, sealForRecipientsOutput{}, fmt.Errorf("project %q is not allowed by policy", project)
 	}
 
-	allSecrets, err := s.vault.GetAllSecrets(project)
+	allSecrets, err := s.readAllSecrets(project)
 	if err != nil {
 		return nil, sealForRecipientsOutput{}, fmt.Errorf("get secrets: %w", err)
 	}
