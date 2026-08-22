@@ -1,11 +1,11 @@
 ---
 title: Run & Environment
-description: Inject TinyVault secrets into a process or your shell at runtime with tvault run and tvault env, without leaving plaintext on disk.
+description: Inject TinyVault secrets into a process, a remote SSH command, or your shell at runtime with tvault run, tvault ssh, and tvault env.
 ---
 
 # Run & Environment
 
-Use your secrets at runtime without writing them to disk or pasting them into shell history. `tvault run` injects a project's secrets into a single child process, `tvault env` emits them for `eval`, and `tvault export` writes a file when you genuinely need one. Committed `.env` templates can carry `tvault://` placeholders that resolve against the vault at run time.
+Use your secrets at runtime without writing them to disk or pasting them into shell history. `tvault run` injects a project's secrets into a single child process, `tvault ssh` does the same for a remote command over SSH, `tvault env` emits them for `eval`, and `tvault export` writes a file when you genuinely need one. Committed `.env` templates can carry `tvault://` placeholders that resolve against the vault at run time.
 
 ## tvault run — inject secrets into one process
 
@@ -153,6 +153,23 @@ tvault env --identity deploy --group app --env preview \
 | `--identity <name>` | Read a shared project with an X25519 identity instead of the vault passphrase. |
 | `--group <name>` | Resolve secrets through an [environment group](/guide/env-groups)'s inheritance chain. |
 | `--env <name>` | Environment within the group (requires `--group`). |
+
+## tvault ssh — inject secrets into a remote command
+
+`tvault ssh <destination> -- <command>` is `tvault run` over SSH. It loads the project locally, then streams a POSIX `export` script over the SSH channel into `sh -s` on the remote host. The remote process sees the secrets as environment variables. Nothing is written to remote disk, and values do not appear on the `ssh` command line (so they do not show up in `ps`).
+
+```bash
+tvault ssh deploy@prod -- systemctl restart api
+tvault ssh --only DATABASE_URL deploy@prod -- ./migrate
+tvault ssh --ssh-arg=-p --ssh-arg=2222 deploy@prod -- hostname
+tvault ssh --identity ci deploy@prod -- docker compose up
+```
+
+The remote host needs a POSIX `sh`. Extra OpenSSH client flags (`-p`, `-i`, `-F`, …) go in repeatable `--ssh-arg` values so TinyVault does not parse them as its own flags. `--only`, `--prefix`, `--strict`, `--identity`, `--group`, and `--env` work the same as on `tvault run`.
+
+::: warning
+The secrets are still plaintext in the remote process environment — the same residual risk as `tvault run`. Prefer `--only` / `--prefix` so the remote command receives only the keys it needs. Do not use `tvault ssh` to dump a `.env` onto the server; for a committed remote artifact, use [committable secrets](/guide/committable-secrets).
+:::
 
 ## tvault env — emit secrets for your shell
 

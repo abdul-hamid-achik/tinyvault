@@ -3,14 +3,10 @@ package cmd
 import (
 	"encoding/base64"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
-
-	"github.com/abdul-hamid-achik/tinyvault/internal/crypto"
-	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
 )
 
 var (
@@ -67,136 +63,6 @@ func init() {
 func envSecrets() (map[string]string, error) {
 	secrets, _, err := envSecretsSelected(nil, "")
 	return secrets, err
-}
-
-func envSecretsSelected(only []string, prefix string) (map[string]string, []string, error) {
-	if err := validateGroupEnvFlags(envGroupFlag, envEnvFlag); err != nil {
-		return nil, nil, err
-	}
-	identityRequested := envIdentity != "" || strings.TrimSpace(os.Getenv(envIdentityKey)) != ""
-
-	// Resolution through environment group inheritance.
-	if envGroupFlag != "" && envEnvFlag != "" {
-		var v *vault.Vault
-		var id *crypto.Identity
-		var source string
-		var err error
-		if identityRequested {
-			id, source, err = resolveIdentity(envIdentity)
-			if err != nil {
-				return nil, nil, err
-			}
-			if id == nil {
-				return nil, nil, fmt.Errorf("no identity available: pass --identity <name> or set %s", envIdentityKey)
-			}
-			v, err = vault.Open(getVaultDir())
-			if err != nil {
-				return nil, nil, fmt.Errorf("vault not found at %s, run 'tvault init' first: %w", getVaultDir(), err)
-			}
-			warnEnvKeyUsed(os.Stderr, source, "env")
-		} else {
-			v, err = openAndUnlockVault()
-		}
-		if err != nil {
-			return nil, nil, err
-		}
-		defer v.Close()
-		selectorsPresent := len(only) > 0 || prefix != ""
-		if identityRequested && selectorsPresent {
-			selected, missing, _, selectErr := resolveSelectedWithInheritanceIdentity(v, id, envGroupFlag, envEnvFlag, only, prefix)
-			if selectErr != nil {
-				return nil, nil, selectErr
-			}
-			recordAudit(v, "secret.read", "environment_group", envGroupFlag, map[string]any{
-				"via": "identity", "source": source, "environment": envEnvFlag, "selected": true,
-			})
-			return selected, missing, nil
-		}
-		if identityRequested {
-			secrets, _, readErr := resolveAllWithInheritanceIdentity(v, id, envGroupFlag, envEnvFlag)
-			if readErr != nil {
-				return nil, nil, readErr
-			}
-			recordAudit(v, "secret.read", "environment_group", envGroupFlag, map[string]any{
-				"via": "identity", "source": source, "environment": envEnvFlag,
-			})
-			return secrets, nil, nil
-		}
-		if selectorsPresent {
-			selected, missing, _, selectErr := resolveSelectedWithInheritance(v, envGroupFlag, envEnvFlag, only, prefix)
-			if selectErr != nil {
-				return nil, nil, selectErr
-			}
-			return selected, missing, nil
-		}
-		secrets, _, err := resolveAllWithInheritance(v, envGroupFlag, envEnvFlag)
-		if err != nil {
-			return nil, nil, err
-		}
-		return secrets, nil, nil
-	}
-
-	// The recipient path is opt-in only: a stray ~/.tvault/identities/default.key
-	// must not silently divert a plain `tvault env` away from the passphrase.
-	if identityRequested {
-		id, source, err := resolveIdentity(envIdentity)
-		if err != nil {
-			return nil, nil, err
-		}
-		if id == nil {
-			return nil, nil, fmt.Errorf("no identity available: pass --identity <name> or set %s", envIdentityKey)
-		}
-		dir := getVaultDir()
-		v, err := vault.Open(dir)
-		if err != nil {
-			return nil, nil, fmt.Errorf("vault not found at %s, run 'tvault init' first: %w", dir, err)
-		}
-		defer v.Close()
-		warnEnvKeyUsed(os.Stderr, source, "env")
-		project := resolveProject(v, projectName)
-		if len(only) > 0 || prefix != "" {
-			selected, missing, selectErr := v.GetSelectedSecretsWithIdentity(project, id, only, prefix)
-			if selectErr != nil {
-				return nil, nil, fmt.Errorf("read selected project keys %q with identity: %w", project, selectErr)
-			}
-			recordAudit(v, "secret.read", "project", project, map[string]any{
-				"via": "identity", "source": source, "selected": true,
-			})
-			return selected, missing, nil
-		}
-		secrets, err := v.GetAllSecretsWithIdentity(project, id)
-		if err != nil {
-			return nil, nil, fmt.Errorf("read project %q with identity: %w", project, err)
-		}
-		recordAudit(v, "secret.read", "project", project, map[string]any{"via": "identity", "source": source})
-		return secrets, nil, nil
-	}
-
-	// Fast path: a running agent serves the project's secrets prompt-free.
-	if len(only) == 0 && prefix == "" {
-		if secrets, _, ok := agentAllSecrets(projectName); ok {
-			return secrets, nil, nil
-		}
-	}
-
-	v, err := openAndUnlockVault()
-	if err != nil {
-		return nil, nil, err
-	}
-	defer v.Close()
-	project := resolveProject(v, projectName)
-	if len(only) > 0 || prefix != "" {
-		selected, missing, selectErr := v.GetSelectedSecrets(project, only, prefix)
-		if selectErr != nil {
-			return nil, nil, fmt.Errorf("failed to get selected secrets: %w", selectErr)
-		}
-		return selected, missing, nil
-	}
-	secrets, err := v.GetAllSecrets(project)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get secrets: %w", err)
-	}
-	return secrets, nil, nil
 }
 
 func runEnv(_ *cobra.Command, _ []string) error {

@@ -87,6 +87,9 @@ tvault list
 # Run a command with secrets injected as environment variables
 tvault run -- npm start
 
+# Same, over SSH — secrets stay off the remote disk and off the ssh argv
+tvault ssh deploy@prod -- systemctl restart api
+
 # Run with a .env file that has tvault:// placeholders (commit-safe templates)
 tvault run --env-file .env -- npm start
 

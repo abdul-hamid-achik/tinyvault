@@ -369,7 +369,14 @@ func fullCatalog() docsCatalog {
 				Summary:     "A local agent (unix) holds the vault unlocked so daily commands skip the prompt + Argon2id.",
 				Commands:    []string{"tvault agent start", "tvault agent status", "tvault agent stop", "tvault hook zsh", "tvault get DATABASE_URL --no-agent"},
 				SeeAlso:     []string{"tvault docs agent"},
-				Description: "`tvault agent start` (foreground; background it with & / nohup / systemd) unlocks the vault once and serves secret reads over a private 0600 unix socket in the 0700 vault dir, accepting only same-uid peers. get/env/run route through it automatically — no passphrase prompt, no ~200ms Argon2id — and fall back to a direct unlock when no agent is running (or with --no-agent / TVAULT_NO_AGENT). The agent caches only the KEK (not an open database), so direct access keeps working between requests; it auto-locks after an idle period and zeros the KEK on stop/idle/signal. `tvault hook <bash|zsh|fish|direnv>` prints a shell snippet (tvault_load) for loading a project's secrets via the agent. Unix only; on Windows the command reports it is unsupported.",
+				Description: "`tvault agent start` (foreground; background it with & / nohup / systemd) unlocks the vault once and serves secret reads over a private 0600 unix socket in the 0700 vault dir, accepting only same-uid peers. get/env/run/ssh route through it automatically — no passphrase prompt, no ~200ms Argon2id — and fall back to a direct unlock when no agent is running (or with --no-agent / TVAULT_NO_AGENT). The agent caches only the KEK (not an open database), so direct access keeps working between requests; it auto-locks after an idle period and zeros the KEK on stop/idle/signal. `tvault hook <bash|zsh|fish|direnv>` prints a shell snippet (tvault_load) for loading a project's secrets via the agent. Unix only; on Windows the command reports it is unsupported.",
+			},
+			{
+				Name:        "remote-ssh",
+				Summary:     "Run a remote command with vault secrets in its environment, without writing a remote file.",
+				Commands:    []string{"tvault ssh deploy@prod -- systemctl restart api", "tvault ssh --only DATABASE_URL --ssh-arg=-p --ssh-arg=2222 deploy@prod -- ./migrate"},
+				SeeAlso:     []string{"tvault run", "tvault env"},
+				Description: "`tvault ssh <destination> -- <command>` loads project secrets locally (agent, identity, or passphrase) and streams a POSIX export script over the SSH channel into `sh -s`. Values never appear on the ssh command line and are never written to remote disk. The remote host needs a POSIX sh. Extra ssh client flags use repeatable --ssh-arg.",
 			},
 
 			{

@@ -64,6 +64,8 @@ cmd/tvault/
     history.go / rollback.go # tvault history KEY / tvault rollback KEY --to N (secret version history)
     list.go / delete.go      # tvault list / tvault delete KEY (list supports --prefix; delete purges history)
     run.go                   # tvault run -- CMD; --env-file + ${tvault://...} interpolation
+    ssh.go                   # tvault ssh <dest> -- CMD (inject env over SSH stdin; never remote disk)
+    secrets_load.go          # shared secret loader for env and ssh
     env.go                   # tvault env (export in shell/dotenv/json/yaml/k8s format)
     export.go                # tvault export (write secrets to file)
     import.go                # tvault import (read secrets from file)

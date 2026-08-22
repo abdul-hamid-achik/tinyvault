@@ -14,6 +14,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `tvault generate KEY` stores a cryptographically random secret and
   prints only metadata (`key`, `length`, `charset`, `stored`). The
   value is never printed. Same generator as MCP `vault_generate_secret`.
+- `tvault ssh <destination> -- <command>` runs a remote command with
+  vault secrets in its environment. Values stream over SSH stdin as a
+  POSIX script; they are never written to remote disk and never appear
+  on the ssh command line.
 
 ### Changed
 

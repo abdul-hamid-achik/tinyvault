@@ -30,6 +30,10 @@ If `tvault` was installed from the retired formula, migrate once with
 - `tvault generate KEY` stores a cryptographically random secret and
   prints only metadata. The value is never printed. Same generator as
   MCP `vault_generate_secret`.
+- `tvault ssh <destination> -- <command>` runs a remote command with
+  vault secrets in its environment. Values stream over SSH stdin; they
+  are never written to remote disk and never appear on the ssh command
+  line.
 
 ### Changed
 

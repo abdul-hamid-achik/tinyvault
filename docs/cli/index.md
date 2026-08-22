@@ -310,6 +310,27 @@ Run a command with the project's secrets injected into its environment. Use `--`
 | `--group <name>` | Resolve secrets through an [environment group](/guide/env-groups)'s inheritance chain. |
 | `--env <name>` | Environment within the group (requires `--group`). |
 
+### `ssh`
+
+```bash
+tvault ssh deploy@prod -- systemctl restart api
+tvault ssh --only DATABASE_URL deploy@prod -- ./migrate
+tvault ssh --ssh-arg=-p --ssh-arg=2222 deploy@prod -- hostname
+tvault ssh --identity ci deploy@prod -- docker compose up
+```
+
+Run a command on a remote host with the project's secrets in that process's environment. Values are streamed over the SSH channel as a POSIX `export` script on stdin (`sh -s`); they are never written to a remote file and never appear on the `ssh` command line. The remote host needs a POSIX `sh`. Extra OpenSSH client flags go in repeatable `--ssh-arg` values. Forwards `SIGINT`/`SIGTERM` to `ssh` and propagates its exit code.
+
+| Flag | Description |
+| --- | --- |
+| `--only <k1,k2>` | Inject only these secret keys (comma-separated allowlist). |
+| `--prefix <p>` | Inject only secret keys with this prefix. |
+| `--strict` | Fail before starting ssh when an explicit `--only` key is missing. |
+| `--identity <name>` | Read a shared project with an X25519 identity instead of the passphrase. |
+| `--group <name>` | Resolve secrets through an [environment group](/guide/env-groups)'s inheritance chain. |
+| `--env <name>` | Environment within the group (requires `--group`). |
+| `--ssh-arg <arg>` | Extra argument passed to the `ssh` client before the destination (repeatable). |
+
 ### `env`
 
 ```bash
