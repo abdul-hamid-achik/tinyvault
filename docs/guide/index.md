@@ -52,5 +52,6 @@ TinyVault stores secret values locally and makes them available through a CLI an
 The integration guides build on the core workflows:
 
 - [Pulumi](/guide/pulumi)
+- [Docker](/guide/docker)
 - [DigitalOcean](/guide/digitalocean)
 - [Codemap](/guide/codemap)

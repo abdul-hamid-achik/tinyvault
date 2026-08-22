@@ -331,6 +331,26 @@ Run a command on a remote host with the project's secrets in that process's envi
 | `--env <name>` | Environment within the group (requires `--group`). |
 | `--ssh-arg <arg>` | Extra argument passed to the `ssh` client before the destination (repeatable). |
 
+### `docker`
+
+```bash
+tvault docker build --only NPM_TOKEN -- -t app .
+tvault docker compose --only DATABASE_URL -- up
+tvault docker run --only DATABASE_URL -- --rm alpine env
+tvault docker init
+```
+
+Wrap the Docker CLI so vault secrets reach a build, compose stack, or container without putting values on the `docker` command line.
+
+| Subcommand | What it does |
+| --- | --- |
+| `build` | `docker build --secret id=KEY,env=KEY` per selected key (BuildKit tmpfs). Sets `DOCKER_BUILDKIT=1`. |
+| `compose` | Injects keys into the compose process so `${KEY}` interpolates. |
+| `run` | `docker run -e KEY` (name only; Docker reads the value from the client env). |
+| `init` | Print Dockerfile and compose snippets. Does not unlock the vault. |
+
+Persistent flags (all subcommands except `init`): `--only`, `--prefix`, `--strict`, `--identity`, `--group`, `--env`. Put TinyVault flags before `--`; everything after is passed to Docker. See [Docker](/guide/docker).
+
 ### `env`
 
 ```bash

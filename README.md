@@ -90,6 +90,10 @@ tvault run -- npm start
 # Same, over SSH — secrets stay off the remote disk and off the ssh argv
 tvault ssh deploy@prod -- systemctl restart api
 
+# Docker: BuildKit secret mounts, compose interpolation, docker run -e KEY
+tvault docker build --only NPM_TOKEN -- -t app .
+tvault docker compose --only DATABASE_URL -- up
+
 # Run with a .env file that has tvault:// placeholders (commit-safe templates)
 tvault run --env-file .env -- npm start
 

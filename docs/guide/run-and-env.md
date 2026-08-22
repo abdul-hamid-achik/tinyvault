@@ -26,6 +26,7 @@ Use `--` to stop TinyVault from interpreting flags meant for your command. Every
 ```bash
 tvault run --env-file .env -- npm start              # npm gets no extra flags
 tvault run -- docker compose up --build              # --build goes to compose
+# least-privilege compose/build: see tvault docker (BuildKit secret mounts)
 tvault run python manage.py runserver                # no flag conflict, -- optional
 ```
 

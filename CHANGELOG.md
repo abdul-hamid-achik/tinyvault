@@ -18,6 +18,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   vault secrets in its environment. Values stream over SSH stdin as a
   POSIX script; they are never written to remote disk and never appear
   on the ssh command line.
+- `tvault docker build` / `compose` / `run` / `init` wraps the Docker
+  CLI: BuildKit `--secret id=KEY,env=KEY` mounts, compose `${KEY}`
+  interpolation, and `docker run -e KEY` (name only). Values stay off
+  the docker command line.
 
 ### Changed
 

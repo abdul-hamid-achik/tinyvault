@@ -65,7 +65,8 @@ cmd/tvault/
     list.go / delete.go      # tvault list / tvault delete KEY (list supports --prefix; delete purges history)
     run.go                   # tvault run -- CMD; --env-file + ${tvault://...} interpolation
     ssh.go                   # tvault ssh <dest> -- CMD (inject env over SSH stdin; never remote disk)
-    secrets_load.go          # shared secret loader for env and ssh
+    docker.go                # tvault docker build/compose/run/init (BuildKit secrets, compose env)
+    secrets_load.go          # shared secret loader for env, ssh, and docker
     env.go                   # tvault env (export in shell/dotenv/json/yaml/k8s format)
     export.go                # tvault export (write secrets to file)
     import.go                # tvault import (read secrets from file)

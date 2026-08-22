@@ -309,6 +309,11 @@ func helpContent() HelpContent {
 				Description: "Streams secrets over SSH into the remote process env. Nothing is written to remote disk, and values do not appear on the ssh command line.",
 			},
 			{
+				Name:        "Build or run Docker with vault secrets",
+				Commands:    []string{"tvault docker build --only NPM_TOKEN -- -t app .", "tvault docker compose --only DATABASE_URL -- up"},
+				Description: "BuildKit secret mounts and compose interpolation. Values stay off the docker command line.",
+			},
+			{
 				Name:        "Generate a random secret",
 				Commands:    []string{"tvault generate SESSION_SECRET", "tvault generate API_KEY --length 48 --charset hex"},
 				Description: "Stores a cryptographically random value and prints only metadata. The value is never printed; use tvault run or tvault get when a process needs it.",

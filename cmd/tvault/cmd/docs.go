@@ -369,7 +369,7 @@ func fullCatalog() docsCatalog {
 				Summary:     "A local agent (unix) holds the vault unlocked so daily commands skip the prompt + Argon2id.",
 				Commands:    []string{"tvault agent start", "tvault agent status", "tvault agent stop", "tvault hook zsh", "tvault get DATABASE_URL --no-agent"},
 				SeeAlso:     []string{"tvault docs agent"},
-				Description: "`tvault agent start` (foreground; background it with & / nohup / systemd) unlocks the vault once and serves secret reads over a private 0600 unix socket in the 0700 vault dir, accepting only same-uid peers. get/env/run/ssh route through it automatically — no passphrase prompt, no ~200ms Argon2id — and fall back to a direct unlock when no agent is running (or with --no-agent / TVAULT_NO_AGENT). The agent caches only the KEK (not an open database), so direct access keeps working between requests; it auto-locks after an idle period and zeros the KEK on stop/idle/signal. `tvault hook <bash|zsh|fish|direnv>` prints a shell snippet (tvault_load) for loading a project's secrets via the agent. Unix only; on Windows the command reports it is unsupported.",
+				Description: "`tvault agent start` (foreground; background it with & / nohup / systemd) unlocks the vault once and serves secret reads over a private 0600 unix socket in the 0700 vault dir, accepting only same-uid peers. get/env/run/ssh/docker route through it automatically — no passphrase prompt, no ~200ms Argon2id — and fall back to a direct unlock when no agent is running (or with --no-agent / TVAULT_NO_AGENT). The agent caches only the KEK (not an open database), so direct access keeps working between requests; it auto-locks after an idle period and zeros the KEK on stop/idle/signal. `tvault hook <bash|zsh|fish|direnv>` prints a shell snippet (tvault_load) for loading a project's secrets via the agent. Unix only; on Windows the command reports it is unsupported.",
 			},
 			{
 				Name:        "remote-ssh",
@@ -377,6 +377,13 @@ func fullCatalog() docsCatalog {
 				Commands:    []string{"tvault ssh deploy@prod -- systemctl restart api", "tvault ssh --only DATABASE_URL --ssh-arg=-p --ssh-arg=2222 deploy@prod -- ./migrate"},
 				SeeAlso:     []string{"tvault run", "tvault env"},
 				Description: "`tvault ssh <destination> -- <command>` loads project secrets locally (agent, identity, or passphrase) and streams a POSIX export script over the SSH channel into `sh -s`. Values never appear on the ssh command line and are never written to remote disk. The remote host needs a POSIX sh. Extra ssh client flags use repeatable --ssh-arg.",
+			},
+			{
+				Name:        "docker",
+				Summary:     "Wrap docker build/compose/run so vault secrets never appear on the docker command line.",
+				Commands:    []string{"tvault docker build --only NPM_TOKEN -- -t app .", "tvault docker compose --only DATABASE_URL -- up", "tvault docker run --only DATABASE_URL -- --rm alpine env", "tvault docker init"},
+				SeeAlso:     []string{"tvault docs docker", "tvault run"},
+				Description: "`tvault docker build` adds BuildKit `--secret id=KEY,env=KEY` per selected key (Dockerfile `RUN --mount=type=secret`). `compose` injects keys into the compose process for `${KEY}` interpolation. `run` passes `-e KEY` (name only). `init` prints snippets. Values stay in the docker process environment, never on argv.",
 			},
 
 			{
@@ -413,6 +420,12 @@ func fullCatalog() docsCatalog {
 				Title:       "Secret history & rollback",
 				Description: "Every overwrite of a secret archives the prior value as a version (the secret_versions bucket), so values are recoverable. `tvault history KEY` lists versions (metadata only, no unlock); `tvault get KEY --version N` prints a past value; `tvault rollback KEY --to N` restores an earlier version as a new version (non-destructive; numbers never reused). History is encrypted with the project key and survives passphrase rotation and live-vault recipient removal; pre-removal snapshots remain readable. MCP: vault_secret_history (no values) and vault_rollback_secret (version numbers only).",
 				Example:     "  tvault set API_KEY v1 && tvault set API_KEY v2\n  tvault history API_KEY\n  tvault get API_KEY --version 1\n  tvault rollback API_KEY --to 1",
+			},
+			{
+				Slug:        "docker",
+				Title:       "tvault docker",
+				Description: "Wraps the Docker CLI so vault secrets reach a build, compose stack, or container without putting values on argv. `docker build` adds BuildKit `--secret id=KEY,env=KEY` (read with RUN --mount=type=secret). `docker compose` injects keys for ${KEY} interpolation. `docker run` passes `-e KEY` (name only). `docker init` prints snippets. --only/--prefix/--identity/--group/--env/--strict match tvault run.",
+				Example:     "  tvault docker build --only NPM_TOKEN -- -t app .\n  tvault docker compose --only DATABASE_URL -- up\n  tvault docker run --only DATABASE_URL -- --rm alpine env\n  tvault docker init",
 			},
 			{
 				Slug:        "run",

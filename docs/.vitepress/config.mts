@@ -199,6 +199,7 @@ export default defineConfig({
           collapsed: true,
           items: [
             { text: 'Pulumi & IaC', link: '/guide/pulumi' },
+            { text: 'Docker', link: '/guide/docker' },
             { text: 'DigitalOcean & SSH', link: '/guide/digitalocean' },
             { text: 'Codemap integration', link: '/guide/codemap' },
           ],

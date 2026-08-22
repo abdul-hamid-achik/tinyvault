@@ -34,6 +34,9 @@ If `tvault` was installed from the retired formula, migrate once with
   vault secrets in its environment. Values stream over SSH stdin; they
   are never written to remote disk and never appear on the ssh command
   line.
+- `tvault docker build` / `compose` / `run` / `init` wraps the Docker
+  CLI: BuildKit secret mounts, compose interpolation, and
+  `docker run -e KEY` (name only). Values stay off the docker command line.
 
 ### Changed
 

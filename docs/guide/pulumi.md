@@ -5,7 +5,7 @@ description: Drive Pulumi (and other IaC tools) with TinyVault — inject secret
 
 # Pulumi & IaC
 
-TinyVault wraps any infrastructure tool that reads its credentials from the environment — `pulumi`, `terraform`, `docker`, `flyctl`. The same project that powers local dev also drives your deploy: one source of truth, no `.env` on disk.
+TinyVault wraps any infrastructure tool that reads its credentials from the environment — `pulumi`, `terraform`, `docker`, `flyctl`. The same project that powers local dev also drives your deploy: one source of truth, no `.env` on disk. For Docker builds and compose interpolation without values on argv, see [Docker](/guide/docker).
 
 ## The recommended pattern: inject at deploy time
 
