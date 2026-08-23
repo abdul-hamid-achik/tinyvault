@@ -139,7 +139,7 @@ secrets_allow:
   - "*"             # otherwise allow every key the project exposes
 ```
 
-A denied key is filtered out of listings and refused on direct access, so an agent cannot reach it via `vault_get_secret`, `vault_search_secrets`, `vault_seal_for_recipients`, or any other key-scoped tool.
+A denied key is filtered out of listings and refused on direct access, so an agent cannot reach it via `vault_get_secret`, `vault_search_secrets`, `vault_seal_for_recipients`, `vault_open_sealed`, or any other key-scoped tool.
 
 ### `max_reads_per_session`
 

@@ -106,6 +106,12 @@ func (v *Vault) DeleteSecret(projectName, key string) error {
 
 // GetAllSecrets decrypts and returns all secrets for a project as a map.
 func (v *Vault) GetAllSecrets(projectName string) (map[string]string, error) {
+	return v.GetAllSecretsWithMeta(projectName, nil)
+}
+
+// GetAllSecretsWithMeta is GetAllSecrets with extra audit metadata merged
+// into the project-level secret.read row (agent peer credentials, …).
+func (v *Vault) GetAllSecretsWithMeta(projectName string, extra map[string]any) (map[string]string, error) {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
@@ -138,6 +144,8 @@ func (v *Vault) GetAllSecrets(projectName string) (map[string]string, error) {
 		result[key] = string(plaintext)
 	}
 
+	v.recordOpAudit("secret.read", "project", projectName, mergeAuditMeta(
+		map[string]any{"bulk": true, "count": len(result)}, extra))
 	return result, nil
 }
 
@@ -145,6 +153,12 @@ func (v *Vault) GetAllSecrets(projectName string) (map[string]string, error) {
 // prefix. It returns missing exact keys separately so callers can fail closed
 // without first materializing every project value.
 func (v *Vault) GetSelectedSecrets(projectName string, only []string, prefix string) (map[string]string, []string, error) {
+	return v.GetSelectedSecretsWithMeta(projectName, only, prefix, nil)
+}
+
+// GetSelectedSecretsWithMeta is GetSelectedSecrets with extra audit metadata
+// merged into the project-level secret.read row.
+func (v *Vault) GetSelectedSecretsWithMeta(projectName string, only []string, prefix string, extra map[string]any) (map[string]string, []string, error) {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
@@ -156,9 +170,25 @@ func (v *Vault) GetSelectedSecrets(projectName string, only []string, prefix str
 		return nil, nil, mapStoreError(err)
 	}
 	if len(only) == 0 && prefix == "" {
-		return v.getAllSecretsForProject(project)
+		result, missing, gerr := v.getAllSecretsForProject(project)
+		if gerr != nil {
+			return nil, nil, gerr
+		}
+		v.recordOpAudit("secret.read", "project", projectName, mergeAuditMeta(
+			map[string]any{"bulk": true, "selected": true, "count": len(result)}, extra))
+		return result, missing, nil
 	}
 
+	result, missing, selErr := v.decryptSelectedSecrets(project, only, prefix)
+	if selErr != nil {
+		return nil, nil, selErr
+	}
+	v.recordOpAudit("secret.read", "project", projectName, mergeAuditMeta(
+		map[string]any{"bulk": true, "selected": true, "count": len(result)}, extra))
+	return result, missing, nil
+}
+
+func (v *Vault) decryptSelectedSecrets(project *store.Project, only []string, prefix string) (map[string]string, []string, error) {
 	allKeys, err := v.store.ListSecretKeys(project.ID)
 	if err != nil {
 		return nil, nil, mapStoreError(err)
@@ -189,13 +219,13 @@ func (v *Vault) GetSelectedSecrets(projectName string, only []string, prefix str
 
 	result := make(map[string]string, len(selected))
 	for key := range selected {
-		entry, err := v.store.GetSecret(project.ID, key)
-		if err != nil {
-			return nil, nil, mapStoreError(err)
+		entry, gerr := v.store.GetSecret(project.ID, key)
+		if gerr != nil {
+			return nil, nil, mapStoreError(gerr)
 		}
-		plaintext, err := crypto.Decrypt(dek, entry.EncryptedValue)
-		if err != nil {
-			return nil, nil, fmt.Errorf("decrypt secret %s: %w", key, err)
+		plaintext, derr := crypto.Decrypt(dek, entry.EncryptedValue)
+		if derr != nil {
+			return nil, nil, fmt.Errorf("decrypt secret %s: %w", key, derr)
 		}
 		result[key] = string(plaintext)
 		crypto.ZeroBytes(plaintext)

@@ -250,10 +250,12 @@ func helpContent() HelpContent {
 			KeyHierarchy: "passphrase -> Argon2id -> KEK -> AES-GCM(per-project DEK) -> AES-GCM(secret value). " +
 				"Compromising one project's DEK does not leak any other project's data. " +
 				"Compromising the KEK leaks every project's DEK but not the passphrase.",
-			Redaction: "The CLI 'tvault run' streams child stdout and stderr unchanged. Over MCP, " +
-				"vault_run_with_secrets applies literal-value redaction only when policy enables " +
-				"redact_output, and only for values longer than 3 characters. Short, transformed, " +
-				"file, and network leaks remain possible; redaction is a safety net, not containment.",
+			Redaction: "The CLI 'tvault run' streams child stdout and stderr unchanged by default; " +
+				"'tvault run --redact' replaces literal injected values longer than 3 characters " +
+				"with [REDACTED:KEY] (a value split across writes is not caught). Over MCP, " +
+				"vault_run_with_secrets applies the same literal-value redaction only when policy " +
+				"enables redact_output. Short, transformed, file, and network leaks remain possible; " +
+				"redaction is a safety net, not containment.",
 			AgentSafety: "The MCP server is the policy-controlled interface for AI agents. Three rules: " +
 				"(1) Never call vault_get_secret unless the value is needed; prefer vault_run_with_secrets. " +
 				"(2) For batch lookups, use vault_search_secrets and vault_list_secrets_by_prefix " +

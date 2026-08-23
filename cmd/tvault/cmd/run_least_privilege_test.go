@@ -17,14 +17,14 @@ func resetRunLeastPrivilegeFlags(t *testing.T) {
 	t.Helper()
 	oldEnvFile, oldNoVault := runEnvFile, runEnvNoVault
 	oldOnly, oldPrefix := runOnly, runPrefix
-	oldGroup, oldEnv, oldStrict, oldIdentity := runGroup, runEnvName, runStrict, runIdentity
+	oldGroup, oldEnv, oldStrict, oldIdentity, oldRedact := runGroup, runEnvName, runStrict, runIdentity, runRedact
 	runEnvFile, runEnvNoVault = "", false
 	runOnly, runPrefix = nil, ""
-	runGroup, runEnvName, runStrict, runIdentity = "", "", false, ""
+	runGroup, runEnvName, runStrict, runIdentity, runRedact = "", "", false, "", false
 	t.Cleanup(func() {
 		runEnvFile, runEnvNoVault = oldEnvFile, oldNoVault
 		runOnly, runPrefix = oldOnly, oldPrefix
-		runGroup, runEnvName, runStrict, runIdentity = oldGroup, oldEnv, oldStrict, oldIdentity
+		runGroup, runEnvName, runStrict, runIdentity, runRedact = oldGroup, oldEnv, oldStrict, oldIdentity, oldRedact
 	})
 }
 
@@ -62,6 +62,36 @@ func TestRunSelectedDirectInjectsNoUnrelatedVaultOrControlValues(t *testing.T) {
 	t.Setenv("TVAULT_DIR", vaultPath)
 	if got := runEnvOutput(t); got != "selected||unset|unset" {
 		t.Fatal("child did not receive only the selected value and no TinyVault controls")
+	}
+}
+
+func TestRunRedactReplacesLiteralChildOutput(t *testing.T) {
+	vaultPath, restore := setupVaultForCommandTest(t)
+	defer restore()
+	resetRunLeastPrivilegeFlags(t)
+
+	v := openTestVault(t, vaultPath)
+	if err := v.SetSecret("default", "API_KEY", "sk_live_SECRET"); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	runRedact = true
+	t.Setenv("TVAULT_DIR", vaultPath)
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	got := string(captureStdout(t, func() {
+		if err := runRun(cmd, []string{"sh", "-c", `printf 'token=%s' "$API_KEY"`}); err != nil {
+			t.Fatalf("runRun: %v", err)
+		}
+	}))
+	if strings.Contains(got, "sk_live_SECRET") {
+		t.Fatalf("child stdout still contains the secret: %q", got)
+	}
+	if !strings.Contains(got, "[REDACTED:API_KEY]") {
+		t.Fatalf("expected redacted marker, got %q", got)
 	}
 }
 

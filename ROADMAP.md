@@ -4,35 +4,30 @@
 > "manage + share secrets everywhere" vision (docker, bun, .env, ssh, CI,
 > commit-to-repo, agents). Grounded in the codebase; every proposal was
 > adversarially stress-tested for security/feasibility before landing here.
-> Status: **analysis & proposal — nothing built yet.** Pick the threads to pursue.
+> Status: **both spines shipped (MVPs).** Remaining rows are deferred by
+> design (breaking `--output` envelope, in-band token mint, OIDC-keyless,
+> in-cluster SealedSecret controller) or are hardening follow-ups
+> (policy hash-chain, redaction of transformed values).
 
 ---
 
 ## TL;DR
 
-TinyVault today is an excellent **single-user, single-machine, local-first**
-secrets manager with a strong agent story (MCP). The
-vision — *share* secrets across people/CI/agents, *commit* them to the repo,
-*pull* them over many transports — is blocked by **two architectural gaps**.
-Everything else is quick wins or builds on these two:
+TinyVault is a **local-first CLI + MCP** secrets manager. Both architectural
+gaps that blocked the original vision are closed:
 
-1. **Crypto is symmetric-only.** `passphrase → Argon2id KEK → per-project DEK
-   → value`. The only way to grant access is to hand over the passphrase. You
-   cannot safely share with a teammate, commit per-recipient-decryptable
-   secrets, or let CI/an agent decrypt without distributing the master secret.
-   → **Decision A: add an asymmetric recipient layer (X25519, age-style).**
+1. **Spine A (recipients).** X25519 identities wrap per-project DEKs.
+   Share/unshare, `.env.encrypted` v2, git filters, `seal`/`open`,
+   `TVAULT_IDENTITY_KEY`, k8s SealedSecret MVP, and MCP
+   `vault_seal_for_recipients` / `vault_open_sealed` are landed.
+2. **Spine B (agent).** `tvault agent` caches the KEK and reopens bbolt
+   per request. Hook, docker, ssh, and `tvault mcp --connect` ride on it.
+   The full unix-socket broker + in-band token mint was re-scoped as
+   security theater vs same-uid (see the Spine B row).
 
-2. **There is no cross-process unlocked session.** Every command re-derives
-   the Argon2id KEK in-process, and bbolt is opened with an *exclusive* lock
-   (no `ReadOnly`), so two `tvault` processes can't even read concurrently.
-   This blocks the "use it everywhere" half — docker, the bun/direnv hook,
-   ssh, a broker, an agent all need a resident unlocked owner.
-   → **Decision B: add a resident agent + local broker (ssh-agent model).**
-
-Plus one **foundation fix** that several features quietly depend on:
-**audit logging is MCP-only today** — CLI/TUI `set`/`delete`/`get` write *no*
-audit entry. "Audited mutations", an audit timeline, and tamper-evident logs
-all need this first. Cheap, high-leverage.
+Wave 0 audit-everywhere, JSON encoding, doctor, diff, and history/rollback
+are also landed. Remaining work is listed as deferred or hardening in the
+tables below.
 
 ---
 
@@ -65,7 +60,7 @@ Ship these first: high value, low risk, no crypto/transport prerequisites.
 
 | Item | Why | Effort | Notes from stress-test |
 |---|---|---|---|
-| **Audit everywhere** — write audit entries from the CLI/TUI vault path, not just MCP | "Audited mutations", audit timeline, tamper-evidence all depend on it | **S–M** | ✅ **Landed:** `SetSecret` / `GetSecret` / `DeleteSecret` / `CreateProject` / `DeleteProject` / `RollbackSecret` / `ListSecretVersions` / `GetSecretVersionValue` / `ResolveKey` write best-effort audit rows at the vault layer (never values). CLI, MCP, and the agent share that trail — handlers no longer duplicate those primitives. Agent single-key reads pass `via:agent` plus peer/token metadata through `GetSecretWithMeta`. Init's default project is not audited. **Still surface-logged:** generate, share, env-group CRUD, exec, export, bulk identity env/run. **Still not recorded:** unlock, passphrase rotation, bulk passphrase `tvault env` (`GetAllSecrets`). |
+| **Audit everywhere** — write audit entries from the CLI/TUI vault path, not just MCP | "Audited mutations", audit timeline, tamper-evidence all depend on it | **S–M** | ✅ **Landed:** `SetSecret` / `GetSecret` / `DeleteSecret` / `CreateProject` / `DeleteProject` / `RollbackSecret` / `ListSecretVersions` / `GetSecretVersionValue` / `ResolveKey` / `GetAllSecrets` / `GetSelectedSecrets` write best-effort audit rows at the vault layer (never values). Bulk reads are one project-level `secret.read` (`bulk: true`, count only). CLI, MCP, and the agent share that trail — handlers no longer duplicate those primitives. Agent reads pass `via:agent` plus peer/token metadata through `*WithMeta`. Init's default project is not audited. **Still surface-logged:** generate, share, env-group CRUD, exec, export, open-sealed. **Still not recorded:** unlock, passphrase rotation. |
 | **Uniform machine output** — a real `--output text\|json`, one JSON envelope, meaningful exit codes | Strengthens the agent/scripting identity | **M** | ✅ **JSON encoding shipped:** `tvault env --format json` and `tvault export --format json` encode the whole object with `encoding/json` (`SetEscapeHTML(false)`), so control bytes (`\r`, NUL, …) and `&`/`<`/`>` round-trip. Shared via `writeJSON`/`marshalJSON`; `tvault get --json` uses the same encoder. **Not this cut:** a global `--output text\|json` envelope (would be breaking) and a designed exit-code table (avoid cobra's `64`). |
 | **`tvault doctor` + a typed config file** | Diagnoses setup; anchors DX and feeds TUI/hook toggles | **M** | ✅ **Landed:** `tvault doctor` is read-only (dir perms, vault metadata, lock state, project/secret counts, config + MCP policy parse, environment, terminal) and exits non-zero only on failed checks. Typed `~/.tvault/config.yaml` parses the `agent:` block (`passphrase_file`, `log_dir`, `log_level`); flags and env vars win. A missing file is fine; a malformed one fails doctor. |
 | **`.env` drift / diff** | Answers "is my `.env` in sync with the vault?" | **L** | ✅ Shipped as the CLI `tvault diff <file>` (metadata-only by default; `--values` compares values without printing them). |
@@ -99,14 +94,14 @@ This is the centerpiece of your vision and the biggest differentiator vs. SOPS+a
 | **Git clean/smudge filters** — `tvault git-filter` to auto-encrypt on commit / decrypt on checkout | "Have them decode themselves" with zero manual steps | **L** | ✅ **Landed:** `cmd/tvault/cmd/gitfilter.go` — `install`/`track`/`status`/`checkout`/`uninstall` + hidden `git-clean`/`git-smudge`. Recipients in a committed `.tvault-recipients`; identity from `$TVAULT_IDENTITY`→`git config tvault.identity`→`default`. **Idempotent clean** (re-emits the staged blob when plaintext is unchanged) so `git status` stays quiet; **locked mode** passes ciphertext through without an identity; anti-double-encrypt. `install`/`checkout` re-smudge the working tree post-clone. Verified end-to-end against a real repo (commit→clone→edit). Bootstrapping reality unchanged: a teammate/CI still needs their *private* key delivered once. |
 | **Keyless/OIDC + ssh transports for CI/agents** — decrypt with a per-context identity, never the passphrase | "Agent pulling secrets in CI or over ssh, safely" | **XL** | ✅ **Env-key transport landed:** `TVAULT_IDENTITY_KEY` (a `tvault-key1…` string) carries a per-context identity with no file/passphrase; one resolver (`resolveIdentity`, file-beats-env-key + warn) backs `open`/`decrypt-env`/`env --identity`/git filters, so the same key decrypts in CI, over ssh (`seal \| ssh host 'tvault open'`), and for agents. `tvault identity export` provisions it (TTY-guarded), `tvault ci init --mode=identity` scaffolds a passphrase-free workflow. **OIDC keyless — assessed, deferred as architecturally incompatible:** true OIDC-keyless (Vault/cloud-KMS style) requires a **trusted remote service** that verifies the CI's OIDC JWT and releases key material on success. tinyvault is deliberately local-first ("no servers, no accounts, no cloud"), so there is no such trust anchor — and the OIDC token is a bearer *assertion*, not key material, so it cannot itself decrypt anything (the identity must still be present, which is exactly what `TVAULT_IDENTITY_KEY` already delivers). Verifying a JWT would also add a new JOSE/JWKS dependency. So the env-key identity path **is** the local-first answer to "CI decrypts without the passphrase"; OIDC-keyless only becomes meaningful if tinyvault ever grows a hosted broker (explicitly out of scope). |
 | **k8s SealedSecret-equivalent + external-secrets sync** | Commit-safe k8s manifests; render Secrets at deploy | **L–M** | ✅ **Landed (MVP):** `tvault seal --format k8s --name <n>` emits a `tinyvault.dev/v1 SealedSecret` manifest whose `encryptedData` is a v2 ciphertext blob (commit-safe); `tvault k8s render --in sealed.yaml --identity <id>` (or TVAULT_IDENTITY_KEY) decrypts it into a real `kind: Secret` for `kubectl apply` — **no cluster controller** (render runs in an init container/CI step). Reuses `resolveIdentity` + recipient layer; values round-trip incl. multi-line. Rendered Secret is plaintext (warns, never commit). **Deferred:** an in-cluster controller + external-secrets-operator sync. |
-| **MCP `vault_seal_for_recipients` / `vault_open_sealed`** | Agents seal/open secrets for others without seeing the master key | **M** | Thin MCP wrappers over `recipient.go`. |
+| **MCP `vault_seal_for_recipients` / `vault_open_sealed`** | Agents seal/open secrets for others without seeing the master key | **M** | ✅ **Landed:** `vault_seal_for_recipients` returns ciphertext or a path (never plaintext). `vault_open_sealed` decrypts a v2 blob with a named identity / `TVAULT_IDENTITY_KEY` and **writes a `0600` dotenv**, returning only `{path, keys, count}`. `CanWrite`; policy-denied keys are omitted from the file. v1 (passphrase) blobs are rejected. |
 
 ---
 
 ## Cross-cutting hardening (do alongside, not after)
 
 - **Live-vault recipient removal = DEK rotation + re-encrypt** (see above) — bake into the design from day one, not bolted on. Retained snapshots and artifacts remain readable.
-- **Redaction limits** — `run`'s output redaction misses multiline/base64-encoded values and isn't applied on the CLI `run` path the way it is in MCP. Harden + extend.
+- **Redaction limits** — ✅ **CLI path landed:** `tvault run --redact` uses the same literal-value matcher as MCP (`internal/redact`; values >3 chars). Default CLI `run` still streams unredacted (interactive programs). **Still a known limit:** multiline/base64/split-across-writes/transformed values are not caught — redaction remains a safety net, not a control.
 - **Policy hardening** — add a per-command allowlist and tamper-evident audit (hash chain); keep policy documentation and implementation in sync.
 - **Crypto agility** — version every wrapped artifact so committed ciphertext stays upgradeable over its (long) lifetime.
 

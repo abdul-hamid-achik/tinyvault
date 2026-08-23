@@ -1,11 +1,11 @@
 ---
 title: MCP Tools Reference
-description: Complete reference for all 49 TinyVault MCP tools, 3 resources, and 2 prompts — their inputs, what they return, and the policy gate each sits behind.
+description: Complete reference for all 50 TinyVault MCP tools, 3 resources, and 2 prompts — their inputs, what they return, and the policy gate each sits behind.
 ---
 
 # MCP Tools Reference
 
-This is the full reference for the TinyVault MCP surface: **49 tools, 3 resources, and 2 prompts**, served over stdio by the `tvault mcp` subcommand (the older `mcp-server` name still works as an alias) and built on the [modelcontextprotocol go-sdk](https://github.com/modelcontextprotocol/go-sdk). For setup — wiring `tvault` into Claude Code and other clients — see the [MCP overview](/mcp/). For the policy file that gates these tools, see [Access Policy](/mcp/access-policy).
+This is the full reference for the TinyVault MCP surface: **50 tools, 3 resources, and 2 prompts**, served over stdio by the `tvault mcp` subcommand (the older `mcp-server` name still works as an alias) and built on the [modelcontextprotocol go-sdk](https://github.com/modelcontextprotocol/go-sdk). For setup — wiring `tvault` into Claude Code and other clients — see the [MCP overview](/mcp/). For the policy file that gates these tools, see [Access Policy](/mcp/access-policy).
 
 The single most important fact: **only `vault_get_secret` deliberately returns a stored secret as a plaintext field.** Most other tools return metadata, a path, a count, or ciphertext. `vault_set_secret` accepts plaintext from the client, and `vault_run_with_secrets` returns arbitrary child-process stdout/stderr, so neither surface is magically value-free.
 
@@ -32,6 +32,7 @@ The single most important fact: **only `vault_get_secret` deliberately returns a
 | `vault_audit_log` | No | Recent audit entries. |
 | `vault_audit_log_since` | No | Filtered audit entries. |
 | `vault_seal_for_recipients` | No | Produce commit-safe ciphertext for recipients. |
+| `vault_open_sealed` | Yes | Decrypt a v2 blob to a `0600` dotenv file (path + keys only). |
 | `vault_secret_history` | No | Version metadata for a key. |
 | `vault_rollback_secret` | No | Restore an old version as a new one. |
 | `vault_get_current_project` | No | Report the current/default project. |
@@ -393,6 +394,23 @@ Produces commit-safe ciphertext for one or more X25519 recipients — the agent-
 
 ::: tip This is the safe way to hand off secrets
 Unlike `vault_get_secret` (plaintext into the model) or `vault_export_env` (plaintext onto disk), sealed output is ciphertext. It is the right tool when an agent needs to deliver secrets to a person, a CI runner, or another identity. See [Committable Secrets](/guide/committable-secrets) and [Sharing Secrets](/guide/sharing).
+:::
+
+### `vault_open_sealed`
+
+Opens a recipient-sealed v2 blob — the inverse of `vault_seal_for_recipients` and the agent-facing equivalent of `tvault open`. Decrypts with a local identity (or `TVAULT_IDENTITY_KEY`) and writes a `0600` dotenv file. The tool result contains only `{ path, keys, count }`. Plaintext values are never returned.
+
+- **Inputs:** exactly one of `path` or `sealed_base64` (required), `output_path` (required), `identity` (optional; default `$TVAULT_IDENTITY`, else `default`, else `$TVAULT_IDENTITY_KEY`).
+- **Returns:** the output path, the key names written, and the count. **Never the values.**
+- **Policy gate:** `CanWrite`; per-key secret globs (denied keys are omitted from the written file). v1 (passphrase) blobs are rejected.
+
+```bash
+# The agent opens a sealed blob it received, writing a local dotenv.
+# vault_open_sealed(path=".env.encrypted", identity="ci", output_path=".env")
+```
+
+::: warning The file is plaintext
+Like `vault_export_env`, the written file contains real secret values (`0600`). Delete it when done and never commit it. The MCP response itself stays value-free.
 :::
 
 ---

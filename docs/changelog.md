@@ -39,12 +39,18 @@ If `tvault` was installed from the retired formula, migrate once with
   `docker run -e KEY` (name only). Values stay off the docker command line.
 - `tvault mcp --connect` can serve secret reads through a running local
   agent so GUI hosts need not store `TVAULT_PASSPHRASE`.
+- MCP `vault_open_sealed` decrypts a recipient-sealed v2 blob and
+  writes a `0600` dotenv; the tool result is path + key names, never
+  values.
+- `tvault run --redact` replaces literal injected secret values in
+  child output with `[REDACTED:KEY]`. Default is still an unredacted
+  stream.
 
 ### Changed
 
-- Get, set, delete, project create/delete, rollback, and history now
-  write the audit log in the vault layer, so CLI, MCP, and the agent
-  share one trail without duplicate rows.
+- Get, set, delete, project create/delete, rollback, history, and bulk
+  project reads now write the audit log in the vault layer, so CLI,
+  MCP, and the agent share one trail without duplicate rows.
 
 ### Fixed
 

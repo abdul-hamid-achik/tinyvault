@@ -44,6 +44,7 @@ Choose the operation that keeps plaintext closest to its consumer:
 | Give a local tool an environment file | `vault_export_env` with `keys` | Path, key names, and count; plaintext is written to disk |
 | Create a new random credential | `vault_generate_secret` | Storage confirmation and generation metadata |
 | Package values for recipients | `vault_seal_for_recipients` or `vault_export_env_encrypted` | Ciphertext or a path plus metadata |
+| Open a sealed blob locally | `vault_open_sealed` | Path, key names, and count; plaintext is written to disk |
 | Import values already stored in dotenv files | `vault_import_env_files` | Import metadata rather than the source values |
 
 For a CLI-driven agent, prefer a narrow injection:

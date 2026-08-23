@@ -8,7 +8,7 @@ For agents: run `tvault docs features` for a machine-readable JSON manifest of e
 
 - [For AI Agents](https://www.tinyvault.dev/guide/for-ai-agents): start here — discovery, the discover→search→use loop, and the value-exposure boundaries.
 - [MCP Overview & Setup](https://www.tinyvault.dev/mcp/): connect a client to `tvault mcp` (Claude Code, Codex, opencode, Hermes, Claude Desktop).
-- [MCP Tools Reference](https://www.tinyvault.dev/mcp/tools): all 49 tools — inputs, returns, and the policy gate each sits behind.
+- [MCP Tools Reference](https://www.tinyvault.dev/mcp/tools): all 50 tools — inputs, returns, and the policy gate each sits behind.
 - [MCP Recipes](https://www.tinyvault.dev/mcp/recipes): end-to-end agent workflows.
 - [Access Policy](https://www.tinyvault.dev/mcp/access-policy): scope what an agent may do via `mcp-policy.yaml`.
 

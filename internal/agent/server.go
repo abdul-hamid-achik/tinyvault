@@ -11,7 +11,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/abdul-hamid-achik/tinyvault/internal/store"
 	"github.com/abdul-hamid-achik/tinyvault/internal/validation"
 	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
 )
@@ -190,12 +189,11 @@ func (a *agentState) doGetAll(req Request, scope tokenScope, uid uint32, pid int
 		if !scope.allows(resolved) {
 			return errScope(resolved)
 		}
-		m, e := v.GetAllSecrets(resolved)
+		m, e := v.GetAllSecretsWithMeta(resolved, agentAuditExtra(uid, pid, tokID))
 		if e != nil {
 			return e
 		}
 		secrets = m
-		auditRead(v, resolved, "", uid, pid, tokID)
 		return nil
 	}); err != nil {
 		return errResp(err.Error())
@@ -219,11 +217,10 @@ func (a *agentState) doGetSelected(req Request, scope tokenScope, uid uint32, pi
 			return errScope(resolved)
 		}
 		var readErr error
-		secrets, missing, readErr = v.GetSelectedSecrets(resolved, req.Only, req.Prefix)
+		secrets, missing, readErr = v.GetSelectedSecretsWithMeta(resolved, req.Only, req.Prefix, agentAuditExtra(uid, pid, tokID))
 		if readErr != nil {
 			return readErr
 		}
-		auditRead(v, resolved, "", uid, pid, tokID)
 		return nil
 	}); err != nil {
 		return errResp(err.Error())
@@ -274,19 +271,6 @@ func agentAuditExtra(uid uint32, pid int, tokID string) map[string]any {
 		meta["token_id"] = tokID
 	}
 	return meta
-}
-
-func auditRead(v *vault.Vault, project, key string, uid uint32, pid int, tokID string) {
-	meta := agentAuditExtra(uid, pid, tokID)
-	meta["project"] = project
-	//nolint:errcheck // audit is best-effort
-	v.AppendAudit(&store.AuditEntry{
-		Action:       "secret.read",
-		ResourceType: "secret",
-		ResourceName: key,
-		Timestamp:    time.Now().UTC(),
-		Metadata:     meta,
-	})
 }
 
 // withVault opens the vault, unlocks it with the cached KEK, runs fn, and

@@ -84,6 +84,43 @@ func TestCreateDoesNotAuditDefaultProject(t *testing.T) {
 	}
 }
 
+func TestGetAllSecretsAuditsBulkWithoutValues(t *testing.T) {
+	v := createTestVault(t)
+	if err := v.SetSecret("default", "API_KEY", "sk_bulk_never_logged"); err != nil {
+		t.Fatal(err)
+	}
+	all, err := v.GetAllSecrets("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if all["API_KEY"] != "sk_bulk_never_logged" {
+		t.Fatalf("unexpected value map: %v", all)
+	}
+	entries, err := v.ListAudit(store.AuditFilter{Action: "secret.read"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bulk bool
+	for _, e := range entries {
+		if e.ResourceType == "project" && e.ResourceName == "default" {
+			if e.Metadata["bulk"] != true {
+				t.Errorf("bulk metadata = %v, want true", e.Metadata["bulk"])
+			}
+			bulk = true
+		}
+	}
+	if !bulk {
+		t.Fatal("GetAllSecrets did not write a project-level secret.read")
+	}
+	blob, err := json.Marshal(entries)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(blob), "sk_bulk_never_logged") {
+		t.Error("bulk audit leaked a secret value")
+	}
+}
+
 func TestFailedGetDoesNotAudit(t *testing.T) {
 	v := createTestVault(t)
 	if _, err := v.GetSecret("default", "MISSING"); err == nil {

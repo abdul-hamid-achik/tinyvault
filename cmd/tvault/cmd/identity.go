@@ -113,37 +113,9 @@ func resolveIdentity(name string) (*crypto.Identity, string, error) {
 	}
 	//nolint:gosec // keyPath comes from identity.File, which validates the name (no traversal)
 	if _, statErr := os.Stat(keyPath); statErr == nil {
-		id, lerr := loadIdentity(keyPath)
-		if lerr != nil {
-			return nil, "", lerr
-		}
-		return id, "file", nil
+		warnIdentityPerms(keyPath)
 	}
-	id, eerr := decodeEnvIdentityKey()
-	if eerr != nil {
-		return nil, "", eerr
-	}
-	if id != nil {
-		return id, "env-key", nil
-	}
-	return nil, "", nil
-}
-
-// decodeEnvIdentityKey decodes the TVAULT_IDENTITY_KEY environment value into
-// an identity, or returns (nil, nil) if it is unset. On a decode failure the
-// error NEVER echoes the key value (DecodeIdentity is already sanitized, and
-// the %w chain carries no copy of the input).
-func decodeEnvIdentityKey() (*crypto.Identity, error) {
-	v := strings.TrimSpace(os.Getenv(envIdentityKey))
-	if v == "" {
-		return nil, nil
-	}
-	id, err := crypto.DecodeIdentity(v)
-	if err != nil {
-		// Never echo the key value; DecodeIdentity's error does not include it.
-		return nil, fmt.Errorf("invalid %s: %w", envIdentityKey, err)
-	}
-	return id, nil
+	return identity.Resolve(getVaultDir(), name)
 }
 
 // warnEnvKeyUsed prints a one-line stderr notice about which identity source
@@ -230,12 +202,16 @@ func runIdentityList(_ *cobra.Command, _ []string) error {
 // loadIdentity reads an identity key file via internal/identity, but first
 // warns (without failing) if the file is group/world-readable, since the
 // private key inside is meant to be 0600.
-func loadIdentity(path string) (*crypto.Identity, error) {
+func warnIdentityPerms(path string) {
 	//nolint:gosec // path comes from identity.File, which validates the name (no traversal)
 	if info, serr := os.Stat(path); serr == nil && info.Mode().Perm()&0o077 != 0 {
 		fmt.Fprintf(os.Stderr, "warning: identity file %s is group/world-readable (mode %#o); run: chmod 600 %s\n",
 			path, info.Mode().Perm(), path)
 	}
+}
+
+func loadIdentity(path string) (*crypto.Identity, error) {
+	warnIdentityPerms(path)
 	return identity.Load(path)
 }
 

@@ -54,7 +54,7 @@ Produce ciphertext you can commit or hand back to the conversation safely:
 - **To specific recipients:** `vault_seal_for_recipients { "recipients": ["tvault1…"], "output_path": ".env.encrypted" }`.
 - **To the project's current recipients** (after `vault_share_project`): `vault_export_env_encrypted { "project": "webapp", "output_path": ".env.encrypted" }` — no need to re-list recipients.
 
-Both return ciphertext (a path or base64). Only a holder of a matching private identity can open it (`tvault decrypt-env --identity …`).
+Both return ciphertext (a path or base64). Only a holder of a matching private identity can open it (`tvault decrypt-env --identity …`, or over MCP `vault_open_sealed { "path": ".env.encrypted", "output_path": ".env" }` — writes a `0600` file and returns path + key names, never values).
 
 ## Check and reconcile a `.env`
 

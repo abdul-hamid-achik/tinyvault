@@ -116,6 +116,7 @@ The policy is loaded once at startup. There is no MCP policy-edit or reload tool
 | `vault_export_env` | Written to a local plaintext file | Path, key names, and count |
 | `vault_generate_secret` | Generated and stored inside TinyVault | Key and generation metadata |
 | `vault_seal_for_recipients` | Encrypted to recipient public keys | Ciphertext or path plus metadata |
+| `vault_open_sealed` | Written to a local plaintext file | Path, key names, and count |
 | `vault_export_env_encrypted` | Encrypted in memory or written to disk | Ciphertext or path plus metadata |
 
 Search and listing tools return names and metadata, so an agent can locate a key before choosing a value path.

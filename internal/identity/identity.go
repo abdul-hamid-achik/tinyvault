@@ -133,3 +133,54 @@ func List(vaultDir string) ([]Entry, error) {
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
 }
+
+// EnvKey is the environment variable that carries a private identity
+// (a tvault-key1… string) so CI, ssh, and agents can decrypt without a
+// key file or passphrase.
+const EnvKey = "TVAULT_IDENTITY_KEY"
+
+// Resolve returns the identity to decrypt with, plus a source tag
+// ("file" | "env-key") for warnings and audit. Precedence:
+//
+//  1. The named key file (empty name → "default") if it exists on disk —
+//     local dev stays deterministic.
+//  2. Else the TVAULT_IDENTITY_KEY environment value — the CI / ssh / agent path.
+//  3. Else (nil, "", nil): locked. The caller decides whether that is fatal.
+//
+// A malformed name is the only hard error (traversal safety via ValidName).
+// A malformed env key errors without echoing the value.
+func Resolve(vaultDir, name string) (*crypto.Identity, string, error) {
+	keyPath, err := File(vaultDir, name)
+	if err != nil {
+		return nil, "", err
+	}
+	if _, statErr := os.Stat(keyPath); statErr == nil {
+		id, lerr := Load(keyPath)
+		if lerr != nil {
+			return nil, "", lerr
+		}
+		return id, "file", nil
+	}
+	id, eerr := DecodeEnvKey()
+	if eerr != nil {
+		return nil, "", eerr
+	}
+	if id != nil {
+		return id, "env-key", nil
+	}
+	return nil, "", nil
+}
+
+// DecodeEnvKey decodes TVAULT_IDENTITY_KEY, or returns (nil, nil) if unset.
+// On decode failure the error never includes the key value.
+func DecodeEnvKey() (*crypto.Identity, error) {
+	v := strings.TrimSpace(os.Getenv(EnvKey))
+	if v == "" {
+		return nil, nil
+	}
+	id, err := crypto.DecodeIdentity(v)
+	if err != nil {
+		return nil, fmt.Errorf("invalid %s: %w", EnvKey, err)
+	}
+	return id, nil
+}

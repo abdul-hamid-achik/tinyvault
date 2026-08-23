@@ -15,6 +15,7 @@ import (
 	"github.com/abdul-hamid-achik/tinyvault/internal/crypto"
 	"github.com/abdul-hamid-achik/tinyvault/internal/dotenv"
 	"github.com/abdul-hamid-achik/tinyvault/internal/processenv"
+	"github.com/abdul-hamid-achik/tinyvault/internal/redact"
 	"github.com/abdul-hamid-achik/tinyvault/internal/vault"
 )
 
@@ -27,6 +28,7 @@ var (
 	runEnvName    string
 	runStrict     bool
 	runIdentity   string
+	runRedact     bool
 )
 
 var runCmd = &cobra.Command{
@@ -72,6 +74,7 @@ func init() {
 	runCmd.Flags().StringVar(&runEnvName, "env", "", "Environment name within the group (requires --group)")
 	runCmd.Flags().BoolVar(&runStrict, "strict", false, "Fail if any --only key is missing instead of warning")
 	runCmd.Flags().StringVar(&runIdentity, "identity", "", "Decrypt a shared project with this X25519 identity instead of the passphrase")
+	runCmd.Flags().BoolVar(&runRedact, "redact", false, "Replace literal injected secret values in child stdout/stderr with [REDACTED:KEY] (safety net; misses short, split, or transformed values)")
 }
 
 func runRun(cmd *cobra.Command, args []string) error {
@@ -330,6 +333,10 @@ func runRun(cmd *cobra.Command, args []string) error {
 	execCmd.Stdin = os.Stdin
 	execCmd.Stdout = os.Stdout
 	execCmd.Stderr = os.Stderr
+	if runRedact {
+		execCmd.Stdout = redact.Writer(os.Stdout, merged)
+		execCmd.Stderr = redact.Writer(os.Stderr, merged)
+	}
 
 	// Handle signals.
 	sigChan := make(chan os.Signal, 1)

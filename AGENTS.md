@@ -63,7 +63,7 @@ cmd/tvault/
     get.go / set.go          # tvault get KEY (--version N) / tvault set KEY VALUE (with --from-env / --from-file)
     history.go / rollback.go # tvault history KEY / tvault rollback KEY --to N (secret version history)
     list.go / delete.go      # tvault list / tvault delete KEY (list supports --prefix; delete purges history)
-    run.go                   # tvault run -- CMD; --env-file + ${tvault://...} interpolation
+    run.go                   # tvault run -- CMD; --env-file + ${tvault://...} interpolation; --redact
     ssh.go                   # tvault ssh <dest> -- CMD (inject env over SSH stdin; never remote disk)
     docker.go                # tvault docker build/compose/run/init (BuildKit secrets, compose env)
     secrets_load.go          # shared secret loader for env, ssh, and docker
@@ -146,8 +146,10 @@ internal/
     encrypted_env_test.go    # End-to-end encrypted .env round-trip via vault
     envgroup_test.go         # Environment group + drift + promote + inheritance tests
   identity/
-    identity.go              # X25519 identity key files: New/List/Load/File/Dir (single source of truth for CLI + MCP)
-    identity_test.go         # New/List/Load round-trip + name validation
+    identity.go              # X25519 identity key files: New/List/Load/File/Dir/Resolve (single source of truth for CLI + MCP)
+    identity_test.go         # New/List/Load/Resolve round-trip + name validation
+  redact/
+    redact.go                # Literal value redaction ([REDACTED:KEY]); used by MCP exec and tvault run --redact
   mcp/
     server.go                # VaultMCPServer, tool registration, Run(); reopen-per-request middleware
                              # (KEK cache or agent-backed reads via NewAgentMCPServer)
@@ -165,11 +167,12 @@ internal/
     tools_secrets_meta.go    # vault_list_secrets_detailed, vault_list_secrets_global
     tools_sharing.go         # vault_share/unshare_project, vault_project_recipients
     tools_dotenv.go          # vault_diff_env, vault_sync_env, vault_export_env_encrypted
+    tools_seal.go            # vault_seal_for_recipients, vault_open_sealed (ciphertext / path only)
     tools_identity.go        # vault_identity_new, vault_identity_list (public recipient only)
     tools_env_groups.go      # vault_env_group_create/list, vault_env_diff, vault_env_promote,
                              # vault_env_seal, vault_env_inherit, vault_env_inherited (environment profiles)
     config.go                # AccessPolicy, LoadPolicy, allow/deny pattern matching
-    redact.go                # redactSecrets() replaces values with [REDACTED:KEY]
+    redact.go                # thin wrapper over internal/redact for MCP exec output
     prompts.go               # MCP prompts (setup-project, inject-secrets)
     resources.go             # MCP resources (vault://status, vault://projects, vault://projects/{name}/keys)
     server_test.go           # Integration tests with in-memory MCP transport

@@ -239,3 +239,15 @@ func (s *VaultMCPServer) resolveProject(explicit string) string {
 	}
 	return name
 }
+
+// vaultDir is the on-disk vault directory (identities live beside it).
+// Reopen-per-request servers stash it on s.dir; held-open tests use the vault.
+func (s *VaultMCPServer) vaultDir() string {
+	if s.dir != "" {
+		return s.dir
+	}
+	if s.vault != nil {
+		return s.vault.Dir()
+	}
+	return ""
+}

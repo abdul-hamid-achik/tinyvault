@@ -18,14 +18,14 @@ TinyVault is a single-binary CLI tool and [MCP server](https://modelcontextproto
 
 ## For AI agents
 
-TinyVault is built around value-minimizing agent workflows: search metadata, inject selected values into a subprocess, or write an export and return only its path. Raw values can still cross the model boundary through explicit tools such as `vault_get_secret` and `vault_set_secret`, so policy remains important. **Run `tvault docs features`** for a machine-readable JSON manifest of every capability, then follow the discover → search → use loop (`tvault help agent --json` documents it). Connect an MCP client to `tvault mcp` (49 tools). Start at the [For AI Agents](https://tinyvault.dev/guide/for-ai-agents) guide.
+TinyVault is built around value-minimizing agent workflows: search metadata, inject selected values into a subprocess, or write an export and return only its path. Raw values can still cross the model boundary through explicit tools such as `vault_get_secret` and `vault_set_secret`, so policy remains important. **Run `tvault docs features`** for a machine-readable JSON manifest of every capability, then follow the discover → search → use loop (`tvault help agent --json` documents it). Connect an MCP client to `tvault mcp` (50 tools). Start at the [For AI Agents](https://tinyvault.dev/guide/for-ai-agents) guide.
 
 ## Features
 
 - **AES-256-GCM Encryption** -- Two-tier key hierarchy with per-project data encryption keys
 - **Argon2id Key Derivation** -- Memory-hard passphrase hashing resistant to GPU/ASIC attacks
 - **Single Binary, Any Stack** -- One `tvault` binary (written in Go) for CLI use and MCP server mode. Language-agnostic: inject secrets as env vars into any process.
-- **MCP Server** -- 49 tools: AI agents can discover and use secrets through value-minimizing Model Context Protocol (stdio) workflows, with explicit raw-value tools gated by policy
+- **MCP Server** -- 50 tools: AI agents can discover and use secrets through value-minimizing Model Context Protocol (stdio) workflows, with explicit raw-value tools gated by policy
 - **Multi-Project** -- Organize secrets into projects with independent encryption keys
 - **.env Ecosystem** -- Safe dotenv parser (no shell expansion), `tvault://` placeholder interpolation, two-way sync (pull/push/mirror), and `.env.encrypted` files (Rails credentials pattern, safe to commit)
 - **Share & commit secrets** -- X25519 recipients (age-style): share a project without the passphrase, commit self-decrypting secrets via `git-filter` (transparent clean/smudge) or v2 `.env.encrypted`, and seal for recipients over MCP. Removing a recipient re-keys the updated live vault; previously copied vaults and sealed artifacts are not retroactively revoked.
@@ -347,7 +347,8 @@ Add to `.claude/settings.local.json`:
 | `vault_status` | Vault metadata + lock state |
 | `vault_audit_log` | Recent audit entries (newest first) |
 | `vault_audit_log_since` | Time-range + action-filtered audit log |
-| `vault_seal_for_recipients` | Seal secrets to X25519 recipients (returns ciphertext only; openable with `decrypt-env --identity`) |
+| `vault_seal_for_recipients` | Seal secrets to X25519 recipients (returns ciphertext only; openable with `decrypt-env --identity` or `vault_open_sealed`) |
+| `vault_open_sealed` | Decrypt a v2 blob to a `0600` dotenv file; returns path + key names, never values |
 | `vault_secret_history` | List a secret's version history (metadata only, never values) |
 | `vault_rollback_secret` | Restore an earlier version as a new version (returns version numbers only) |
 | `vault_get_current_project` | Report the current/default project |
@@ -515,7 +516,7 @@ tvault (single binary)
     crypto/         # AES-256-GCM, Argon2id, key generation
     store/          # bbolt storage layer
     vault/          # High-level vault operations
-    mcp/            # MCP server (49 tools, access policy, redaction)
+    mcp/            # MCP server (50 tools, access policy, redaction)
     validation/     # Input validation
 ```
 

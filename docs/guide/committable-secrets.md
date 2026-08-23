@@ -201,7 +201,7 @@ See the full walkthrough — install, track, status, checkout, and the idempoten
 | Files that look like plaintext locally, encrypted in history | [Git Filter](/guide/git-filter) |
 
 ::: info Where MCP fits
-An AI agent can produce the same v2 blob over MCP with the `vault_seal_for_recipients` tool, whose own result is **ciphertext only**. Elsewhere, `vault_get_secret` deliberately returns plaintext and `vault_run_with_secrets` can carry values through child output. Optional literal-value redaction is a safety net, not a control. See [MCP Tools](/mcp/tools) and [Access Policy](/mcp/access-policy).
+An AI agent can produce the same v2 blob over MCP with the `vault_seal_for_recipients` tool, whose own result is **ciphertext only**, and open one with `vault_open_sealed`, which writes a `0600` dotenv and returns only the path and key names. Elsewhere, `vault_get_secret` deliberately returns plaintext and `vault_run_with_secrets` can carry values through child output. Optional literal-value redaction is a safety net, not a control. See [MCP Tools](/mcp/tools) and [Access Policy](/mcp/access-policy).
 :::
 
 ## See also

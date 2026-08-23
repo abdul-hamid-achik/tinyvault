@@ -3,6 +3,7 @@ package identity
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/crypto"
@@ -80,5 +81,75 @@ func TestFile(t *testing.T) {
 	// Traversal rejected.
 	if _, err := File("/vault", "../evil"); err == nil {
 		t.Error("File(../evil) should error")
+	}
+}
+
+func TestResolveEnvKey(t *testing.T) {
+	dir := t.TempDir()
+	id, err := crypto.GenerateIdentity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(EnvKey, crypto.EncodeIdentity(id))
+
+	got, source, rerr := Resolve(dir, "default")
+	if rerr != nil {
+		t.Fatalf("Resolve: %v", rerr)
+	}
+	if got == nil || source != "env-key" {
+		t.Fatalf("want env-key identity, got source=%q id=%v", source, got)
+	}
+	if crypto.EncodeRecipient(got.Recipient()) != crypto.EncodeRecipient(id.Recipient()) {
+		t.Error("env-key resolved a different identity")
+	}
+}
+
+func TestResolveFileBeatsEnvKey(t *testing.T) {
+	dir := t.TempDir()
+	fileRec, _, err := New(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := crypto.GenerateIdentity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(EnvKey, crypto.EncodeIdentity(other))
+
+	got, source, rerr := Resolve(dir, "default")
+	if rerr != nil {
+		t.Fatalf("Resolve: %v", rerr)
+	}
+	if source != "file" {
+		t.Fatalf("file must win over env key, got source=%q", source)
+	}
+	if crypto.EncodeRecipient(got.Recipient()) != fileRec {
+		t.Error("resolved the env key instead of the file")
+	}
+}
+
+func TestResolveLocked(t *testing.T) {
+	t.Setenv(EnvKey, "")
+	got, source, err := Resolve(t.TempDir(), "default")
+	if err != nil || got != nil || source != "" {
+		t.Fatalf("locked state should be (nil, \"\", nil), got id=%v source=%q err=%v", got, source, err)
+	}
+}
+
+func TestResolveEnvKeyMalformedNoLeak(t *testing.T) {
+	const secretish = "tvault-key1SUPERSECRETGARBAGEZZZZ"
+	t.Setenv(EnvKey, secretish)
+	_, _, err := Resolve(t.TempDir(), "default")
+	if err == nil {
+		t.Fatal("malformed env key should error")
+	}
+	if strings.Contains(err.Error(), "SUPERSECRETGARBAGE") {
+		t.Errorf("error leaked the key value: %v", err)
+	}
+}
+
+func TestResolveBadName(t *testing.T) {
+	if _, _, err := Resolve(t.TempDir(), "../../etc/x"); err == nil {
+		t.Fatal("traversal name should be rejected")
 	}
 }

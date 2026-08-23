@@ -25,13 +25,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `tvault mcp --connect auto|none|unix://PATH` can serve secret reads
   through a running local agent, so GUI hosts need not put
   `TVAULT_PASSPHRASE` in their config. Writes still need the passphrase.
+- MCP `vault_open_sealed` decrypts a recipient-sealed v2 blob with a
+  local identity (or `TVAULT_IDENTITY_KEY`) and writes a `0600` dotenv.
+  The tool result is `{path, keys, count}` — never values. Inverse of
+  `vault_seal_for_recipients`.
+- `tvault run --redact` replaces literal injected secret values in
+  child stdout/stderr with `[REDACTED:KEY]` (values longer than 3
+  characters; split or transformed values are not caught). Default is
+  still an unredacted stream.
 
 ### Changed
 
-- Get, set, delete, project create/delete, rollback, and history now
-  write the audit log in the vault layer, so CLI, MCP, and the agent
-  share one trail without duplicate rows. Secret values are never stored
-  in the log.
+- Get, set, delete, project create/delete, rollback, history, and bulk
+  project reads (`GetAllSecrets` / `GetSelectedSecrets`) now write the
+  audit log in the vault layer, so CLI, MCP, and the agent share one
+  trail without duplicate rows. Bulk reads are one project-level
+  `secret.read` (count only). Secret values are never stored in the log.
 
 ### Fixed
 

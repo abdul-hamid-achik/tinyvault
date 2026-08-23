@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/abdul-hamid-achik/tinyvault/internal/crypto"
 	"github.com/abdul-hamid-achik/tinyvault/internal/dotenv"
 	"github.com/abdul-hamid-achik/tinyvault/internal/encryptedenv"
+	"github.com/abdul-hamid-achik/tinyvault/internal/identity"
 )
 
 type sealForRecipientsInput struct {
@@ -30,16 +32,38 @@ type sealForRecipientsOutput struct {
 	RecipientCount int      `json:"recipient_count"`
 }
 
+type openSealedInput struct {
+	Path         string `json:"path,omitempty" jsonschema:"Path to a v2 .env.encrypted blob. Provide this or sealed_base64, not both."`
+	SealedBase64 string `json:"sealed_base64,omitempty" jsonschema:"Base64 of a v2 blob (the sealed_base64 returned by vault_seal_for_recipients). Provide this or path, not both."`
+	Identity     string `json:"identity,omitempty" jsonschema:"Identity name to decrypt with (default: $TVAULT_IDENTITY, else 'default'). Falls back to TVAULT_IDENTITY_KEY when no file exists."`
+	OutputPath   string `json:"output_path" jsonschema:"Required. Write the decrypted dotenv here (0600). Plaintext is NEVER returned to the model."`
+}
+
+type openSealedOutput struct {
+	Path  string   `json:"path"`
+	Count int      `json:"count"`
+	Keys  []string `json:"keys"`
+}
+
 func (s *VaultMCPServer) registerSealTools() {
 	sdkmcp.AddTool(s.server, &sdkmcp.Tool{
 		Name: "vault_seal_for_recipients",
 		Description: "Seal project secrets to one or more X25519 recipients (tvault1…), producing a " +
 			"commit-safe .env.encrypted v2 blob that ONLY a holder of a matching private identity can open " +
-			"(with `tvault decrypt-env --identity`). The returned bytes are ciphertext, so they are safe to " +
+			"(with `tvault decrypt-env --identity` or vault_open_sealed). The returned bytes are ciphertext, so they are safe to " +
 			"hand back to the conversation, commit, or send over any transport -- plaintext secret values are " +
 			"NEVER returned. Use this to package secrets for a teammate, CI, or another agent without sharing " +
 			"the passphrase.",
 	}, s.handleSealForRecipients)
+
+	sdkmcp.AddTool(s.server, &sdkmcp.Tool{
+		Name: "vault_open_sealed",
+		Description: "Open a recipient-sealed v2 blob (from vault_seal_for_recipients, tvault seal, or " +
+			"encrypt-env --recipient) with a local identity and write the decrypted dotenv to output_path " +
+			"(0600). Returns only the path, key names, and count -- plaintext values are NEVER returned. " +
+			"Identity is `identity`, else $TVAULT_IDENTITY, else 'default', else $TVAULT_IDENTITY_KEY. " +
+			"v1 (passphrase) blobs are rejected; use decrypt-env for those. Write op.",
+	}, s.handleOpenSealed)
 }
 
 func (s *VaultMCPServer) handleSealForRecipients(_ context.Context, _ *sdkmcp.CallToolRequest, input sealForRecipientsInput) (*sdkmcp.CallToolResult, sealForRecipientsOutput, error) {
@@ -130,4 +154,103 @@ func selectSealKeys(all map[string]string, requested []string, policy *AccessPol
 		}
 	}
 	return filtered, nil
+}
+
+func (s *VaultMCPServer) handleOpenSealed(_ context.Context, _ *sdkmcp.CallToolRequest, input openSealedInput) (*sdkmcp.CallToolResult, openSealedOutput, error) {
+	if !s.policy.CanWrite() {
+		return nil, openSealedOutput{}, fmt.Errorf("file exports are not allowed by policy")
+	}
+	if input.OutputPath == "" {
+		return nil, openSealedOutput{}, fmt.Errorf("output_path is required (plaintext is written to disk, never returned)")
+	}
+	hasPath := input.Path != ""
+	hasInline := input.SealedBase64 != ""
+	if hasPath == hasInline {
+		return nil, openSealedOutput{}, fmt.Errorf("provide exactly one of path or sealed_base64")
+	}
+
+	data, sourceKind, err := readSealedInput(input)
+	if err != nil {
+		return nil, openSealedOutput{}, err
+	}
+
+	ver, verr := encryptedenv.FileVersion(data)
+	if verr != nil {
+		return nil, openSealedOutput{}, fmt.Errorf("open: %w", verr)
+	}
+	if ver != 2 {
+		return nil, openSealedOutput{}, fmt.Errorf("vault_open_sealed handles recipient-sealed (v2) blobs; this is v%d — use decrypt-env for passphrase files", ver)
+	}
+
+	id, idSource, ierr := s.resolveOpenIdentity(input.Identity)
+	if ierr != nil {
+		return nil, openSealedOutput{}, ierr
+	}
+
+	plaintext, derr := encryptedenv.DecryptV2(id, data)
+	if derr != nil {
+		return nil, openSealedOutput{}, fmt.Errorf("open: %w", derr)
+	}
+	defer crypto.ZeroBytes(plaintext)
+
+	parsed, perr := dotenv.ParseBytes(input.OutputPath, plaintext)
+	if perr != nil {
+		return nil, openSealedOutput{}, fmt.Errorf("parse decrypted dotenv: %w", perr)
+	}
+	filtered := make(map[string]string, len(parsed.Entries))
+	for _, e := range parsed.Entries {
+		if s.policy.CanAccessSecret(e.Key) {
+			filtered[e.Key] = e.Value
+		}
+	}
+	body := dotenv.Marshal(filtered)
+	if werr := os.WriteFile(input.OutputPath, body, 0o600); werr != nil {
+		return nil, openSealedOutput{}, fmt.Errorf("write file: %w", werr)
+	}
+
+	keys := make([]string, 0, len(filtered))
+	for k := range filtered {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	s.audit("secret.open", "env", input.OutputPath, map[string]any{
+		"keys":     len(keys),
+		"identity": idSource,
+		"input":    sourceKind,
+	})
+	return nil, openSealedOutput{
+		Path:  input.OutputPath,
+		Count: len(keys),
+		Keys:  keys,
+	}, nil
+}
+
+func readSealedInput(input openSealedInput) (data []byte, kind string, err error) {
+	if input.Path != "" {
+		raw, rerr := os.ReadFile(input.Path)
+		if rerr != nil {
+			return nil, "", fmt.Errorf("read %s: %w", input.Path, rerr)
+		}
+		return raw, "path", nil
+	}
+	raw, berr := base64.StdEncoding.DecodeString(input.SealedBase64)
+	if berr != nil {
+		return nil, "", fmt.Errorf("decode sealed_base64: %w", berr)
+	}
+	return raw, "inline", nil
+}
+
+func (s *VaultMCPServer) resolveOpenIdentity(name string) (*crypto.Identity, string, error) {
+	if name == "" {
+		name = strings.TrimSpace(os.Getenv("TVAULT_IDENTITY"))
+	}
+	id, source, err := identity.Resolve(s.vaultDir(), name)
+	if err != nil {
+		return nil, "", err
+	}
+	if id == nil {
+		return nil, "", fmt.Errorf("no identity available: pass identity, set TVAULT_IDENTITY, or set %s", identity.EnvKey)
+	}
+	return id, source, nil
 }
