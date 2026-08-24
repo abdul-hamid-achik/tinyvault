@@ -22,6 +22,17 @@ If `tvault` was installed from the retired formula, migrate once with
 
 ## Unreleased
 
+## 0.22.1 — 2026-08-24
+
+### Fixed
+
+- npm smoke waits for `registry.npmjs.org` to serve the new version
+  (main package and every platform package) and installs with a fresh
+  cache, so a CDN lag cannot cache an `ETARGET` miss. Ubuntu failed that
+  way on 0.22.0 while macOS and Windows passed.
+- CI and the release toolchain pin Go 1.26.6 (stdlib fixes that
+  `govulncheck` flagged on 1.26.5).
+
 ## 0.22.0 — 2026-08-24
 
 ### Added

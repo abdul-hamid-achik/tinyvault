@@ -127,6 +127,11 @@ jobs:
             (cd npm/cli && npm publish)
             echo "published: $pkg@$ver"
           fi
+      - name: Wait until the npm registry serves this version
+        # `needs: publish` only waits for this job to finish, not for npm's
+        # CDN. Without this, Ubuntu smoke (fastest runner) can ETARGET on
+        # the first install and then keep failing because npm caches the miss.
+        run: node npm/scripts/wait-for-registry.mjs "${{ steps.version.outputs.version }}"
 
   smoke:
     needs: publish
@@ -138,29 +143,23 @@ jobs:
     env:
       TVAULT_PASSPHRASE: smoke-test-passphrase
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
         with:
           node-version: "24"
+      - name: Wait until the npm registry serves this version
+        run: node npm/scripts/wait-for-registry.mjs "${{ needs.publish.outputs.version }}"
       - name: Install package from npm
         shell: bash
-        # Retried, because `needs: publish` orders the jobs but not the
-        # registry: npm serves a just-published version from a CDN that takes
-        # seconds to catch up, so the first install after a release can answer
-        # ETARGET "No matching version found". That reads as "the publish
-        # failed" when the publish was perfect — which is exactly what happened
-        # on 0.21.0, where a plain rerun then passed untouched.
+        # A too-early `npm install` caches ETARGET and every retry in this
+        # job then fails even after the CDN catches up. Wait (above) talks
+        # to registry.npmjs.org with no npm cache; the install itself uses
+        # a throwaway cache so a leftover miss cannot poison it.
         run: |
           set -euo pipefail
           version="${{ needs.publish.outputs.version }}"
-          for attempt in 1 2 3 4 5 6; do
-            if npm install --global "@thelacanians/tinyvault@${version}"; then
-              exit 0
-            fi
-            echo "install attempt ${attempt} failed; the registry may not be serving ${version} yet"
-            sleep 10
-          done
-          echo "::error::@thelacanians/tinyvault@${version} was still not installable after 6 attempts over a minute"
-          exit 1
+          cache="$(mktemp -d)"
+          npm install --global --cache "$cache" --prefer-online "@thelacanians/tinyvault@${version}"
       - name: CLI smoke through the npm shim
         shell: bash
         run: |
@@ -170,14 +169,14 @@ jobs:
           tvault init
           tvault set SMOKE_KEY "smoke-value"
           [[ "$(tvault get SMOKE_KEY)" == "smoke-value" ]]
-          # The exact invocation MCP hosts use:
-          npx -y "@thelacanians/tinyvault@${{ needs.publish.outputs.version }}" --version
-      - name: MCP stdio handshake through the npm shim
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+          # The exact invocation MCP hosts use. Fresh cache so npx cannot
+          # reuse an ETARGET miss from a previous lookup.
+          NPM_CONFIG_CACHE="$(mktemp -d)" npx -y "@thelacanians/tinyvault@${{ needs.publish.outputs.version }}" --version
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          go-version: "1.26"
-      - name: Run stdio handshake test
+          go-version: "1.26.6"
+      - name: MCP stdio handshake through the npm shim
         shell: bash
         run: |
           set -euo pipefail

@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.22.1] - 2026-08-24
+
+### Fixed
+
+- npm smoke no longer treats a CDN lag as a failed publish. After
+  publishing, CI waits until `registry.npmjs.org` serves the new version
+  of the main package and every platform package (up to 5 minutes), then
+  installs with a fresh npm cache. Retrying `npm install` after an
+  `ETARGET` used to keep failing because npm caches the miss — that is
+  what turned Ubuntu red on 0.22.0 while macOS and Windows passed.
+- CI and GoReleaser pin Go 1.26.6, which includes the stdlib fixes
+  `govulncheck` reported against 1.26.5 (`net/url`, `crypto/tls`,
+  `encoding/asn1`, `net/http`).
+
 ## [0.22.0] - 2026-08-24
 
 ### Added
@@ -483,7 +497,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 See the [GitHub releases](https://github.com/abdul-hamid-achik/tinyvault/releases)
 for v0.8.0 and earlier.
 
-[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.22.1...HEAD
+[0.22.1]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.22.0...v0.22.1
 [0.22.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.21.1...v0.22.0
 [0.21.1]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.21.0...v0.21.1
 [0.21.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.20.2...v0.21.0
