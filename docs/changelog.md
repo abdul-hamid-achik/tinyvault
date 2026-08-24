@@ -22,6 +22,8 @@ If `tvault` was installed from the retired formula, migrate once with
 
 ## Unreleased
 
+## 0.22.0 — 2026-08-24
+
 ### Added
 
 - `tvault audit` lists recent vault audit-log entries (metadata only:

@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-08-24
+
 ### Added
 
 - `tvault audit` lists recent vault audit-log entries (metadata only:
@@ -481,7 +483,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 See the [GitHub releases](https://github.com/abdul-hamid-achik/tinyvault/releases)
 for v0.8.0 and earlier.
 
-[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.20.2...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.21.1...v0.22.0
+[0.21.1]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.21.0...v0.21.1
+[0.21.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.20.2...v0.21.0
 [0.20.2]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.20.1...v0.20.2
 [0.20.1]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.19.1...v0.20.0
