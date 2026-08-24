@@ -22,6 +22,14 @@ If `tvault` was installed from the retired formula, migrate once with
 
 ## Unreleased
 
+## 0.22.2 — 2026-08-24
+
+### Fixed
+
+- Windows npm smoke: do not `process.exit()` after `fetch`, which aborted
+  with a libuv `UV_HANDLE_CLOSING` assert even after the registry wait
+  succeeded.
+
 ## 0.22.1 — 2026-08-24
 
 ### Fixed

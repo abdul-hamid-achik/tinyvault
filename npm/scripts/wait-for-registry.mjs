@@ -16,6 +16,7 @@ if (!/^\d+\.\d+\.\d+$/.test(version)) {
   console.error(
     `usage: node npm/scripts/wait-for-registry.mjs <version>; got ${JSON.stringify(process.argv[2])}`,
   );
+  process.exitCode = 2;
   process.exit(2);
 }
 
@@ -46,25 +47,33 @@ async function hasVersion(pkg) {
   }
 }
 
-const start = Date.now();
-for (;;) {
-  const results = await Promise.all(
-    pkgs.map(async (pkg) => [pkg, await hasVersion(pkg)]),
-  );
-  const missing = results.filter(([, ok]) => !ok).map(([pkg]) => pkg);
-  if (missing.length === 0) {
-    console.log(`registry has all ${pkgs.length} packages at ${version}`);
-    process.exit(0);
-  }
-  const elapsed = Date.now() - start;
-  if (elapsed >= timeoutMs) {
-    console.error(
-      `timed out after ${Math.round(elapsed / 1000)}s waiting for npm to serve ${version}: still missing ${missing.join(", ")}`,
+async function main() {
+  const start = Date.now();
+  for (;;) {
+    const results = await Promise.all(
+      pkgs.map(async (pkg) => [pkg, await hasVersion(pkg)]),
     );
-    process.exit(1);
+    const missing = results.filter(([, ok]) => !ok).map(([pkg]) => pkg);
+    if (missing.length === 0) {
+      console.log(`registry has all ${pkgs.length} packages at ${version}`);
+      // Do not process.exit() after fetch: on Windows libuv asserts
+      // `UV_HANDLE_CLOSING` if we abort while keep-alive sockets close
+      // (0.22.1 smoke: "registry has all 7 packages" then exit 1).
+      return;
+    }
+    const elapsed = Date.now() - start;
+    if (elapsed >= timeoutMs) {
+      console.error(
+        `timed out after ${Math.round(elapsed / 1000)}s waiting for npm to serve ${version}: still missing ${missing.join(", ")}`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+    console.log(
+      `still missing ${missing.length}/${pkgs.length} at ${version}: ${missing.join(", ")}`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
-  console.log(
-    `still missing ${missing.length}/${pkgs.length} at ${version}: ${missing.join(", ")}`,
-  );
-  await new Promise((resolve) => setTimeout(resolve, intervalMs));
 }
+
+await main();

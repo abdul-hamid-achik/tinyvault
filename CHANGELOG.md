@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.22.2] - 2026-08-24
+
+### Fixed
+
+- npm smoke on Windows no longer aborts after a successful registry wait.
+  `process.exit(0)` right after `fetch` trips a libuv `UV_HANDLE_CLOSING`
+  assert (`src/win/async.c`). The waiter now returns and lets Node shut
+  down cleanly.
+
 ## [0.22.1] - 2026-08-24
 
 ### Fixed
@@ -497,7 +506,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 See the [GitHub releases](https://github.com/abdul-hamid-achik/tinyvault/releases)
 for v0.8.0 and earlier.
 
-[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.22.1...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.22.2...HEAD
+[0.22.2]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.22.1...v0.22.2
 [0.22.1]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.22.0...v0.22.1
 [0.22.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.21.1...v0.22.0
 [0.21.1]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.21.0...v0.21.1
