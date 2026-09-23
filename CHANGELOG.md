@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-09-23
+
 ### Added
 
 - Rotated, compressed backup snapshots: `tvault backup [path] [--dir D] [--keep N]
@@ -594,7 +596,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 See the [GitHub releases](https://github.com/abdul-hamid-achik/tinyvault/releases)
 for v0.8.0 and earlier.
 
-[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.22.2...v0.23.0
 [0.22.2]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.22.1...v0.22.2
 [0.22.1]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.22.0...v0.22.1

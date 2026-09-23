@@ -22,6 +22,51 @@ If `tvault` was installed from the retired formula, migrate once with
 
 ## Unreleased
 
+## 0.24.0 — 2026-09-23
+
+### Added
+
+- Rotated, compressed backup snapshots: `tvault backup [path] [--dir D] [--keep N]
+  [--immutable]` without a path writes a timestamped, gzip-compressed
+  `vault-YYYYMMDD-HHMMSS.mmm[-reason].db.gz` into `--dir` (or `backup.dir` in
+  `config.yaml`) and prunes the oldest beyond `--keep` (or `backup.keep`,
+  default 30); rotation only ever touches files it wrote (`vault-*.db[.gz]`).
+- `--immutable` / `backup.immutable: true` marks rotated snapshots with the
+  macOS/BSD user-immutable flag (`chflags uchg`), so an accidental `rm -rf`
+  fails with `Operation not permitted`; `tvault backup` clears the flag itself
+  on snapshots it prunes. Unsupported on Linux/Windows (a warning is printed;
+  the snapshot is still written).
+- Safety snapshots before destructive operations: when `backup.dir` is
+  configured, `tvault delete`, `tvault projects delete`, `tvault restore`, and
+  the MCP `vault_delete_secret` / `vault_delete_project` tools take a rotated
+  snapshot first (`pre-delete`, `pre-delete-project`, `pre-restore`) and are
+  refused — nothing changes — if that snapshot fails to write.
+- `tvault restore` now stages and verifies the incoming backup *before*
+  touching the current vault, and always saves the current vault first (into
+  `backup.dir` when configured, else next to `vault.db` as
+  `vault.db.pre-restore-<time>`) before the atomic swap. It also accepts a
+  gzip-compressed backup, auto-detected by magic bytes.
+- `tvault doctor` gained a **backups** check: warns when `backup.dir` isn't
+  configured, when it has no snapshots yet, or when the newest snapshot is
+  older than 7 days; otherwise reports the snapshot count and age.
+- Documented backup scheduling with a macOS launchd example and a Linux
+  systemd `--user` timer example — see
+  [Backups & recovery](/guide/backups).
+
+### Changed
+
+- `tvault backup` now writes a **consistent, transactional snapshot**
+  (`store.Snapshot`, a bbolt read transaction via `Tx.WriteTo`) instead of a
+  raw byte copy of `vault.db`, so a concurrent write from another `tvault`
+  process can no longer produce a torn backup. The snapshot is written to a
+  private temp file in the destination directory, `fsync`'d, verified (opened
+  read-only, core buckets checked), and only then renamed atomically into
+  place at `0600` — a failed or interrupted backup never leaves a truncated
+  file behind. One side effect: because the audit log usually dominates a
+  vault's size and compresses roughly 10x, a compressed snapshot can be
+  noticeably smaller than `vault.db`.
+
+
 ## 0.23.0 — 2026-09-22
 
 ### Added
