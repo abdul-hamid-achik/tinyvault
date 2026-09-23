@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,20 +26,18 @@ func captureStdoutErr(t *testing.T, fn func()) (stdout, stderr []byte) {
 	os.Stdout, os.Stderr = wOut, wErr
 	defer func() { os.Stdout, os.Stderr = oldOut, oldErr }()
 
-	done := make(chan struct{})
-	go func() {
-		bufOut := make([]byte, 64*1024)
-		bufErr := make([]byte, 64*1024)
-		nOut, _ := rOut.Read(bufOut)
-		nErr, _ := rErr.Read(bufErr)
-		stdout = bufOut[:nOut]
-		stderr = bufErr[:nErr]
-		close(done)
-	}()
+	// Drain both pipes to EOF concurrently. A single Read returns only what
+	// has been written so far, so multi-line output written by separate
+	// Fprintf calls was intermittently truncated to its first line.
+	outDone := make(chan struct{})
+	errDone := make(chan struct{})
+	go func() { stdout, _ = io.ReadAll(rOut); close(outDone) }()
+	go func() { stderr, _ = io.ReadAll(rErr); close(errDone) }()
 	fn()
 	_ = wOut.Close()
 	_ = wErr.Close()
-	<-done
+	<-outDone
+	<-errDone
 	return stdout, stderr
 }
 
