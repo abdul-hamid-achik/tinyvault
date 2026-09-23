@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -60,7 +62,7 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 	checks = append(checks, checkVaultDir(dir)...)
 	checks = append(checks, checkVault(dir)...)
 	checks = append(checks, checkConfig()...)
-	checks = append(checks, checkUnlockSource(), checkPolicy(dir))
+	checks = append(checks, checkUnlockSource(), checkBackups(), checkPolicy(dir))
 	checks = append(checks, checkEnvironment()...)
 	checks = append(checks, checkTerminal())
 
@@ -264,4 +266,37 @@ func shortID(id string) string {
 		return id[:8]
 	}
 	return id
+}
+
+// staleBackupAge is when doctor starts warning that the newest snapshot is old.
+const staleBackupAge = 7 * 24 * time.Hour
+
+// checkBackups reports whether rotated snapshots are configured and fresh.
+// The vault is a single file; without a backup, deleting or corrupting it
+// loses every secret.
+func checkBackups() doctorCheck {
+	const name = "backups"
+	cfg, err := loadConfig()
+	if err != nil {
+		return doctorCheck{Name: name, Status: statusInfo, Detail: "unknown (config unreadable)"}
+	}
+	dir := expandHome(strings.TrimSpace(cfg.Backup.Dir))
+	if dir == "" {
+		return doctorCheck{Name: name, Status: statusWarn,
+			Detail: "not configured — the vault is one file; set backup.dir and schedule `tvault backup` (see `tvault help backup`)"}
+	}
+	snaps, err := listSnapshots(dir)
+	if err != nil || len(snaps) == 0 {
+		return doctorCheck{Name: name, Status: statusWarn, Detail: fmt.Sprintf("no snapshots in %s yet — run `tvault backup`", dir)}
+	}
+	info, err := os.Stat(snaps[len(snaps)-1])
+	if err != nil {
+		return doctorCheck{Name: name, Status: statusWarn, Detail: fmt.Sprintf("%s: %v", dir, err)}
+	}
+	age := time.Since(info.ModTime()).Round(time.Minute)
+	detail := fmt.Sprintf("%d snapshot(s) in %s, newest %s ago", len(snaps), dir, age)
+	if age > staleBackupAge {
+		return doctorCheck{Name: name, Status: statusWarn, Detail: detail + " — is the scheduled backup running?"}
+	}
+	return doctorCheck{Name: name, Status: statusOK, Detail: detail}
 }

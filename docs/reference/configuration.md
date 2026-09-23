@@ -22,11 +22,15 @@ agent:
   passphrase_file: ~/.config/secrets/env
   log_dir: ""        # empty = $XDG_STATE_HOME/tvault
   log_level: info
+backup:
+  dir: ~/Library/Application Support/tvault/backups
+  keep: 30
+  immutable: true
 ```
 
 ### What the typed config parses
 
-Only the `agent:` block is parsed into TinyVault's typed config.
+Only the `agent:` and `backup:` blocks are parsed into TinyVault's typed config.
 
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
@@ -34,6 +38,9 @@ Only the `agent:` block is parsed into TinyVault's typed config.
 | `agent.passphrase_file` | string | empty | Path to an env-style file containing `TVAULT_PASSPHRASE` for non-interactive unlock (must not be group- or world-readable). |
 | `agent.log_dir` | string | empty | Override agent log directory. Empty means `$XDG_STATE_HOME/tvault`. |
 | `agent.log_level` | string | `info` | One of `debug`, `info`, `warn`, `error`. |
+| `backup.dir` | string | empty | Directory for rotated, timestamped `tvault backup` snapshots. Setting it also makes `delete`, `projects delete`, `restore`, and the MCP delete tools take a safety snapshot first and refuse to proceed if it fails. See [Backups & recovery](/guide/backups). |
+| `backup.keep` | int | `30` | How many rotated snapshots survive pruning. |
+| `backup.immutable` | bool | `false` | Mark rotated snapshots with the macOS/BSD user-immutable flag (`chflags uchg`); unsupported (warning, not an error) on Linux and Windows. |
 
 A leftover `browse:` block from older releases is ignored. Top-level `vault`, `project`, and `verbose` keys do not configure those command flags.
 
@@ -247,6 +254,7 @@ esac
 
 ## See also
 
+- [Backups & recovery](/guide/backups) — `backup:` config in practice: rotation, `--immutable`, safety snapshots, and scheduling.
 - [Environment variables](/reference/environment-variables) — every `TVAULT_*` variable in detail.
 - [Keep the passphrase out of plaintext](/guide/passphrase-sources) — `agent.passphrase_command`, the unlock precedence, and a safe migration.
 - [MCP Access Policy](/mcp/access-policy) — the schema for `mcp-policy.yaml`.

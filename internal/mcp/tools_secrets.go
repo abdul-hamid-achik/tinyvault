@@ -204,6 +204,9 @@ func (s *VaultMCPServer) handleDeleteSecret(_ context.Context, _ *sdkmcp.CallToo
 		return nil, deleteSecretOutput{}, fmt.Errorf("secret %q is not allowed by policy", input.Key)
 	}
 
+	if err := s.guardDestructive("pre-delete"); err != nil {
+		return nil, deleteSecretOutput{}, err
+	}
 	if err := s.writeLockedHint(s.vault.DeleteSecret(project, input.Key)); err != nil {
 		return nil, deleteSecretOutput{}, fmt.Errorf("delete secret: %w", err)
 	}

@@ -55,6 +55,8 @@ These are the threats TinyVault is built to mitigate, and how.
 - **A malicious dotenv file is imported.** The parser does no shell, variable, or command expansion; it enforces a filename allowlist, skips symlinks, and caps files at 1 MiB. Importing a `.env` cannot execute a payload embedded in it. See [Dotenv files](/guide/dotenv).
 - **A stored value looks like shell syntax.** `tvault env --format shell`, `tvault ssh`'s remote export script, and `tvault shell-init` single-quote any value containing a character outside a conservative safe set (`[A-Za-z0-9@%+=:,./_-]`) before printing it. Earlier versions left characters like `;`, `&`, `|`, `<`, `>`, `(`, `*`, `~`, and `#` unquoted, so a stored value such as `a;touch pwned` could execute part of itself when the caller ran `eval "$(tvault env)"`. Values are now always safely quoted for the target shell.
 - **`config.yaml` is used to run a passphrase command.** `agent.passphrase_command` only runs from a config file owned by the current user and not writable by group or others — otherwise it is refused, because a writable config would let anyone who can write it run arbitrary code as you. The command itself runs directly (never through a shell) with stdin closed, output capped and time-bounded, and its errors never echo anything the command printed. See [Keep the passphrase out of plaintext](/guide/passphrase-sources).
+- **A torn or truncated backup.** `tvault backup` takes its snapshot inside a bbolt read transaction (`Tx.WriteTo`), never a raw file copy, so it always reflects one committed state even if another `tvault` writes concurrently. The snapshot is written to a temporary file, `fsync`'d, and verified (opened read-only, core buckets checked) before an atomic rename — a failed or interrupted backup never leaves a truncated file at the destination.
+- **A destructive command with no way back.** When `backup.dir` is configured, `delete`, `projects delete`, `restore`, and the MCP delete tools take a rotated safety snapshot first and are refused — nothing changes — if that snapshot fails to write. See [Backups & recovery](/guide/backups).
 
 ## Threat model: out of scope
 
@@ -175,6 +177,21 @@ For genuinely untrusted delegation — CI runners, containers, another person �
 
 See [Keep the passphrase out of plaintext](/guide/passphrase-sources) for the full unlock precedence, provider examples, and a staged migration off a plaintext file.
 
+## Backups and safety snapshots
+
+`tvault backup` and the automatic safety snapshots it powers (see [Backups & recovery](/guide/backups)) are honest about two things: what stays protected in a backup, and what the `--immutable` flag actually defends against.
+
+- **A backup carries the same metadata exposure as the live vault.** Secret values and per-project key material stay AES-256-GCM encrypted in every snapshot; project names, key names, timestamps, versions, and the audit log are readable to anyone who can open the file, exactly as in `vault.db`. Treat a backup — rotated, immutable, or off-machine — with the same care as `~/.tvault/` itself.
+- **Restoring the complete owner view still needs the credential that protected that snapshot.** The passphrase in effect when a backup was taken decrypts it in full; a recipient identity recovers only the projects that snapshot shared with it. A backup does not weaken or bypass encryption.
+
+::: warning `--immutable` is a guard against accidents, not a same-user attacker
+`--immutable` / `backup.immutable: true` sets the macOS/BSD **user-immutable** flag (`chflags uchg`) on rotated snapshots, so an unprivileged `rm -rf` fails with `Operation not permitted`. It stops **careless** deletion — a bad cleanup script, a fat-fingered retention job. It does **not** stop a process running as the file's owner that deliberately clears the flag first (`chflags nouchg`) before deleting; that owner already has the same access the flag is guarding. Linux (`chattr +i` needs `CAP_LINUX_IMMUTABLE`) and Windows have no unprivileged equivalent, so `--immutable` there is a warning, not an enforced flag — the snapshot is still written.
+:::
+
+::: warning A safety snapshot only guards what `backup.dir` can reach
+When `backup.dir` is configured, `delete` / `projects delete` / `restore` / the MCP delete tools take a snapshot first and refuse to proceed if it fails — but that guard only exists once `backup.dir` is set, and it protects against the *destructive command itself*, not against `backup.dir`'s own storage being unavailable, full, or itself deleted. It is not a substitute for an [off-machine copy](/guide/backups#scheduling) of your backups.
+:::
+
 ## Sharing, committing, and rendering: handle with care
 
 The recipient layer lets you share and commit secrets safely, but a few commands produce sensitive output. Know which is which.
@@ -239,6 +256,7 @@ TinyVault is a small, security-sensitive tool. If you find a vulnerability, plea
 ## See also
 
 - [Architecture](/reference/architecture) — the cryptographic design and storage internals behind this threat model.
+- [Backups & recovery](/guide/backups) — rotated snapshots, `--immutable`, safety snapshots, and scheduling.
 - [Keep the passphrase out of plaintext](/guide/passphrase-sources) — provider setup, the unlock precedence, and a safe migration off a plaintext file.
 - [MCP access policy](/mcp/access-policy) — how to constrain what an AI agent can reach.
 - [The local agent](/guide/agent) — set up and operate the unix-socket agent.

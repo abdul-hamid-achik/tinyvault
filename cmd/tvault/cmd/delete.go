@@ -44,6 +44,10 @@ func runDelete(_ *cobra.Command, args []string) error {
 		}
 	}
 
+	// Deleting a secret also purges its history, so it is irreversible.
+	if err := snapshotBeforeDestructive(v, "pre-delete"); err != nil {
+		return err
+	}
 	if err := v.DeleteSecret(project, key); err != nil {
 		return fmt.Errorf("failed to delete secret: %w", err)
 	}

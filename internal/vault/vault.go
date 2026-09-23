@@ -5,6 +5,7 @@ package vault
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -434,4 +435,15 @@ func mapStoreError(err error) error {
 		return ErrProjectExists
 	}
 	return err
+}
+
+// Snapshot writes a consistent, still-encrypted copy of the vault database to
+// w. It does not need the vault to be unlocked: nothing is decrypted.
+func (v *Vault) Snapshot(w io.Writer) (int64, error) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	if v.store == nil {
+		return 0, ErrNotInitialized
+	}
+	return v.store.Snapshot(w)
 }

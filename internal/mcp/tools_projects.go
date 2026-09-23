@@ -110,6 +110,9 @@ func (s *VaultMCPServer) handleDeleteProject(_ context.Context, _ *sdkmcp.CallTo
 		return nil, deleteProjectOutput{}, fmt.Errorf("project %q is not allowed by policy", input.Name)
 	}
 
+	if err := s.guardDestructive("pre-delete-project"); err != nil {
+		return nil, deleteProjectOutput{}, err
+	}
 	if err := s.vault.DeleteProject(input.Name); err != nil {
 		return nil, deleteProjectOutput{}, fmt.Errorf("delete project: %w", err)
 	}

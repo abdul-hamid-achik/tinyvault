@@ -32,6 +32,7 @@ TinyVault is built around value-minimizing agent workflows: search metadata, inj
 - **Versioned secrets** -- every overwrite archives the prior value; `tvault history`, `tvault get --version N`, and `tvault rollback --to N` (also over MCP) let you inspect and restore past values. History survives key rotation.
 - **Local agent (unix)** -- `tvault agent` holds the vault unlocked over a private 0600 socket so daily `get/env/run` skip the passphrase prompt and Argon2id; `tvault hook` wires it into bash/zsh/fish/direnv, `tvault shell-init` loads a project at shell startup without ever prompting, and `tvault agent install` runs it as a launchd/systemd service. Auto-locks when idle.
 - **Passphrase in a password manager** -- `agent.passphrase_command` / `TVAULT_PASSPHRASE_COMMAND` reads the vault passphrase from 1Password, the macOS Keychain, `pass`, or any helper instead of a plaintext file.
+- **Backups & recovery** -- `tvault backup` takes a consistent, verified snapshot (a bbolt read transaction, never a raw copy) with optional rotation, gzip compression, and a macOS/BSD `--immutable` flag; `delete`/`projects delete`/`restore` take an automatic safety snapshot first when `backup.dir` is set (and refuse to proceed if it fails), and `tvault doctor` reports backup health.
 - **Relational Search** -- `tvault search` and `vault_search_secrets` for prefix, name glob, time-range, version, and cross-project queries
 - **Audit log** -- `tvault audit` lists recent actions (metadata only); the same trail is available over MCP
 - **Generate** -- `tvault generate KEY` stores a random secret and prints only metadata (never the value)
@@ -498,12 +499,17 @@ agents: `tvault seal | ssh host 'tvault open > .env'`.
 # Rotate your vault passphrase
 tvault key rotate
 
-# Backup the vault
-tvault backup ~/.tvault-backup/vault.db
+# Backup the vault (one snapshot; gzip-compressed if the path ends in .gz)
+tvault backup ~/.tvault-backup/vault.db.gz
 
-# Restore from backup
-tvault restore ~/.tvault-backup/vault.db
+# Or rotated, timestamped, compressed snapshots with pruning and immutability
+tvault backup --dir ~/Backups/tvault --keep 30 --immutable
+
+# Restore from backup (plain or gzip, auto-detected; current vault saved first)
+tvault restore ~/.tvault-backup/vault.db.gz
 ```
+
+See [Backups & recovery](https://tinyvault.dev/guide/backups) for scheduling, the automatic safety snapshots `delete`/`projects delete`/`restore` take when `backup.dir` is set, and the `tvault doctor` backup health check.
 
 ## Security
 

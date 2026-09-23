@@ -71,6 +71,28 @@ The usual cause is that no [`tvault agent`](/guide/agent) is reachable and `--al
 
 `tvault agent install`'s generated launchd/systemd unit starts with a **minimal `PATH`**, so `agent.passphrase_command: ["op", "read", "..."]` can resolve fine interactively and fail under the service. Use the absolute path (`command -v op`). A password-manager or keychain helper may also need your GUI session already unlocked — at boot, before login, the command can fail, and the agent falls back to failing that one unlock rather than hanging; it should succeed once you're logged in. See [Keep the passphrase out of plaintext](/guide/passphrase-sources).
 
+## `delete` / `projects delete` / `restore` refused: "safety snapshot ... failed"
+
+You've set `backup.dir` in `config.yaml`, so `tvault delete`, `tvault projects delete`, and `tvault restore` take a safety snapshot before making any change — and refuse to proceed if that snapshot can't be written. Nothing was deleted or overwritten; fix the underlying problem and retry:
+
+```bash
+tvault delete API_KEY
+# Error: safety snapshot before pre-delete failed (nothing was changed; fix backup.dir or remove it from ~/.tvault/config.yaml): ...
+```
+
+Common causes: `backup.dir` doesn't exist and its parent isn't writable, the destination disk is full, or (on macOS/BSD) an old snapshot at that path is still marked `--immutable` and blocking the write. Run `tvault doctor` to see where `backup.dir` currently points, fix the directory or free space, or remove `backup.dir` from `config.yaml` to go back to unguarded deletes. See [Backups & recovery](/guide/backups#safety-snapshots-before-destructive-commands).
+
+## "Operation not permitted" deleting a backup snapshot
+
+A snapshot taken with `--immutable` / `backup.immutable: true` carries the macOS/BSD user-immutable flag (`chflags uchg`), so `rm` (even as the file's owner) fails with `Operation not permitted`. This is by design — it's a guard against an accidental `rm -rf` on the backup directory, not against you clearing the flag on purpose:
+
+```bash
+chflags nouchg ~/Backups/tvault/vault-20260923-030000.000.db.gz
+rm ~/Backups/tvault/vault-20260923-030000.000.db.gz
+```
+
+`tvault backup`'s own rotation clears the flag on snapshots it prunes automatically — you only need to do this by hand when removing a snapshot yourself, outside of rotation. See [Immutability](/guide/backups#immutability).
+
 ## "vault not found" / "not initialized"
 
 Exit code `5`. Create a vault first:
@@ -135,11 +157,12 @@ tvault identity export ci --force | gh secret set TVAULT_IDENTITY_KEY
 
 **Does it work on Windows?** The CLI and MCP server: yes (amd64/arm64). The unlock-once agent: no (unix only).
 
-**How do I back up the vault?** `tvault backup <path>` copies `vault.db` without decrypting its records. The matching passphrase restores the complete owner view; a pre-provisioned recipient identity can read only projects shared to it. Operational metadata remains readable, so treat the backup as sensitive. See [Key Management](/guide/key-management).
+**How do I back up the vault?** `tvault backup [path]` writes a consistent snapshot (a bbolt read transaction, never a raw file copy) without decrypting any records. Without a path, `--dir`/`backup.dir` gives you rotated, compressed, timestamped snapshots with pruning. The matching passphrase restores the complete owner view; a pre-provisioned recipient identity can read only projects shared to it. Operational metadata remains readable, so treat the backup as sensitive. See [Backups & recovery](/guide/backups).
 
 ## See also
 
 - [CLI Reference](/cli/) — every command, flag, and the exit-code table
+- [Backups & recovery](/guide/backups) — rotation, `--immutable`, safety snapshots, and scheduling
 - [Environment Variables](/reference/environment-variables) — `TVAULT_PASSPHRASE`, `TVAULT_DIR`, identities
 - [Keep the passphrase out of plaintext](/guide/passphrase-sources) — `shell-init`, `agent.passphrase_command`, and a safe migration
 - [MCP Overview](/mcp/) — setup, the launcher pattern, and the safety model

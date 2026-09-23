@@ -57,14 +57,19 @@ This does **not** affect **v2** files (made with `--recipient`), which are keyed
 
 ## Back up the vault
 
-`tvault backup <path>` writes a byte copy of `vault.db` to the path you give. Secret payloads and key material stay encrypted, so decrypting values still requires the passphrase or a matching recipient identity. Operational metadata — including project and key names, timestamps, versions, configuration, and audit rows — remains readable to anyone who can inspect the backup.
+`tvault backup [path]` writes a consistent, verified snapshot of the vault — taken inside a bbolt read transaction (`Tx.WriteTo`), never a raw byte copy, so it can't capture a half-written page even if another `tvault` writes at the same moment. Secret payloads and key material stay encrypted, so decrypting values still requires the passphrase or a matching recipient identity. Operational metadata — including project and key names, timestamps, versions, configuration, and audit rows — remains readable to anyone who can inspect the backup.
 
 ```bash
-# Timestamped backup into a directory you control
-tvault backup ~/backups/tvault-$(date +%Y%m%d).db
+# One snapshot at an explicit path (gzip-compressed if it ends in .gz)
+tvault backup ~/backups/tvault-$(date +%Y%m%d).db.gz
+
+# Rotated, timestamped, compressed snapshots into a directory, oldest pruned beyond --keep
+tvault backup --dir ~/Backups/tvault --keep 30 --immutable
 ```
 
-The vault does **not** need to be unlocked to take a backup; the command copies the database without decrypting its records. Still treat every backup as sensitive because its metadata is visible and its ciphertext can be attacked offline. Store it only in a location whose access and retention you control.
+The vault does **not** need to be unlocked to take a backup; the snapshot never decrypts records. Still treat every backup as sensitive because its metadata is visible and its ciphertext can be attacked offline. Store it only in a location whose access and retention you control.
+
+`backup.dir` (in `config.yaml`) also makes `delete`, `projects delete`, and `restore` take an automatic safety snapshot first, refusing to run if it fails — and `tvault doctor` reports whether scheduled backups look healthy. See **[Backups & recovery](/guide/backups)** for the full picture: configuration, compression, the macOS/BSD `--immutable` flag, safety snapshots, scheduling with launchd/systemd, and the doctor check.
 
 ::: warning Keep your passphrase and identities with your strategy
 Restoring the complete owner view of a `vault.db` snapshot requires the passphrase that derived its KEK. A matching private recipient identity can instead recover only the projects that snapshot shared with it. Preserve the snapshot's passphrase and any identities your recovery plan relies on; if every matching credential is lost, there is no recovery service.
@@ -76,14 +81,14 @@ Do not commit `~/.tvault/`, `vault.db`, any backup of it, or any `tvault-key1...
 
 ## Restore the vault
 
-`tvault restore <path>` overwrites the current `~/.tvault/vault.db` with the backup at `<path>`. This is destructive: the existing vault file is replaced.
+`tvault restore <path>` overwrites the current `~/.tvault/vault.db` with the backup at `<path>`. This is destructive, but not unguarded: the backup is staged and verified *before* anything about the current vault is touched, and the current vault is saved first (into `backup.dir` when configured, else next to `vault.db` as `vault.db.pre-restore-<time>`) before the atomic swap.
 
 ```bash
 # Prompts for confirmation before overwriting
-tvault restore ~/backups/tvault-20260619.db
+tvault restore ~/backups/tvault-20260619.db.gz
 
 # Skip the confirmation prompt (for scripts / automation)
-tvault restore ~/backups/tvault-20260619.db -y
+tvault restore ~/backups/tvault-20260619.db.gz -y
 ```
 
 After restoring, the vault uses the passphrase that was in effect when **that backup** was taken — restoring does not change which passphrase unlocks it.
@@ -92,8 +97,8 @@ After restoring, the vault uses the passphrase that was in effect when **that ba
 | --- | --- |
 | `-y`, `--yes` | Skip the confirmation prompt and overwrite the current vault. |
 
-::: warning `restore` overwrites in place
-There is no automatic safety copy. If the current vault has changes that are not in your backup, take a fresh `tvault backup` first.
+::: tip `restore` saves the current vault automatically
+Every `restore` keeps a snapshot of what it's about to overwrite before the swap — see [Restore the vault](/guide/backups#restore-the-vault) in the backups guide for exactly where that snapshot lands and how to recover from it.
 :::
 
 ## Read-only diagnostics
@@ -179,6 +184,7 @@ Every command accepts the global flags `--config <file>`, `--vault <dir>`, `-p`/
 
 ## See also
 
+- [Backups & recovery](/guide/backups) — rotated snapshots, `--immutable`, safety snapshots, scheduling, and the doctor check.
 - [Versioning & Rollback](/guide/versioning) — prior values, history, and non-destructive rollback.
 - [Sharing Secrets](/guide/sharing) — DEK rotation, live-vault recipient removal, and retained-data limits.
 - [Architecture](/reference/architecture) — the full key hierarchy and crypto design.

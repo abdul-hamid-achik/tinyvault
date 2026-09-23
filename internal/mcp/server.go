@@ -42,6 +42,25 @@ type VaultMCPServer struct {
 	agent   *agent.Client // optional; used for decrypts when kek is nil
 	vaultMu sync.Mutex
 	reads   atomic.Int64
+
+	// beforeDestructive, when set, runs before an irreversible write (secret or
+	// project deletion) with the open vault. An error aborts the operation;
+	// the CLI uses it to take a safety snapshot.
+	beforeDestructive func(v *vault.Vault, reason string) error
+}
+
+// SetBeforeDestructive installs a hook that runs before every irreversible
+// write. Returning an error aborts that write.
+func (s *VaultMCPServer) SetBeforeDestructive(fn func(v *vault.Vault, reason string) error) {
+	s.beforeDestructive = fn
+}
+
+// guardDestructive runs the beforeDestructive hook, if any.
+func (s *VaultMCPServer) guardDestructive(reason string) error {
+	if s.beforeDestructive == nil {
+		return nil
+	}
+	return s.beforeDestructive(s.vault, reason)
 }
 
 func (s *VaultMCPServer) consumeValueRead() bool {

@@ -787,17 +787,27 @@ A passphrase rotation invalidates any v1 `.env.encrypted` files made under the *
 
 ```bash
 tvault backup ./tvault-backup.db
+tvault backup ./tvault-backup.db.gz
+tvault backup --dir ~/Backups/tvault --keep 30 --immutable
+tvault backup   # uses backup.dir / backup.keep / backup.immutable from config.yaml
 ```
 
-Write a byte-for-byte database backup to `<path>`. Secret payloads and key material remain encrypted, while operational metadata remains readable. No command-local flags.
+Write a consistent, verified snapshot of the vault — taken inside a bbolt read transaction (`Tx.WriteTo`), never a raw file copy, so it's never a torn copy even if another `tvault` writes concurrently. Secret payloads and key material remain encrypted, while operational metadata (project/key names, audit log) remains readable. With `[path]`, writes one snapshot there (gzip-compressed if it ends in `.gz`). Without a path, writes a rotated, timestamped, compressed snapshot into `--dir`/`backup.dir` and prunes the oldest beyond `--keep`/`backup.keep`. See [Backups & recovery](/guide/backups).
+
+| Flag | Description |
+| --- | --- |
+| `--dir <path>` | Directory for timestamped, rotated snapshots (default: `backup.dir` in `config.yaml`). |
+| `--keep <N>` | Number of snapshots to keep in `--dir` (default: `backup.keep`, else `30`). |
+| `--immutable` | Mark snapshots immutable (macOS/BSD user flag) so `rm` cannot delete them; unsupported on Linux/Windows (warning printed, snapshot still written). |
 
 ### `restore`
 
 ```bash
 tvault restore ./tvault-backup.db -y
+tvault restore ./tvault-backup.db.gz
 ```
 
-Restore the vault from a backup file.
+Restore the vault from a backup file (plain or gzip, auto-detected). The backup is staged and verified before anything about the current vault is touched; the current vault is saved first (into `backup.dir` when configured, else next to `vault.db` as `vault.db.pre-restore-<time>`); then the staged file is renamed atomically over `vault.db`.
 
 | Flag | Description |
 | --- | --- |
@@ -940,5 +950,6 @@ Generate a shell completion script.
 
 - [Getting started](/guide/getting-started) — install, init, and your first secret.
 - [Run & env](/guide/run-and-env) — inject secrets into processes.
+- [Backups & recovery](/guide/backups) — rotation, `--immutable`, safety snapshots, and scheduling.
 - [MCP tools](/mcp/tools) — the agent-facing tool surface.
 - [Configuration](/reference/configuration) — config file and environment variables.

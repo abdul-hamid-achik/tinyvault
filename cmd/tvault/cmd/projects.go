@@ -198,6 +198,9 @@ func runProjectsDelete(_ *cobra.Command, args []string) error {
 		}
 	}
 
+	if err := snapshotBeforeDestructive(v, "pre-delete-project"); err != nil {
+		return err
+	}
 	if err := v.DeleteProject(name); err != nil {
 		return fmt.Errorf("failed to delete project: %w", err)
 	}

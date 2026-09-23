@@ -41,6 +41,7 @@ TinyVault stores secret values locally and makes them available through a CLI an
 
 ## Operate TinyVault
 
+- [Backups & recovery](/guide/backups) — scheduled rotated snapshots, safety snapshots before destructive commands, and restore.
 - [Key management](/guide/key-management) — back up, restore, and rotate key material.
 - [Configuration](/reference/configuration) — configure the vault and agent.
 - [Environment variables](/reference/environment-variables) — non-interactive and CI inputs.

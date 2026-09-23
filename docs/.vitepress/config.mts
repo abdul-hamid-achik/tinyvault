@@ -189,6 +189,7 @@ export default defineConfig({
           text: 'Operations',
           collapsed: true,
           items: [
+            { text: 'Backups & recovery', link: '/guide/backups' },
             { text: 'Backup, restore & rotate', link: '/guide/key-management' },
             { text: 'Keep the passphrase out of plaintext', link: '/guide/passphrase-sources' },
             { text: 'Configuration', link: '/reference/configuration' },

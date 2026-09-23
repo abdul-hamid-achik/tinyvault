@@ -2,12 +2,9 @@ package cmd
 
 import (
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	ivault "github.com/abdul-hamid-achik/tinyvault/internal/vault"
 )
 
 func TestRunBackup(t *testing.T) {
@@ -22,24 +19,16 @@ func TestRunBackup(t *testing.T) {
 
 	backupPath := filepath.Join(t.TempDir(), "vault.db")
 
-	// runBackup is a simple file copy: src=vault.db -> dst=args[0].
+	// runBackup writes a transactional snapshot (not a byte copy, so its size
+	// can be smaller than vault.db: free pages past the high-water mark are
+	// not copied). It must open as a vault and still hold the secret.
 	if err := runBackup(nil, []string{backupPath}); err != nil {
 		t.Fatalf("runBackup: %v", err)
 	}
-
-	// Verify the backup file exists and is a valid vault.
-	v2, err := ivault.Open(filepath.Dir(backupPath) + "/.placeholder")
-	_ = v2
-	_ = err
-	if _, err := os.Stat(backupPath); err != nil {
-		t.Errorf("backup file not created: %v", err)
-	}
-	// We can't Open the backup directly (its dir has no vault.db),
-	// but we can compare bytes.
-	srcBytes, _ := os.ReadFile(vaultPath + "/vault.db")
-	dstBytes, _ := os.ReadFile(backupPath)
-	if len(srcBytes) != len(dstBytes) {
-		t.Errorf("backup size differs: src=%d dst=%d", len(srcBytes), len(dstBytes))
+	v2 := openTestVault(t, filepath.Dir(backupPath))
+	defer v2.Close()
+	if got, err := v2.GetSecret("default", "BACKUP_KEY"); err != nil || got != "backup-value" {
+		t.Fatalf("secret from backup = %q, %v", got, err)
 	}
 }
 

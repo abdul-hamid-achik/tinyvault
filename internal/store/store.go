@@ -44,6 +44,7 @@
 package store
 
 import (
+	"io"
 	"time"
 
 	"github.com/google/uuid"
@@ -64,6 +65,9 @@ type Store interface {
 	SecretStore
 	// Audit is the append-only audit log.
 	AuditStore
+	// Snapshot writes a consistent copy of the whole database (still
+	// encrypted) to w, for backups.
+	Snapshot(w io.Writer) (int64, error)
 	// Close releases the underlying file handle.
 	Close() error
 }

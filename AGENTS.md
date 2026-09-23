@@ -87,16 +87,23 @@ cmd/tvault/
       platforms/             # @thelacanians/tinyvault-{os}-{arch} packages (binary payloads)
       scripts/pack.mjs       # downloads release assets, verifies checksums, versions packages
     projects.go / use.go     # tvault projects list/create / tvault use PROJECT
-    backup.go                # tvault backup <path> / tvault restore <path> (restore is a separate command)
+    backup.go                # tvault backup [path] [--dir D --keep N --immutable] / tvault restore <path>
+                             # (restore is a separate command); rotation, gzip, safety
+                             # snapshots before delete/projects delete/restore (snapshotBeforeDestructive)
+    immutable.go             # errImmutableUnsupported sentinel (build-tag-independent)
+    immutable_bsd.go         # setImmutable: chflags UF_IMMUTABLE (darwin/freebsd/netbsd/openbsd/dragonfly)
+    immutable_other.go       # setImmutable: unsupported stub (Linux/Windows/etc.) — warns, never fails a backup
     rotate.go                # tvault key rotate
     mcp_server.go            # tvault mcp (alias: mcp-server); --connect auto|none|unix:// agent reads
     ci.go                    # tvault ci init --mode=passphrase|identity (generate CI workflow files)
-    doctor.go                # tvault doctor (read-only setup diagnostics; --json)
+    doctor.go                # tvault doctor (read-only setup diagnostics; --json); checkBackups warns when
+                             # backup.dir is unset, empty, or its newest snapshot is stale (>7d)
     selfupdate.go            # tvault self-update (alias: upgrade) — checksum-verified in-place binary update
     generate.go              # tvault generate KEY (stores random value; never prints it)
     audit.go                 # tvault audit (lock-free metadata log; --action/--since/--json)
     audit_helper.go          # recordAudit(): CLI surface-specific audit (generate, share, env groups)
-    config_helper.go         # typed config.yaml (agent: block); config location resolution (--config/TVAULT_CONFIG/XDG)
+    config_helper.go         # typed config.yaml (agent: block, backup: block — BackupConfig: dir/keep/immutable);
+                             # config location resolution (--config/TVAULT_CONFIG/XDG)
     passphrase_command.go    # agent.passphrase_command / TVAULT_PASSPHRASE_COMMAND: run a helper (no shell), stdin /dev/null
     passphrase_file.go       # TVAULT_PASSPHRASE_FILE / agent.passphrase_file / implicit ~/.config/secrets/env; resolvePassphrasePlan (precedence)
     owner_unix.go / owner_other.go  # ownedByCurrentUser() for the config-file trust check (build-tagged)
@@ -126,6 +133,8 @@ internal/
                              #  GetSecretVersion / ListSecretVersions /
                              #  ListSecretVersionEntries; RekeyProject re-keys
                              #  current + history atomically.
+    snapshot.go              # Snapshot (Tx.WriteTo, consistent even under concurrent
+                             #  writers) + VerifySnapshot (read-only open, checks buckets)
     bbolt_test.go            # bbolt integration tests
     version_test.go          # secret-version archive / rollback / purge tests
     query_test.go            # Relational query tests
@@ -156,9 +165,12 @@ internal/
     redact.go                # Literal value redaction ([REDACTED:KEY]); used by MCP exec and tvault run --redact
   mcp/
     server.go                # VaultMCPServer, tool registration, Run(); reopen-per-request middleware
-                             # (KEK cache or agent-backed reads via NewAgentMCPServer)
+                             # (KEK cache or agent-backed reads via NewAgentMCPServer);
+                             # SetBeforeDestructive/guardDestructive hook (CLI wires in
+                             # snapshotBeforeDestructive so agent deletes get a safety snapshot too)
     reads.go                 # readSecret/readAllSecrets: vault or local agent when KEK is absent
     reopen_test.go           # coexistence: server doesn't hold the bbolt lock; reopens per request
+    destructive_guard_test.go # guardDestructive: hook runs before delete/delete-project, aborts on error
     tools_projects.go        # vault_list/create/delete_project
     tools_secrets.go         # vault_list/get/set/delete_secret
     tools_exec.go            # vault_run_with_secrets (exec + output redaction)

@@ -83,6 +83,9 @@ func runMCPServer(cmd *cobra.Command, _ []string) error {
 	} else {
 		srv = tvmcp.NewReopeningVaultMCPServer(dir, kek, policy)
 	}
+	// An agent deleting a secret or project gets the same safety snapshot as
+	// the CLI when backup.dir is configured.
+	srv.SetBeforeDestructive(snapshotBeforeDestructive)
 	defer srv.Close()
 	return srv.Run(cmd.Context())
 }

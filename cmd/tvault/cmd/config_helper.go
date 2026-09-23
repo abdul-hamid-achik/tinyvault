@@ -20,7 +20,20 @@ import (
 //	  log_dir: ""        # empty = $XDG_STATE_HOME/tvault
 //	  log_level: info
 type Config struct {
-	Agent AgentConfig `yaml:"agent"`
+	Agent  AgentConfig  `yaml:"agent"`
+	Backup BackupConfig `yaml:"backup"`
+}
+
+// BackupConfig configures rotated vault snapshots (`tvault backup` with no
+// path) and the safety snapshot destructive commands take first.
+type BackupConfig struct {
+	// Dir receives timestamped vault-*.db snapshots. Setting it also makes
+	// delete / projects delete / restore / MCP deletes snapshot first.
+	Dir string `yaml:"dir"`
+	// Keep is how many snapshots rotation retains (default 30).
+	Keep int `yaml:"keep"`
+	// Immutable marks snapshots with the macOS/BSD user-immutable flag.
+	Immutable bool `yaml:"immutable"`
 }
 
 // AgentConfig holds settings for `tvault agent` and the service definitions

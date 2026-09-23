@@ -91,6 +91,39 @@ Security Scan, Build**. All four must be green.
   atomically). `TestUnshareReEncryptsHistory` guards this — keep it passing.
   KEK rotation (`tvault key rotate`) doesn't touch values, so history is safe.
 
+## Backups (`backup.go`, `internal/store/snapshot.go`)
+
+- **Snapshots are always `store.Snapshot` (`Tx.WriteTo`), never a raw copy of
+  the live file.** `Tx.WriteTo` runs inside a bbolt read transaction, so it
+  reflects one committed state even if another `tvault` writes concurrently —
+  don't reintroduce a byte-for-byte `os.Open`/`io.Copy` of `vault.db` for
+  backups. `snapshotTo` (backup.go) writes into a private temp file in the
+  destination dir, `fsync`s it, and only proceeds after `store.VerifySnapshot`
+  (open read-only, check the core buckets exist) — **verify before rename**,
+  every time, so a failed/interrupted backup never leaves a truncated file at
+  the destination.
+- **Destructive ops must call `snapshotBeforeDestructive` / `guardDestructive`
+  and fail closed.** `delete`, `projects delete`, `restore` (CLI), and
+  `vault_delete_secret`/`vault_delete_project` (MCP, via
+  `VaultMCPServer.SetBeforeDestructive`) all take a safety snapshot first when
+  `backup.dir` is configured; if that snapshot fails, the destructive
+  operation must not proceed — no case should let a delete/restore continue
+  after a snapshot error.
+- **Rotation only touches files it owns.** `pruneSnapshots`/`listSnapshots`
+  match strictly on `vault-*.db` / `vault-*.db.gz` (`snapshotPrefix` +
+  `snapshotSuffix`/`gzipSuffix`) in the configured directory — never widen
+  that glob or rotation could delete something a user put there themselves.
+- **Snapshot warnings go to stderr, not stdout.** `stdout` is the MCP protocol
+  stream under `tvault mcp`; a rotation or immutability warning written to
+  stdout there would corrupt JSON-RPC framing. Keep using
+  `fmt.Fprintf(os.Stderr, ...)` for anything printed from `rotatedSnapshot`/
+  `pruneSnapshots`.
+- `--immutable` (`immutable_bsd.go`) is best-effort and platform-gated
+  (`immutable_other.go` returns `errImmutableUnsupported` only when turning it
+  *on*; clearing is always a no-op so rotation keeps working on unsupported
+  platforms). Never let a failed/unsupported `setImmutable` call fail the
+  backup itself — it's a warning, not a requirement.
+
 ## The local agent (`tvault agent`) — `internal/agent/`
 
 - Unix-only, opt-in daemon that holds the vault unlocked over a private 0600
