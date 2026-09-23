@@ -22,6 +22,53 @@ If `tvault` was installed from the retired formula, migrate once with
 
 ## Unreleased
 
+## 0.23.0 — 2026-09-22
+
+### Added
+
+- `agent.passphrase_command` (config.yaml) and `TVAULT_PASSPHRASE_COMMAND` let
+  the vault passphrase live in a password manager or the OS keychain instead
+  of a plaintext file — for example 1Password (`op read op://…`), the macOS
+  Keychain (`security find-generic-password -w`), or `pass`. The command runs
+  directly (never through a shell), with stdin closed, output capped at 4096
+  bytes and time-bounded to 2 minutes, and errors never echo its stdout. A
+  command sourced from `config.yaml` only runs when that file is owned by the
+  current user and not writable by group or others. `tvault mcp` does not
+  treat a configured command as a "cheap" unlock source — it prefers a
+  running local agent for reads and only runs the command as the fallback
+  unlock, so an MCP session start does not force a Touch ID prompt.
+  `tvault agent install` accepts it as an alternative to `--passphrase-file`
+  and warns when the program isn't an absolute path. See
+  [Keep the passphrase out of plaintext](/guide/passphrase-sources).
+- `tvault shell-init <bash|zsh|fish> --project <name>` prints quoted export
+  assignments for `eval` at shell startup. It never prompts: values come from
+  a running `tvault agent`, or — only with `--allow-unlock` — a
+  non-interactive unlock source. When nothing is available it prints nothing,
+  warns once on stderr (`--quiet` silences it), and exits `0`, so a locked
+  vault never blocks a new shell. `--only`/`--prefix` narrow the loaded set.
+- `config.yaml` now also resolves from an XDG location
+  (`$XDG_CONFIG_HOME/tvault/config.yaml`, falling back to
+  `~/.config/tvault/config.yaml`) when the vault is the default `~/.tvault`,
+  plus a `--config <file>` flag and `TVAULT_CONFIG` environment variable.
+  Scratch vaults (`--vault`/`TVAULT_DIR`) ignore the XDG location. `tvault
+  doctor` warns when both a vault-directory and an XDG config file exist.
+- `tvault doctor` reports the non-interactive "unlock source" that would be
+  used (environment variable, passphrase command, plaintext passphrase file,
+  or none) without ever running the command or printing a secret; a
+  plaintext file is flagged with a suggestion to move to
+  `agent.passphrase_command`.
+
+### Security
+
+- `tvault env --format shell`, `tvault ssh`'s remote export script, and
+  `tvault shell-init` now always single-quote a value that contains a
+  character outside a conservative safe set
+  (`[A-Za-z0-9@%+=:,./_-]`). Previously, characters such as `;`, `&`, `|`,
+  `<`, `>`, `(`, `*`, `~`, and `#` were left unquoted, so a stored value like
+  `a;touch pwned` could execute part of itself when the caller ran
+  `eval "$(tvault env)"`.
+
+
 ## 0.22.2 — 2026-08-24
 
 ### Fixed
