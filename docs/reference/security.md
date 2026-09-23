@@ -53,6 +53,8 @@ These are the threats TinyVault is built to mitigate, and how.
 - **A removed recipient tries to read the updated live vault.** `tvault projects unshare` atomically rotates the project DEK, re-encrypts every current value and archived version, and re-wraps the new DEK to the remaining recipients. The removed identity cannot decrypt that updated state or future writes under the new DEK. See [Sharing](/guide/sharing).
 - **A different-uid process reaches the agent socket.** The agent performs a mandatory peer-credential check before token validation and rejects any peer whose uid does not match its own. For accepted same-uid clients, `--require-token` adds a second bearer-token gate and can scope a token to one project.
 - **A malicious dotenv file is imported.** The parser does no shell, variable, or command expansion; it enforces a filename allowlist, skips symlinks, and caps files at 1 MiB. Importing a `.env` cannot execute a payload embedded in it. See [Dotenv files](/guide/dotenv).
+- **A stored value looks like shell syntax.** `tvault env --format shell`, `tvault ssh`'s remote export script, and `tvault shell-init` single-quote any value containing a character outside a conservative safe set (`[A-Za-z0-9@%+=:,./_-]`) before printing it. Earlier versions left characters like `;`, `&`, `|`, `<`, `>`, `(`, `*`, `~`, and `#` unquoted, so a stored value such as `a;touch pwned` could execute part of itself when the caller ran `eval "$(tvault env)"`. Values are now always safely quoted for the target shell.
+- **`config.yaml` is used to run a passphrase command.** `agent.passphrase_command` only runs from a config file owned by the current user and not writable by group or others — otherwise it is refused, because a writable config would let anyone who can write it run arbitrary code as you. The command itself runs directly (never through a shell) with stdin closed, output capped and time-bounded, and its errors never echo anything the command printed. See [Keep the passphrase out of plaintext](/guide/passphrase-sources).
 
 ## Threat model: out of scope
 
@@ -160,6 +162,19 @@ Tokens are provisioned out-of-band in a `0600` file (a `SIGHUP` reloads it to re
 
 For genuinely untrusted delegation — CI runners, containers, another person — use a scoped **identity** instead of a token. An identity is cryptographic and transport-agnostic, and its access to the updated live vault can be removed atomically via DEK re-key. Pre-removal snapshots and artifacts remain readable, so rotate underlying credentials after a compromise. See [Sharing](/guide/sharing) and [CI/CD](/guide/ci-cd).
 
+## The passphrase command
+
+`agent.passphrase_command` / `TVAULT_PASSPHRASE_COMMAND` moves the vault passphrase out of a plaintext file and into a password manager or the OS keychain. It is a stronger default than a plaintext `TVAULT_PASSPHRASE_FILE`, but it is not automatically a same-uid boundary — that depends entirely on the helper you point it at.
+
+- **The command runs directly, never through a shell.** No variable expansion, globbing, or command substitution. stdin is `/dev/null` (so it can never consume `tvault mcp`'s protocol stream on stdin), stderr is inherited (so a Touch ID or unlock-dialog prompt stays visible), output is capped at 4096 bytes and trailing-newline-trimmed, and errors never echo anything the command printed on stdout.
+- **A `config.yaml`-sourced command is trust-checked before it runs.** The file must be owned by the current user and not writable by group or others, or the command is refused outright — otherwise `agent.passphrase_command` would be a code-execution primitive for anyone who could write that file.
+
+::: warning macOS Keychain ACLs are per-binary, not per-caller
+`security find-generic-password -w` checks the identity of the **calling binary** (`security`), not the process that invoked it. Any same-uid process that can run `security` can read the same item `tvault` does — this route mainly removes the plaintext from disk and backups, it is **not** a same-uid confidentiality boundary. **1Password with biometric approval** (Touch ID gating each unlock) is the stronger choice when you actually want a human-in-the-loop gate on the passphrase.
+:::
+
+See [Keep the passphrase out of plaintext](/guide/passphrase-sources) for the full unlock precedence, provider examples, and a staged migration off a plaintext file.
+
 ## Sharing, committing, and rendering: handle with care
 
 The recipient layer lets you share and commit secrets safely, but a few commands produce sensitive output. Know which is which.
@@ -224,6 +239,7 @@ TinyVault is a small, security-sensitive tool. If you find a vulnerability, plea
 ## See also
 
 - [Architecture](/reference/architecture) — the cryptographic design and storage internals behind this threat model.
+- [Keep the passphrase out of plaintext](/guide/passphrase-sources) — provider setup, the unlock precedence, and a safe migration off a plaintext file.
 - [MCP access policy](/mcp/access-policy) — how to constrain what an AI agent can reach.
 - [The local agent](/guide/agent) — set up and operate the unix-socket agent.
 - [Sharing](/guide/sharing) — recipients, identities, live-vault re-keying, and retained-data limits.

@@ -30,7 +30,8 @@ TinyVault is built around value-minimizing agent workflows: search metadata, inj
 - **.env Ecosystem** -- Safe dotenv parser (no shell expansion), `tvault://` placeholder interpolation, two-way sync (pull/push/mirror), and `.env.encrypted` files (Rails credentials pattern, safe to commit)
 - **Share & commit secrets** -- X25519 recipients (age-style): share a project without the passphrase, commit self-decrypting secrets via `git-filter` (transparent clean/smudge) or v2 `.env.encrypted`, and seal for recipients over MCP. Removing a recipient re-keys the updated live vault; previously copied vaults and sealed artifacts are not retroactively revoked.
 - **Versioned secrets** -- every overwrite archives the prior value; `tvault history`, `tvault get --version N`, and `tvault rollback --to N` (also over MCP) let you inspect and restore past values. History survives key rotation.
-- **Local agent (unix)** -- `tvault agent` holds the vault unlocked over a private 0600 socket so daily `get/env/run` skip the passphrase prompt and Argon2id; `tvault hook` wires it into bash/zsh/fish/direnv. Auto-locks when idle.
+- **Local agent (unix)** -- `tvault agent` holds the vault unlocked over a private 0600 socket so daily `get/env/run` skip the passphrase prompt and Argon2id; `tvault hook` wires it into bash/zsh/fish/direnv, `tvault shell-init` loads a project at shell startup without ever prompting, and `tvault agent install` runs it as a launchd/systemd service. Auto-locks when idle.
+- **Passphrase in a password manager** -- `agent.passphrase_command` / `TVAULT_PASSPHRASE_COMMAND` reads the vault passphrase from 1Password, the macOS Keychain, `pass`, or any helper instead of a plaintext file.
 - **Relational Search** -- `tvault search` and `vault_search_secrets` for prefix, name glob, time-range, version, and cross-project queries
 - **Audit log** -- `tvault audit` lists recent actions (metadata only); the same trail is available over MCP
 - **Generate** -- `tvault generate KEY` stores a random secret and prints only metadata (never the value)
@@ -183,6 +184,19 @@ access keeps working between requests, and it **auto-locks after 15m idle**
 (`--idle`), zeroing the KEK on stop/idle/signal. Bypass it any time with
 `--no-agent` or `TVAULT_NO_AGENT=1`. Not available on Windows (use the direct
 CLI or `mcp`). See `tvault docs agent`.
+
+Run it as a persistent per-user service (launchd on macOS, systemd on Linux)
+with `tvault agent install`. It needs a non-interactive unlock: either
+`--passphrase-file <file>` or `agent.passphrase_command` in
+`~/.tvault/config.yaml`, so the passphrase can live in 1Password, the macOS
+Keychain, or `pass` instead of a plaintext file — see
+[Keep the passphrase out of plaintext](https://tinyvault.dev/guide/passphrase-sources).
+Load a project into a login shell without ever prompting with
+`tvault shell-init`:
+
+```bash
+eval "$(tvault shell-init zsh --project personal --quiet)"   # ~/.zshrc
+```
 
 For an OS-confined delegate (a different uid, a container with the socket
 bind-mounted, a sandbox) you can run the agent with `--require-token
@@ -525,6 +539,9 @@ tvault (single binary)
 | Variable | Description |
 |----------|-------------|
 | `TVAULT_PASSPHRASE` | Vault passphrase (for CI/CD, skips interactive prompt) |
+| `TVAULT_PASSPHRASE_COMMAND` | A program whose stdout is the vault passphrase (1Password, Keychain, `pass`, …) |
+| `TVAULT_PASSPHRASE_FILE` | Path to a `0600` env-style file holding `TVAULT_PASSPHRASE` |
+| `TVAULT_CONFIG` | Path to `config.yaml`, overriding the default location resolution |
 | `TVAULT_NO_AGENT` | Set to bypass a running `tvault agent` and unlock the vault directly |
 | `TVAULT_AGENT_TOKEN` | Capability token sent to a `--require-token` agent (privilege separation for confined delegates) |
 | `TVAULT_IDENTITY_KEY` | A private identity (`tvault-key1…`) for passphrase-free decrypt in CI/ssh/agents; a local identity file takes precedence |

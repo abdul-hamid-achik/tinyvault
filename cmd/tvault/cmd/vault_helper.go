@@ -76,7 +76,7 @@ func openAndUnlockVault() (*vault.Vault, error) {
 		_ = v.Close()
 		return nil, fmt.Errorf("read %s: %w", configPath(), cfgErr)
 	}
-	passphrase, err := passphraseFromEnvOrFile(cfg)
+	passphrase, err := nonInteractivePassphrase(cfg)
 	if err != nil {
 		_ = v.Close()
 		return nil, err
@@ -162,7 +162,8 @@ func lockedRemedy(agentRunning bool) string {
 				"so this command needs the passphrase itself")
 	}
 	clauses = append(clauses,
-		"set TVAULT_PASSPHRASE, point TVAULT_PASSPHRASE_FILE (or agent.passphrase_file) at a 0600 env file, or run in a TTY")
+		"set TVAULT_PASSPHRASE, configure TVAULT_PASSPHRASE_COMMAND (or agent.passphrase_command) to fetch it from a password manager, "+
+			"point TVAULT_PASSPHRASE_FILE (or agent.passphrase_file) at a 0600 env file, or run in a TTY")
 	if !agentRunning && agent.Supported() {
 		clauses = append(clauses,
 			"starting 'tvault agent' makes read commands prompt-free but never unlocks a write")

@@ -5,7 +5,7 @@ description: Inject TinyVault secrets into a process, a remote SSH command, or y
 
 # Run & Environment
 
-Use your secrets at runtime without writing them to disk or pasting them into shell history. `tvault run` injects a project's secrets into a single child process, `tvault ssh` does the same for a remote command over SSH, `tvault env` emits them for `eval`, and `tvault export` writes a file when you genuinely need one. Committed `.env` templates can carry `tvault://` placeholders that resolve against the vault at run time.
+Use your secrets at runtime without writing them to disk or pasting them into shell history. `tvault run` injects a project's secrets into a single child process, `tvault ssh` does the same for a remote command over SSH, `tvault env` emits them for `eval`, `tvault shell-init` loads them at shell startup without ever prompting, and `tvault export` writes a file when you genuinely need one. Committed `.env` templates can carry `tvault://` placeholders that resolve against the vault at run time.
 
 ## tvault run — inject secrets into one process
 
@@ -192,7 +192,7 @@ Select a format with `-f`/`--format`. The default is `shell`.
 
 | Format | Output |
 | --- | --- |
-| `shell` (default) | `export KEY=value` lines (shell-quoted). |
+| `shell` (default) | `export KEY=value` lines (shell-quoted — see below). |
 | `dotenv` | `KEY=value` lines for a `.env` file. |
 | `json` | A flat JSON object of key/value pairs. Control bytes are escaped; `&`, `<`, and `>` stay literal. |
 | `yaml` | A flat YAML mapping. |
@@ -252,6 +252,30 @@ The identity is resolved from the named key file, or — when no file exists —
 | `--identity <name>` | Read a shared project with an X25519 identity, no passphrase. |
 | `--only <k1,k2>` | Emit only these keys; a missing explicit key fails closed. |
 | `--prefix <p>` | Emit only keys with this prefix; combines with `--only` as a union. |
+
+::: tip Values are always safely quoted
+`shell` output single-quotes any value containing a character outside a conservative safe set (`[A-Za-z0-9@%+=:,./_-]`) — letters, digits, and a handful of punctuation that no POSIX shell treats specially. Earlier versions left characters like `;`, `&`, `|`, `<`, `>`, `(`, `*`, `~`, and `#` unquoted, so a stored value such as `a;touch pwned` could run a command when you `eval`'d the output. That is fixed: `eval "$(tvault env)"` can no longer execute part of a stored value. The same quoting applies to `tvault ssh`'s remote export script and `tvault shell-init`.
+:::
+
+## tvault shell-init — load a project at shell startup, without ever prompting
+
+`tvault shell-init <bash|zsh|fish> --project <name>` is built for the one place `tvault env` doesn't fit well: a login shell's rc file, where a prompt or a hang at startup is unacceptable.
+
+```bash
+eval "$(tvault shell-init zsh --project personal)"           # ~/.zshrc
+tvault shell-init fish --project personal | source            # config.fish
+```
+
+Unlike `tvault env`, it **never prompts** — it reads through a running [agent](/guide/agent), and, only with `--allow-unlock`, falls back to a non-interactive source (`TVAULT_PASSPHRASE`, a passphrase command, or a passphrase file — never a TTY). If nothing is available, it prints nothing on stdout, one notice on stderr (`--quiet` silences it), and exits `0`, so a locked vault never blocks a new shell from opening. `--project` is required — a login shell must load a named project, not whichever one `tvault use` last selected.
+
+| Command | Runs | Prompts? | Scope |
+| --- | --- | --- | --- |
+| `tvault shell-init` | Once, at shell startup | Never | Selected keys, for the whole session |
+| `tvault hook` + `tvault_load` | On demand, when you call `tvault_load` | Only if no agent is running | Whole project, for the rest of the session |
+| `tvault run -- <cmd>` | Per invocation | Only if no agent is running and no other source | Just that one child process |
+| `tvault env` | Per invocation, for you to `eval` | Only if no agent is running and no other source | Whatever you `eval`, for that shell |
+
+See [Keep the passphrase out of plaintext](/guide/passphrase-sources) for the full flag reference, the non-interactive unlock precedence, and a staged migration off a plaintext `~/.config/secrets/env`.
 
 ## tvault export — write a file
 
@@ -378,4 +402,5 @@ tvault env -p production --format dotenv > prod.env
 - [Working with .env files](/guide/dotenv) — import, diff, two-way sync, and the full dotenv surface.
 - [Committable secrets](/guide/committable-secrets) — encrypted `.env` files and recipient-sealed values you can commit.
 - [The local agent](/guide/agent) — unlock once, run prompt-free.
+- [Keep the passphrase out of plaintext](/guide/passphrase-sources) — `shell-init` in full, plus `agent.passphrase_command` and a safe migration.
 - [CI/CD](/guide/ci-cd) — passphrase-free reads with `--identity` and `TVAULT_IDENTITY_KEY`.

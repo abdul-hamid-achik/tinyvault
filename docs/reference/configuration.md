@@ -9,15 +9,16 @@ This page documents the optional `config.yaml` file in the resolved vault direct
 
 TinyVault works with zero configuration. A config file is optional, and a missing file is never an error. Everything here is for when you want to tune defaults or understand exactly where bytes live.
 
-## The config file: `<vault-dir>/config.yaml`
+## The config file: `config.yaml`
 
-TinyVault reads a single optional YAML file from the resolved vault directory. Its default path is `~/.tvault/config.yaml`; `--vault <dir>` or `TVAULT_DIR` moves it together with the rest of the vault files.
+TinyVault reads a single optional YAML file. Its default path is `~/.tvault/config.yaml`, but it can also live at an XDG-standard location — see [Config file location](#config-file-location) below for the full resolution order.
 
 A **missing** file is fine — built-in defaults apply. If the file is malformed or unreadable, [`tvault doctor`](/cli/) reports the problem and exits non-zero.
 
 ```yaml
 # ~/.tvault/config.yaml
 agent:
+  passphrase_command: ["/opt/homebrew/bin/op", "read", "op://Private/tvault/password"]
   passphrase_file: ~/.config/secrets/env
   log_dir: ""        # empty = $XDG_STATE_HOME/tvault
   log_level: info
@@ -29,15 +30,39 @@ Only the `agent:` block is parsed into TinyVault's typed config.
 
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
+| `agent.passphrase_command` | list of strings (or a single whitespace-split string) | empty | A program (and its arguments) whose stdout is the vault passphrase — for a password manager or the OS keychain instead of a plaintext file. Run directly, never through a shell; wins over `agent.passphrase_file`. See [Keep the passphrase out of plaintext](/guide/passphrase-sources). |
 | `agent.passphrase_file` | string | empty | Path to an env-style file containing `TVAULT_PASSPHRASE` for non-interactive unlock (must not be group- or world-readable). |
 | `agent.log_dir` | string | empty | Override agent log directory. Empty means `$XDG_STATE_HOME/tvault`. |
 | `agent.log_level` | string | `info` | One of `debug`, `info`, `warn`, `error`. |
 
 A leftover `browse:` block from older releases is ignored. Top-level `vault`, `project`, and `verbose` keys do not configure those command flags.
 
+`agent.passphrase_command` applies to every non-interactive unlock (CLI, MCP, agent), not only `tvault agent` — it lives under `agent:` because the agent running under launchd/systemd was its first consumer. A command sourced from `config.yaml` only runs when the file is owned by the current user and not writable by group or others; a loosely permissioned config file is refused as an unlock source (it would otherwise be a code-execution primitive for anyone who could write it).
+
 ::: tip Flags and environment variables win
 Explicit command-line flags and `TVAULT_*` environment variables override the corresponding `agent:` values.
 :::
+
+### Config file location
+
+`config.yaml` is resolved in this order (first match wins):
+
+```text
+--config <file>   >   TVAULT_CONFIG   >   <vault dir>/config.yaml (if it exists)
+  >   $XDG_CONFIG_HOME/tvault/config.yaml, else ~/.config/tvault/config.yaml
+      (if it exists AND the vault is the default ~/.tvault)
+  >   <vault dir>/config.yaml   (default location to create one)
+```
+
+- `--config` is a global persistent flag, same precedence rules as `--vault`.
+- `TVAULT_CONFIG` is the environment-variable equivalent.
+- The XDG location is **ignored for scratch vaults** (`--vault` / `TVAULT_DIR`): it holds the operator's own unlock settings, and a test fixture or throwaway vault must not accidentally run their `passphrase_command`.
+- If files exist at **both** `<vault dir>/config.yaml` and the XDG location, the vault-dir one wins and the XDG one is ignored — `tvault doctor` warns when this happens, since it is almost always a half-finished move to the XDG location.
+
+```bash
+tvault --config /etc/tvault/config.yaml doctor
+TVAULT_CONFIG=/etc/tvault/config.yaml tvault doctor
+```
 
 ::: warning A broken config is caught by doctor
 If `~/.tvault/config.yaml` fails to parse, `tvault doctor` reports it and exits non-zero. Run `tvault doctor` after editing the file:
@@ -84,7 +109,7 @@ Override its location with `--vault` or `TVAULT_DIR` (see
 | Path | Mode | Contents |
 | --- | --- | --- |
 | `vault.db` | `0600` | The bbolt database. Holds encrypted `secrets` and `secret_versions`, project metadata with wrapped per-project DEKs, the audit log, and the KEK verifier plus Argon2id salt. It is the only file containing stored project secret values; private identity key material lives separately under `identities/`. |
-| `config.yaml` | `0600` | Optional configuration ([above](#the-config-file-vault-dir-config-yaml)). |
+| `config.yaml` | `0600` | Optional configuration ([above](#the-config-file-config-yaml)). |
 | `mcp-policy.yaml` | `0600` | Optional [MCP access policy](/mcp/access-policy). |
 | `identities/<name>.key` | `0600` | One asymmetric identity per file. Stores the **private** half (`tvault-key1...`); the **public** half (`tvault1...`) is derived and shareable. See [Sharing](/guide/sharing) and [Key management](/guide/key-management). |
 | `agent.sock` | `0600` | Unix-only. The [agent](/guide/agent) listens here so `get`/`env`/`run` can skip the passphrase prompt. |
@@ -182,6 +207,7 @@ These command-line flags affect the paths and workflows described on this page:
 | Flag | Effect |
 | --- | --- |
 | `--vault <dir>` | Use an alternate vault directory. |
+| `--config <file>` | Use an alternate `config.yaml`, overriding the [location precedence](#config-file-location) (same as `TVAULT_CONFIG`). |
 | `-p`, `--project <name>` | Operate on a specific project. |
 | `--json` | Emit machine-readable JSON on commands that support it. |
 | `--no-agent` | Make `get`, `env`, or `run` bypass a running agent and unlock directly (same as `TVAULT_NO_AGENT`). |
@@ -222,6 +248,7 @@ esac
 ## See also
 
 - [Environment variables](/reference/environment-variables) — every `TVAULT_*` variable in detail.
+- [Keep the passphrase out of plaintext](/guide/passphrase-sources) — `agent.passphrase_command`, the unlock precedence, and a safe migration.
 - [MCP Access Policy](/mcp/access-policy) — the schema for `mcp-policy.yaml`.
 - [The local agent](/guide/agent) — `agent:` config, socket, and install.
 - [Security](/reference/security) — the threat model behind these defaults.

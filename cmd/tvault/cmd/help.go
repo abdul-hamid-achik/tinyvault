@@ -198,12 +198,15 @@ func helpContent() HelpContent {
 				"-p <name>        short for --project",
 				"--json          emit machine-readable JSON output",
 				"--verbose, -v   enable verbose logging on stderr",
-				"--config <file>  compatibility selector for Viper input; typed config still uses <vault-dir>/config.yaml",
+				"--config <file>  config file; default <vault-dir>/config.yaml, else $XDG_CONFIG_HOME/tvault/config.yaml (or set TVAULT_CONFIG)",
 				"--no-vault      (run only) skip vault secrets, use only --env-file values",
 				"--yes, -y       (delete/restore) skip confirmation prompt",
 			},
 			EnvVars: []string{
 				"TVAULT_PASSPHRASE     vault passphrase; skips the interactive prompt",
+				"TVAULT_PASSPHRASE_COMMAND  command printing the passphrase (e.g. `op read op://…`); run without a shell",
+				"TVAULT_PASSPHRASE_FILE     0600 env file holding TVAULT_PASSPHRASE",
+				"TVAULT_CONFIG         explicit config.yaml path (like --config)",
 				"TVAULT_NO_AGENT       set to bypass a running `tvault agent` and unlock directly",
 				"TVAULT_AGENT_TOKEN    capability token for a `tvault agent --require-token` (privilege separation for confined delegates)",
 				"TVAULT_IDENTITY_KEY   a private identity (tvault-key1…) for passphrase-free decrypt in CI/ssh; a local identity file takes precedence",
@@ -401,6 +404,17 @@ func helpContent() HelpContent {
 				Description: "The agent (unix only) holds the vault unlocked over a private 0600 socket so " +
 					"get/env/run skip the passphrase prompt and Argon2id. It auto-locks when idle; " +
 					"use --no-agent to bypass it.",
+			},
+			{
+				Name: "Keep the passphrase in a password manager; load a project at shell start",
+				Commands: []string{
+					`# config.yaml: agent.passphrase_command: ["/opt/homebrew/bin/op", "read", "op://Private/tvault/password"]`,
+					"tvault doctor   # unlock source: passphrase command (not run by doctor)",
+					`eval "$(tvault shell-init zsh --project personal --quiet)"`,
+				},
+				Description: "A passphrase command (1Password, the OS keychain, pass) replaces a plaintext passphrase file; " +
+					"it runs without a shell and only from a config file you own. shell-init reads through the agent, " +
+					"never prompts, and prints nothing (exit 0) when the vault is locked, so shell startup never blocks.",
 			},
 			{
 				Name: "Commit-safe Kubernetes secrets (SealedSecret pattern)",

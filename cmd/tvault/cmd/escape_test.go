@@ -26,6 +26,17 @@ func TestEscapeShellValue(t *testing.T) {
 		{"with\ttab", "'with\ttab'"},
 		{"with\"double", `'with"double'`},
 		{"with\\back", `'with\back'`},
+		// Shell control and glob characters must be quoted, or eval of
+		// `export K=VALUE` runs part of the value as a command.
+		{"a;touch pwned", "'a;touch pwned'"},
+		{"a&b", "'a&b'"},
+		{"a|b", "'a|b'"},
+		{"a>b", "'a>b'"},
+		{"$(id)", "'$(id)'"},
+		{"a*b", "'a*b'"},
+		{"~/x", "'~/x'"},
+		{"#c", "'#c'"},
+		{"sk-abc_123.def/+=", "sk-abc_123.def/+="},
 	}
 	for _, tt := range tests {
 		got := escapeShellValue(tt.in)

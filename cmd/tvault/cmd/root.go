@@ -3,8 +3,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -73,7 +71,7 @@ func Execute() error {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default ~/.tvault/config.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default ~/.tvault/config.yaml, else $XDG_CONFIG_HOME/tvault/config.yaml)")
 	rootCmd.PersistentFlags().StringVar(&vaultDir, "vault", "", "vault directory (default ~/.tvault)")
 	rootCmd.PersistentFlags().StringVarP(&projectName, "project", "p", "", "project name")
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "output in JSON format")
@@ -90,20 +88,10 @@ func init() {
 }
 
 func initConfig() {
-	if cfgFile != "" {
-		viper.SetConfigFile(cfgFile)
-	} else {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-
-		configDir := filepath.Join(home, ".tvault")
-		viper.AddConfigPath(configDir)
-		viper.SetConfigType("yaml")
-		viper.SetConfigName("config")
-	}
+	// Same resolution as loadConfig (--config, TVAULT_CONFIG, the vault dir,
+	// then the XDG location), so both readers agree on one file.
+	viper.SetConfigFile(configPath())
+	viper.SetConfigType("yaml")
 
 	viper.SetEnvPrefix("TVAULT")
 	viper.AutomaticEnv()

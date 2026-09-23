@@ -123,6 +123,28 @@ tvault agent start --idle 0     # never auto-lock
 
 The default is 15 minutes. After auto-lock the socket is gone and commands fall back to direct unlocks until you start the agent again.
 
+## Installing as a persistent service
+
+`tvault agent install` writes and registers a per-user service definition — a launchd `LaunchAgent` on macOS, a systemd user unit on Linux — so the agent survives logout/reboot without you backgrounding it by hand. The agent still never daemonizes itself; the service manager owns that (launchd `RunAtLoad`, systemd `Type=simple`).
+
+Because a service has no terminal to prompt at, it needs a non-interactive unlock source: either a passphrase file or `agent.passphrase_command` (see [Keep the passphrase out of plaintext](/guide/passphrase-sources)).
+
+```bash
+tvault agent install --dry-run                                  # review the definition first
+tvault agent install --passphrase-file ~/.config/secrets/env    # file-based unlock
+tvault agent install                                             # uses agent.passphrase_command from config.yaml
+tvault agent install --idle 0 --log-level debug
+tvault agent uninstall
+```
+
+With `--passphrase-file`, the generated service definition records only the **path** to the file, never the passphrase itself — a launchd plist is world-readable by default and ends up in backups. With `agent.passphrase_command` configured instead, nothing passphrase-related is baked into the definition at all: the agent reads `config.yaml` and runs the command itself each time it starts.
+
+::: warning A service starts with a minimal PATH
+If `agent.passphrase_command`'s program is not an absolute path (`op` instead of `/opt/homebrew/bin/op`), it may resolve in your interactive shell and fail under the service manager, which does not inherit your shell's `PATH`. `tvault agent install` warns about this; use the absolute path from `command -v op`. A password manager or keychain helper may also need your GUI session to already be unlocked — at boot, before you log in, the command can fail, and the agent falls back to failing that one unlock rather than hanging.
+:::
+
+The service restarts on failure but **not** after a clean exit, so idle auto-lock is respected instead of immediately undone; the next read after an idle lock falls back to a direct unlock, which still needs no prompt when a passphrase source is configured. After upgrading the `tvault` binary, run `tvault agent restart` to pick it up — the service manager keeps running whatever process it already started. `tvault agent logs` prints (or `--clear`s) the agent's log path.
+
 ## Bypassing the agent
 
 To force a direct unlock even when an agent is running:
@@ -187,6 +209,7 @@ For untrusted delegation — CI, another machine, a teammate, an AI agent you do
 ## See also
 
 - [Run & environment](/guide/run-and-env) — `run`, `env`, and how they route through the agent
+- [Keep the passphrase out of plaintext](/guide/passphrase-sources) — `agent.passphrase_command`, `shell-init`, and a safe migration
 - [Sharing](/guide/sharing) — scoped identities for real, revocable delegation
 - [Environment variables](/reference/environment-variables) — `TVAULT_NO_AGENT`, `TVAULT_AGENT_TOKEN`, `TVAULT_PASSPHRASE`
 - [Security](/reference/security) — the full threat model and trust boundaries

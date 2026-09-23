@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,10 +118,22 @@ func serviceConfig(cfg Config) (service.Config, error) {
 	// path, so keep it.
 
 	passFile := strings.TrimSpace(agentPassphraseFileFlag)
-	if passFile == "" {
-		passFile = passphraseFilePath(cfg)
-	} else {
+	switch {
+	case passFile != "":
 		passFile = expandHome(passFile)
+	case strings.TrimSpace(os.Getenv(envPassphraseFile)) != "":
+		passFile = expandHome(strings.TrimSpace(os.Getenv(envPassphraseFile)))
+	case len(cfg.Agent.PassphraseCommand) > 0:
+		// The agent reads config.yaml itself and runs the command at start;
+		// no passphrase file is baked into the definition.
+	default:
+		path, implicit := passphraseFileSource(cfg)
+		if implicit {
+			if _, rerr := readPassphraseFile(path); errors.Is(rerr, errPassphraseFileUnusable) {
+				path = ""
+			}
+		}
+		passFile = path
 	}
 	if passFile != "" {
 		abs, aerr := filepath.Abs(passFile)
@@ -182,10 +196,13 @@ func runAgentInstall(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	if sc.PassphraseFile == "" {
+	if sc.PassphraseFile == "" && len(cfg.Agent.PassphraseCommand) == 0 {
 		return fmt.Errorf(
-			"a service has no terminal to prompt at: pass --passphrase-file <file> "+
-				"or set agent.passphrase_file in %s", configPath())
+			"a service has no terminal to prompt at: pass --passphrase-file <file>, "+
+				"or set agent.passphrase_command or agent.passphrase_file in %s", configPath())
+	}
+	if sc.PassphraseFile == "" {
+		warnServicePassphraseCommand(os.Stderr, cfg.Agent.PassphraseCommand)
 	}
 
 	body, err := service.Render(kind, sc)
@@ -303,4 +320,21 @@ func runAgentLogs(_ *cobra.Command, _ []string) error {
 		PrintKeyValue("Size", "not created yet")
 	}
 	return nil
+}
+
+// warnServicePassphraseCommand flags the two ways a passphrase command most
+// often fails under a service manager: launchd/systemd start the agent with a
+// minimal PATH, so a bare program name (e.g. "op") may not resolve, and the
+// helper may need a logged-in, unlocked GUI session (1Password, the keychain)
+// that does not exist yet at boot.
+func warnServicePassphraseCommand(w io.Writer, argv CommandSpec) {
+	if len(argv) == 0 {
+		return
+	}
+	if !filepath.IsAbs(expandHome(argv[0])) {
+		fmt.Fprintf(w, "warning: passphrase_command program %q is not an absolute path; "+
+			"a service starts with a minimal PATH, so use the full path (e.g. from `command -v %s`)\n", argv[0], argv[0])
+	}
+	fmt.Fprintln(w, "note: the agent runs passphrase_command when it starts; a password manager "+
+		"or keychain helper may need your GUI session to be unlocked first")
 }

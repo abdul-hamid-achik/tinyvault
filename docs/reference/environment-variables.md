@@ -14,7 +14,9 @@ There is no generic environment-variable mapping for command flags. Use only the
 | Variable | Reads it | What it does |
 | --- | --- | --- |
 | `TVAULT_PASSPHRASE` | commands that unlock directly; also `init`, `agent start`, `mcp` | Vault passphrase for non-interactive unlock; skips the prompt. |
-| `TVAULT_PASSPHRASE_FILE` | same surfaces as `TVAULT_PASSPHRASE` | Path to a `0600` env-style file holding `TVAULT_PASSPHRASE`. Preferred for MCP/launchd (the process inherits a path, not the secret). Falls back to `agent.passphrase_file` in `~/.tvault/config.yaml`, then `~/.config/secrets/env` when that file exists. |
+| `TVAULT_PASSPHRASE_COMMAND` | same surfaces as `TVAULT_PASSPHRASE` | A program (and args) whose stdout is the vault passphrase — a password manager or the OS keychain instead of a file. Beats `TVAULT_PASSPHRASE_FILE`; loses to `TVAULT_PASSPHRASE`. |
+| `TVAULT_PASSPHRASE_FILE` | same surfaces as `TVAULT_PASSPHRASE` | Path to a `0600` env-style file holding `TVAULT_PASSPHRASE`. Preferred for MCP/launchd (the process inherits a path, not the secret). Falls back to `agent.passphrase_command`, then `agent.passphrase_file` in `~/.tvault/config.yaml`, then `~/.config/secrets/env` when that file exists. |
+| `TVAULT_CONFIG` | every command that reads config | Path to `config.yaml`, overriding the default location resolution (same as `--config`). |
 | `TVAULT_DIR` | every command | Vault directory override. Default `~/.tvault`. |
 | `TVAULT_NO_AGENT` | `get`, `env`, `run` | If set, bypass a running agent and unlock directly (same as `--no-agent`). |
 | `TVAULT_AGENT_TOKEN` | agent-routed `get`, `env`, `run` | Bearer token sent to a `--require-token` agent after the mandatory same-uid check. |
@@ -42,6 +44,26 @@ Precedence for the vault directory is:
 `--vault` is a global persistent flag available on every command, so a one-off `tvault --vault /tmp/scratch list` always wins over an exported `TVAULT_DIR`.
 :::
 
+### `TVAULT_CONFIG`
+
+Points `tvault` at a `config.yaml` other than the resolved default. Useful for running with a config file that lives outside the vault directory, or for pointing several vaults at one shared config.
+
+```bash
+export TVAULT_CONFIG=/etc/tvault/config.yaml
+tvault doctor
+```
+
+Full config-file resolution order:
+
+```
+--config <file>   >   TVAULT_CONFIG   >   <vault dir>/config.yaml (if present)
+  >   $XDG_CONFIG_HOME/tvault/config.yaml, else ~/.config/tvault/config.yaml
+      (if present AND the vault is the default ~/.tvault)
+  >   <vault dir>/config.yaml (default location)
+```
+
+The XDG location is ignored for a scratch vault selected with `--vault`/`TVAULT_DIR`, so a test fixture never picks up your personal `passphrase_command`. See [Configuration](/reference/configuration#config-file-location) for the full explanation.
+
 ## Unlocking
 
 ### `TVAULT_PASSPHRASE`
@@ -61,6 +83,19 @@ tvault env --project api > .env
 - For passphrase-free CI, consider an identity key instead (see [`TVAULT_IDENTITY_KEY`](#tvault-identity-key)); it scopes access to specific recipients rather than handing over the master passphrase.
 :::
 
+### `TVAULT_PASSPHRASE_COMMAND`
+
+Names a program (and its arguments) whose stdout is the vault passphrase, so it can live in 1Password, the macOS Keychain, `pass`, or any helper instead of a plaintext file or the shell environment.
+
+```bash
+export TVAULT_PASSPHRASE_COMMAND="op read op://Private/tvault/password"
+tvault env --project api
+```
+
+The value is split on whitespace, with `'`/`"` quoting for arguments containing spaces — same rule as the YAML string form of `agent.passphrase_command`. It is executed directly (never through a shell), so there is no variable expansion or globbing. stdin is `/dev/null`; stderr is inherited so a helper's own prompt (Touch ID, a master password) stays visible; output over 4096 bytes or empty output is refused; a 2-minute timeout bounds how long `tvault` waits.
+
+`tvault mcp` treats this differently from the other two sources: it prefers a running [local agent](/guide/agent) for reads and only runs the command as the fallback unlock, so an MCP session start does not demand a Touch ID prompt when an agent is already serving reads. See [Keep the passphrase out of plaintext](/guide/passphrase-sources) for the full picture, including `agent.passphrase_command` in `config.yaml` and a safe migration off a plaintext file.
+
 ### `TVAULT_PASSPHRASE_FILE`
 
 Points at a `0600` env-style file (`KEY=VALUE`, `export` accepted) that contains `TVAULT_PASSPHRASE`. Use this for MCP servers, launchd, and systemd: the process environment carries a path, not the master passphrase.
@@ -70,13 +105,15 @@ export TVAULT_PASSPHRASE_FILE="$HOME/.config/secrets/env"
 tvault env --project api
 ```
 
-Precedence:
+Full precedence across all non-interactive sources (environment beats config; within a layer, a command beats a file):
 
 ```
-TVAULT_PASSPHRASE   >   TVAULT_PASSPHRASE_FILE   >   agent.passphrase_file   >   ~/.config/secrets/env (if present)
+TVAULT_PASSPHRASE   >   TVAULT_PASSPHRASE_COMMAND   >   TVAULT_PASSPHRASE_FILE
+  >   agent.passphrase_command   >   agent.passphrase_file
+      >   ~/.config/secrets/env (implicit; default vault only, and only if it defines TVAULT_PASSPHRASE)
 ```
 
-The file is refused if it is group- or world-readable. Set `agent.passphrase_file` in `~/.tvault/config.yaml` when you want the same path without exporting anything into a GUI-launched harness.
+The file is refused if it is group- or world-readable. Set `agent.passphrase_file` (or, better, `agent.passphrase_command`) in `~/.tvault/config.yaml` when you want the same path without exporting anything into a GUI-launched harness.
 
 If the passphrase is wrong, `tvault` exits with code **6**. If the vault has not been initialized yet, it exits with code **5**.
 
@@ -177,6 +214,7 @@ Scripts that read these variables will want to branch on the process exit code:
 ## See also
 
 - [Configuration](/reference/configuration) — the `config.yaml` file and the `agent:` block.
+- [Keep the passphrase out of plaintext](/guide/passphrase-sources) — `TVAULT_PASSPHRASE_COMMAND`, the full unlock precedence, and a safe migration.
 - [CI/CD](/guide/ci-cd) — wiring up passphrase-free and identity-based pipelines.
 - [Sharing Secrets](/guide/sharing) — identities, recipients, live-vault re-keying, and retained-data limits.
 - [Local Agent](/guide/agent) — the unlocked-vault daemon and `--require-token`.

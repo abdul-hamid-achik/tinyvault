@@ -118,9 +118,9 @@ func TestPassphraseFromEnvOrFilePrefersEnv(t *testing.T) {
 	t.Setenv("TVAULT_PASSPHRASE", "from-env")
 	t.Setenv(envPassphraseFile, path)
 
-	got, err := passphraseFromEnvOrFile(Config{})
+	got, err := nonInteractivePassphrase(Config{})
 	if err != nil {
-		t.Fatalf("passphraseFromEnvOrFile: %v", err)
+		t.Fatalf("nonInteractivePassphrase: %v", err)
 	}
 	if got != "from-env" {
 		t.Errorf("passphrase = %q, want the environment value", got)
@@ -132,9 +132,9 @@ func TestPassphraseFromEnvOrFileFallsBackToFile(t *testing.T) {
 	t.Setenv("TVAULT_PASSPHRASE", "")
 	t.Setenv(envPassphraseFile, path)
 
-	got, err := passphraseFromEnvOrFile(Config{})
+	got, err := nonInteractivePassphrase(Config{})
 	if err != nil {
-		t.Fatalf("passphraseFromEnvOrFile: %v", err)
+		t.Fatalf("nonInteractivePassphrase: %v", err)
 	}
 	if got != "from-file" {
 		t.Errorf("passphrase = %q, want the file value", got)
@@ -150,7 +150,7 @@ func TestPassphraseFromEnvOrFileUnconfiguredIsNotAnError(t *testing.T) {
 	t.Setenv("TVAULT_PASSPHRASE", "")
 	t.Setenv(envPassphraseFile, "")
 
-	got, err := passphraseFromEnvOrFile(Config{})
+	got, err := nonInteractivePassphrase(Config{})
 	if err != nil {
 		t.Fatalf("an unconfigured passphrase source must not error: %v", err)
 	}

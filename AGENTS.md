@@ -96,7 +96,11 @@ cmd/tvault/
     generate.go              # tvault generate KEY (stores random value; never prints it)
     audit.go                 # tvault audit (lock-free metadata log; --action/--since/--json)
     audit_helper.go          # recordAudit(): CLI surface-specific audit (generate, share, env groups)
-    config_helper.go         # typed ~/.tvault/config.yaml (agent: defaults)
+    config_helper.go         # typed config.yaml (agent: block); config location resolution (--config/TVAULT_CONFIG/XDG)
+    passphrase_command.go    # agent.passphrase_command / TVAULT_PASSPHRASE_COMMAND: run a helper (no shell), stdin /dev/null
+    passphrase_file.go       # TVAULT_PASSPHRASE_FILE / agent.passphrase_file / implicit ~/.config/secrets/env; resolvePassphrasePlan (precedence)
+    owner_unix.go / owner_other.go  # ownedByCurrentUser() for the config-file trust check (build-tagged)
+    shell_init.go            # tvault shell-init <bash|zsh|fish> --project <name>: never prompts, exits 0 when locked
     completion.go            # Shell completion
     output.go                # Color output helpers (Success, Error, Warning, Info)
 
@@ -331,6 +335,9 @@ Before every commit:
 | Variable               | Description                                                                |
 |------------------------|----------------------------------------------------------------------------|
 | `TVAULT_PASSPHRASE`    | Vault passphrase (CI/CD, scripts, MCP writes — skips interactive prompt). MCP reads can use a running agent instead. |
+| `TVAULT_PASSPHRASE_COMMAND` | Program (whitespace-split argv) whose stdout is the passphrase — 1Password/Keychain/`pass`. No shell; stdin `/dev/null`; not treated as a "cheap" source by `tvault mcp` (agent preferred, command is the fallback). |
+| `TVAULT_PASSPHRASE_FILE` | Path to a `0600` env-style file holding `TVAULT_PASSPHRASE`. Beats `agent.passphrase_command`/`agent.passphrase_file`; loses to `TVAULT_PASSPHRASE`/`TVAULT_PASSPHRASE_COMMAND`. |
+| `TVAULT_CONFIG`        | Path to `config.yaml`, overriding the vault-dir/XDG resolution (same as `--config`). |
 | `TVAULT_NO_AGENT`      | Bypass a running `tvault agent` and unlock the vault directly.             |
 | `TVAULT_AGENT_TOKEN`   | Capability token for a `--require-token` agent (privilege separation; same-uid is NOT a threat it defends — see [token honesty](docs/reference/security.md#token-honesty)). |
 | `TVAULT_IDENTITY_KEY`  | Private identity (`tvault-key1…`) for passphrase-free decrypt in CI/ssh/agents (`resolveIdentity`); a local key file takes precedence + warns. Never echoed in errors. |

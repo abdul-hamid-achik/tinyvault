@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -58,7 +59,8 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 	checks = append(checks, doctorCheck{Name: "version", Status: statusInfo, Detail: formatVersion()})
 	checks = append(checks, checkVaultDir(dir)...)
 	checks = append(checks, checkVault(dir)...)
-	checks = append(checks, checkConfig(), checkPolicy(dir))
+	checks = append(checks, checkConfig()...)
+	checks = append(checks, checkUnlockSource(), checkPolicy(dir))
 	checks = append(checks, checkEnvironment()...)
 	checks = append(checks, checkTerminal())
 
@@ -170,15 +172,56 @@ func checkVault(dir string) []doctorCheck {
 	return checks
 }
 
-func checkConfig() doctorCheck {
-	path := filepath.Join(getVaultDir(), "config.yaml")
+func checkConfig() []doctorCheck {
+	path := configPath()
+	var checks []doctorCheck
 	if _, err := os.Stat(path); err != nil {
-		return doctorCheck{Name: "config", Status: statusInfo, Detail: "no config file (using defaults)"}
+		checks = append(checks, doctorCheck{Name: "config", Status: statusInfo, Detail: "no config file (using defaults)"})
+	} else if _, err := loadConfig(); err != nil {
+		checks = append(checks, doctorCheck{Name: "config", Status: statusFail, Detail: fmt.Sprintf("%s: %v", path, err)})
+	} else {
+		checks = append(checks, doctorCheck{Name: "config", Status: statusOK, Detail: path})
 	}
-	if _, err := loadConfig(); err != nil {
-		return doctorCheck{Name: "config", Status: statusFail, Detail: fmt.Sprintf("%s: %v", path, err)}
+	// Two config files is almost always a half-finished move to the XDG
+	// location; say which one is being ignored rather than let it drift.
+	if xdg := xdgConfigPath(); xdg != "" && xdg != path && isDefaultVaultDir() && fileExists(xdg) && fileExists(path) {
+		checks = append(checks, doctorCheck{Name: "config", Status: statusWarn,
+			Detail: fmt.Sprintf("%s is ignored because %s exists; keep one", xdg, path)})
 	}
-	return doctorCheck{Name: "config", Status: statusOK, Detail: path}
+	return checks
+}
+
+// checkUnlockSource describes how a non-interactive unlock would get the
+// passphrase. It never runs a passphrase command or prints a secret; it
+// nudges a plaintext passphrase file toward a password-manager command.
+func checkUnlockSource() doctorCheck {
+	const name = "unlock source"
+	cfg, err := loadConfig()
+	if err != nil {
+		return doctorCheck{Name: name, Status: statusInfo, Detail: "unknown (config unreadable)"}
+	}
+	plan, err := resolvePassphrasePlan(cfg)
+	if err != nil {
+		return doctorCheck{Name: name, Status: statusFail, Detail: err.Error()}
+	}
+	switch plan.kind {
+	case passSourceEnv:
+		return doctorCheck{Name: name, Status: statusInfo, Detail: "TVAULT_PASSPHRASE (environment)"}
+	case passSourceCommand:
+		prog := expandHome(plan.argv[0])
+		if _, lerr := exec.LookPath(prog); lerr != nil {
+			return doctorCheck{Name: name, Status: statusWarn,
+				Detail: fmt.Sprintf("passphrase command from %s: %q not found on PATH", plan.origin, plan.argv[0])}
+		}
+		return doctorCheck{Name: name, Status: statusOK,
+			Detail: fmt.Sprintf("passphrase command %q from %s (not run by doctor)", plan.argv[0], plan.origin)}
+	case passSourceFile:
+		return doctorCheck{Name: name, Status: statusWarn,
+			Detail: fmt.Sprintf("passphrase stored in plaintext file %s; any process running as you can read it — "+
+				"consider agent.passphrase_command (a password manager or the OS keychain)", plan.path)}
+	default:
+		return doctorCheck{Name: name, Status: statusInfo, Detail: "none (interactive prompt, or a running agent for reads)"}
+	}
 }
 
 func checkPolicy(dir string) doctorCheck {
@@ -211,7 +254,7 @@ func checkTerminal() doctorCheck {
 		return doctorCheck{Name: "terminal", Status: statusWarn, Detail: "TERM=dumb — interactive passphrase prompts may fail; set TVAULT_PASSPHRASE"}
 	}
 	if !term.IsTerminal(int(os.Stdout.Fd())) {
-		return doctorCheck{Name: "terminal", Status: statusInfo, Detail: "not a TTY — unlock-requiring commands need TVAULT_PASSPHRASE or the agent"}
+		return doctorCheck{Name: "terminal", Status: statusInfo, Detail: "not a TTY — unlock-requiring commands need TVAULT_PASSPHRASE, a passphrase command or file, or the agent (reads only)"}
 	}
 	return doctorCheck{Name: "terminal", Status: statusOK, Detail: "interactive TTY"}
 }

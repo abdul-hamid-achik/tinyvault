@@ -128,6 +128,48 @@ Security Scan, Build**. All four must be green.
   delegation. Tokens are out-of-band (0600 file, SIGHUP reload), only their
   SHA-256 is stored, and audit logs a hash prefix (`token_id`), never the token.
 
+## Non-interactive unlock (`agent.passphrase_command`, `shell-init`)
+
+- `agent.passphrase_command` / `TVAULT_PASSPHRASE_COMMAND` (`passphrase_command.go`)
+  lets the passphrase live in a password manager instead of a plaintext file.
+  Precedence: `TVAULT_PASSPHRASE` > `TVAULT_PASSPHRASE_COMMAND` >
+  `TVAULT_PASSPHRASE_FILE` > `agent.passphrase_command` > `agent.passphrase_file`
+  > implicit `~/.config/secrets/env` (`passphrase_file.go`, `resolvePassphrasePlan`).
+- **Invariants to preserve:** `passphraseSource`/`checkUnlockSource` (doctor.go)
+  and `mcpHasPassphrase` (mcp_server.go) must **never execute** the command —
+  they only report which source *would* be used. The command itself runs with
+  **stdin `/dev/null`** (critical under `tvault mcp`, whose own stdin is the
+  protocol stream — a helper must never be able to read it), inherited stderr,
+  a 2-minute timeout, and a 4096-byte output cap; errors must never include
+  anything the command printed on stdout. A command sourced from `config.yaml`
+  only runs after `checkConfigTrusted` passes (owned by the caller, not
+  group/world-writable) — don't relax that guard, it is what stops
+  `agent.passphrase_command` from being a code-execution primitive for anyone
+  who can write the config file. `tvault mcp` deliberately excludes a command
+  from `mcpHasPassphrase`'s "cheap source" check (only env/file count) so a
+  server start prefers a running agent over forcing a Touch ID prompt; keep
+  that asymmetry. The **implicit** `~/.config/secrets/env` fallback is
+  *skipped, not an error*, once it no longer defines `TVAULT_PASSPHRASE`
+  (`errPassphraseFileUnusable`) — an **explicitly** named file stays strict.
+- `tvault shell-init` (`shell_init.go`) prints quoted export lines for a
+  login shell's rc file. **Invariants:** it must **never prompt** — reads go
+  through a running agent, and only `--allow-unlock` permits a direct unlock,
+  restricted to non-interactive sources (never a TTY). When nothing is
+  available it must exit **0** (a locked vault must never block shell
+  startup), printing at most one stderr notice, silenced by `--quiet`.
+  `--project` is **required** — a login shell must load a named project, not
+  whatever `tvault use` last selected. Keys that aren't valid shell
+  identifiers (`shellIdentifier` regex) are skipped with a **name-only**
+  warning — never print the key verbatim, that would let a crafted key inject
+  into the `eval`. Values go through the same `escapeShellValue`/`fishQuote`
+  quoting as `tvault env`'s shell format (see the security fix below).
+- **Security fix worth remembering:** `escapeShellValue` (env.go) now
+  single-quotes anything outside `[A-Za-z0-9@%+=:,./_-]`. Before this, a
+  stored value with `;`, `&`, `|`, `<`, `>`, `(`, `*`, `~`, or `#` was emitted
+  unquoted by `tvault env --format shell`, `tvault ssh`'s remote script, and
+  `shell-init`, so `eval "$(tvault env)"` could execute part of the value.
+  Any new shell-emitting surface must go through the same helper.
+
 ## Documentation site (`docs/` → tinyvault.dev)
 
 User-facing docs live in `docs/` — a **VitePress (v1) + Bun** site deployed to

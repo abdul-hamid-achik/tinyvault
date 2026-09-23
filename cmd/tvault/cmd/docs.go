@@ -367,9 +367,16 @@ func fullCatalog() docsCatalog {
 			{
 				Name:        "agent-and-hooks",
 				Summary:     "A local agent (unix) holds the vault unlocked so daily commands skip the prompt + Argon2id.",
-				Commands:    []string{"tvault agent start", "tvault agent status", "tvault agent stop", "tvault hook zsh", "tvault get DATABASE_URL --no-agent"},
+				Commands:    []string{"tvault agent start", "tvault agent status", "tvault agent stop", "tvault hook zsh", "tvault shell-init zsh --project personal", "tvault get DATABASE_URL --no-agent"},
 				SeeAlso:     []string{"tvault docs agent"},
 				Description: "`tvault agent start` (foreground; background it with & / nohup / systemd) unlocks the vault once and serves secret reads over a private 0600 unix socket in the 0700 vault dir, accepting only same-uid peers. get/env/run/ssh/docker route through it automatically — no passphrase prompt, no ~200ms Argon2id — and fall back to a direct unlock when no agent is running (or with --no-agent / TVAULT_NO_AGENT). The agent caches only the KEK (not an open database), so direct access keeps working between requests; it auto-locks after an idle period and zeros the KEK on stop/idle/signal. `tvault hook <bash|zsh|fish|direnv>` prints a shell snippet (tvault_load) for loading a project's secrets via the agent. Unix only; on Windows the command reports it is unsupported.",
+			},
+			{
+				Name:        "passphrase-sources",
+				Summary:     "Keep the vault passphrase out of plaintext: fetch it from a password manager or keychain, and load a project at shell start without prompting.",
+				Commands:    []string{"tvault doctor", "tvault shell-init zsh --project personal", "tvault agent install"},
+				SeeAlso:     []string{"tvault docs agent", "tvault help shell-init"},
+				Description: "Non-interactive unlock sources, environment before config and command before file: TVAULT_PASSPHRASE, TVAULT_PASSPHRASE_COMMAND, TVAULT_PASSPHRASE_FILE, agent.passphrase_command, agent.passphrase_file, then ~/.config/secrets/env (default vault only, skipped when it defines no TVAULT_PASSPHRASE). A passphrase command (e.g. `op read op://…`, `security find-generic-password -w …`) runs without a shell, with stdin closed and a 2-minute timeout; its stdout is the passphrase. From config.yaml it runs only when the file is yours and not group/world-writable. MCP prefers a running agent over a command so Touch ID is not triggered per server start. config.yaml is read from --config, TVAULT_CONFIG, <vault-dir>/config.yaml, then $XDG_CONFIG_HOME/tvault/config.yaml. `tvault shell-init <bash|zsh|fish> --project P` prints quoted assignments via the agent (or, with --allow-unlock, a non-interactive unlock), never prompts, and prints nothing with exit 0 when locked. `tvault doctor` reports the unlock source without running it and warns about a plaintext passphrase file.",
 			},
 			{
 				Name:        "remote-ssh",

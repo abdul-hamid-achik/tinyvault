@@ -724,6 +724,28 @@ Print a shell snippet that defines `tvault_load` for loading a project's secrets
 | --- | --- |
 | `<shell>` | `bash`, `zsh`, `fish`, `direnv` |
 
+### `shell-init`
+
+```bash
+eval "$(tvault shell-init zsh --project personal)"
+eval "$(tvault shell-init bash -p personal --only GITHUB_TOKEN,OPENAI_API_KEY)"
+tvault shell-init fish --project personal | source
+eval "$(tvault shell-init zsh -p personal --allow-unlock --quiet)"
+```
+
+Print export assignments for one project, meant for `eval` at shell startup (`~/.zshrc`, `~/.bashrc`, `config.fish`). Unlike `hook`/`tvault_load`, it never prompts: values come from a running agent, or — only with `--allow-unlock` — a non-interactive source (env, passphrase command, or passphrase file, never a TTY). When nothing is available it prints nothing, warns once on stderr (unless `--quiet`), and exits `0`, so a locked vault never blocks shell startup. `--project` is required. See [Keep the passphrase out of plaintext](/guide/passphrase-sources).
+
+| Argument | Values |
+| --- | --- |
+| `<shell>` | `bash`, `zsh`, `fish` |
+
+| Flag | Description |
+| --- | --- |
+| `--only <k1,k2>` | Load only these keys. |
+| `--prefix <p>` | Load only keys with this prefix. |
+| `--allow-unlock` | Fall back to a non-interactive unlock when no agent is reachable. |
+| `-q`, `--quiet` | Suppress the stderr notice when nothing is loaded. |
+
 ---
 
 ## CI/CD

@@ -57,6 +57,20 @@ Fixes, best first:
 
   Understand the trade: that child now holds the passphrase to *every* project and version, which is exactly what `--only` was narrowing.
 
+## `tvault shell-init` prints nothing / my project didn't load into the shell
+
+This is by design, not a bug: [`shell-init`](/guide/run-and-env) never prompts and never blocks shell startup. If it has nothing to load, it silently exits `0` (a one-line notice goes to stderr unless you passed `--quiet`).
+
+The usual cause is that no [`tvault agent`](/guide/agent) is reachable and `--allow-unlock` wasn't passed (or was passed but no non-interactive source resolves). Fixes:
+
+- Start or install the agent: `tvault agent start &` or `tvault agent install`.
+- Or add `--allow-unlock` so it can fall back to `TVAULT_PASSPHRASE`, a passphrase command, or a passphrase file — see [Keep the passphrase out of plaintext](/guide/passphrase-sources).
+- Drop `--quiet` temporarily and open a new shell to see the actual notice on stderr.
+
+## A passphrase command works in my shell but not under the agent service
+
+`tvault agent install`'s generated launchd/systemd unit starts with a **minimal `PATH`**, so `agent.passphrase_command: ["op", "read", "..."]` can resolve fine interactively and fail under the service. Use the absolute path (`command -v op`). A password-manager or keychain helper may also need your GUI session already unlocked — at boot, before login, the command can fail, and the agent falls back to failing that one unlock rather than hanging; it should succeed once you're logged in. See [Keep the passphrase out of plaintext](/guide/passphrase-sources).
+
 ## "vault not found" / "not initialized"
 
 Exit code `5`. Create a vault first:
@@ -127,5 +141,6 @@ tvault identity export ci --force | gh secret set TVAULT_IDENTITY_KEY
 
 - [CLI Reference](/cli/) — every command, flag, and the exit-code table
 - [Environment Variables](/reference/environment-variables) — `TVAULT_PASSPHRASE`, `TVAULT_DIR`, identities
+- [Keep the passphrase out of plaintext](/guide/passphrase-sources) — `shell-init`, `agent.passphrase_command`, and a safe migration
 - [MCP Overview](/mcp/) — setup, the launcher pattern, and the safety model
 - [Security & Threat Model](/reference/security) — what is and isn't protected

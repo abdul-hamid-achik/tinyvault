@@ -102,13 +102,23 @@ func parseMCPConnect(s string) (mode, socket string, err error) {
 	return "unix", path, nil
 }
 
+// mcpHasPassphrase reports whether a cheap, non-interactive passphrase (the
+// environment or a passphrase file) is available, in which case the MCP server
+// unlocks directly instead of going through the agent. A passphrase command is
+// deliberately not counted: it may wait on a human (Touch ID, a password
+// manager), so a running agent is preferred and the command only runs as the
+// fallback unlock. Nothing is executed or read here beyond that check.
 func mcpHasPassphrase() bool {
 	cfg, err := loadConfig()
 	if err != nil {
 		return strings.TrimSpace(os.Getenv("TVAULT_PASSPHRASE")) != ""
 	}
-	pass, err := passphraseFromEnvOrFile(cfg)
-	return err == nil && pass != ""
+	switch passphraseSource(cfg) {
+	case passSourceEnv, passSourceFile:
+		return true
+	default:
+		return false
+	}
 }
 
 func dialMCPAgent(dir, socket string) (*agent.Client, error) {

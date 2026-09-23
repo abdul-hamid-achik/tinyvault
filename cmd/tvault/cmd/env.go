@@ -154,21 +154,36 @@ func shellArgQuote(s string) string {
 	if s == "" {
 		return "''"
 	}
-	for _, r := range s {
-		safe := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
-			(r >= '0' && r <= '9') || strings.ContainsRune("@%+=:,./-_", r)
-		if !safe {
-			return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-		}
+	if !isShellSafe(s) {
+		return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 	}
 	return s
 }
 
+// escapeShellValue quotes a value for the right-hand side of an `export
+// KEY=VALUE` line that is meant to be eval'd or sourced. Anything outside a
+// conservative safe set is single-quoted: an unquoted `;`, `&`, `|`, `<`, `(`
+// or `*` would otherwise be read as shell syntax, so a stored value such as
+// "x;touch pwned" would run a command in the caller's shell on eval.
 func escapeShellValue(s string) string {
-	if !strings.ContainsAny(s, "'\"\\$`\n\t ") {
+	if isShellSafe(s) {
 		return s
 	}
 	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
+}
+
+// isShellSafe reports whether s consists only of characters that no POSIX
+// shell treats specially inside a word (the shlex.quote safe set). The empty
+// string counts as safe.
+func isShellSafe(s string) bool {
+	for _, r := range s {
+		safe := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || strings.ContainsRune("@%+=:,./-_", r)
+		if !safe {
+			return false
+		}
+	}
+	return true
 }
 
 func escapeDotenvValue(s string) string {

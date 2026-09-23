@@ -119,14 +119,13 @@ func runAgentStart(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("read %s: %w", configPath(), err)
 	}
-	// A configured passphrase file counts as a usable unlock source: it is how
-	// the agent starts under launchd/systemd, where there is neither a TTY nor
-	// an inherited TVAULT_PASSPHRASE.
-	if !term.IsTerminal(int(os.Stdin.Fd())) &&
-		os.Getenv("TVAULT_PASSPHRASE") == "" && passphraseFilePath(cfg) == "" {
+	// A configured passphrase command or file counts as a usable unlock source:
+	// it is how the agent starts under launchd/systemd, where there is neither a
+	// TTY nor an inherited TVAULT_PASSPHRASE.
+	if !term.IsTerminal(int(os.Stdin.Fd())) && passphraseSource(cfg) == "" {
 		return fmt.Errorf(
-			"agent start needs a TTY, TVAULT_PASSPHRASE, or %s (see 'tvault agent install')",
-			envPassphraseFile)
+			"agent start needs a TTY, TVAULT_PASSPHRASE, %s, or %s (see 'tvault agent install')",
+			envPassphraseCommand, envPassphraseFile)
 	}
 
 	logger, logCloser, err := logging.New("agent", logging.Options{

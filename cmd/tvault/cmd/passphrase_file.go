@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -30,6 +31,12 @@ const passphraseFileKey = "TVAULT_PASSPHRASE" //nolint:gosec // G101: a variable
 // `tvault run` work without a per-tool env stanza.
 const conventionalPassphraseFile = "~/.config/secrets/env" //nolint:gosec // G101: a path, not a credential
 
+// errPassphraseFileUnusable marks a passphrase file that exists but holds no
+// usable TVAULT_PASSPHRASE (unparseable, or the key is absent). For an
+// explicitly configured file that is a hard error; for the implicit
+// conventional file it only means "this file is not the unlock source".
+var errPassphraseFileUnusable = errors.New("passphrase file has no usable TVAULT_PASSPHRASE")
+
 // passphraseFilePath resolves which env file to read, in precedence order:
 // the TVAULT_PASSPHRASE_FILE environment variable, then the config's
 // agent.passphrase_file, then ~/.config/secrets/env when that file exists.
@@ -38,25 +45,31 @@ const conventionalPassphraseFile = "~/.config/secrets/env" //nolint:gosec // G10
 // A leading ~ is expanded so config.yaml can hold the portable
 // "~/.config/secrets/env" rather than a machine-specific absolute path.
 func passphraseFilePath(cfg Config) string {
-	path := strings.TrimSpace(os.Getenv(envPassphraseFile))
+	path, _ := passphraseFileSource(cfg)
+	return path
+}
+
+// passphraseFileSource is passphraseFilePath plus whether the path is the
+// implicit conventional fallback rather than something the operator named.
+func passphraseFileSource(cfg Config) (path string, implicit bool) {
+	path = strings.TrimSpace(os.Getenv(envPassphraseFile))
 	if path == "" {
 		path = strings.TrimSpace(cfg.Agent.PassphraseFile)
 	}
-	if path == "" {
-		path = conventionalPassphraseFileIfPresent()
+	if path != "" {
+		return expandHome(path), false
 	}
-	return expandHome(path)
+	if path = conventionalPassphraseFileIfPresent(); path != "" {
+		return path, true
+	}
+	return "", false
 }
 
 func conventionalPassphraseFileIfPresent() string {
 	// Scratch vaults (TVAULT_DIR / --vault) must not inherit the operator's
 	// login passphrase; that turns "locked" into "wrong passphrase" in tests
 	// and isolated fixtures.
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	if getVaultDir() != home+"/"+defaultVaultDir {
+	if !isDefaultVaultDir() {
 		return ""
 	}
 	candidate := expandHome(conventionalPassphraseFile)
@@ -113,7 +126,7 @@ func readPassphraseFile(path string) (string, error) {
 	}
 	parsed, err := dotenv.ParseBytes(filepath.Base(path), data)
 	if err != nil {
-		return "", fmt.Errorf("parse passphrase file %s: %w", path, err)
+		return "", fmt.Errorf("%w: parse passphrase file %s: %w", errPassphraseFileUnusable, path, err)
 	}
 	for _, e := range parsed.Entries {
 		if e.Key == passphraseFileKey {
@@ -123,23 +136,102 @@ func readPassphraseFile(path string) (string, error) {
 			return e.Value, nil
 		}
 	}
-	return "", fmt.Errorf("%s not found in %s", passphraseFileKey, path)
+	return "", fmt.Errorf("%w: %s not found in %s", errPassphraseFileUnusable, passphraseFileKey, path)
 }
 
-// passphraseFromEnvOrFile returns the passphrase for a non-interactive unlock.
+// Passphrase sources, as reported by passphraseSource.
+const (
+	passSourceEnv     = "env"
+	passSourceCommand = "command"
+	passSourceFile    = "file"
+)
+
+// passphrasePlan is the one non-interactive source an unlock would use.
+type passphrasePlan struct {
+	kind     string   // passSourceEnv / passSourceCommand / passSourceFile, or "" for none
+	argv     []string // command sources
+	origin   string   // where a command came from, for errors
+	path     string   // file sources
+	implicit bool     // the conventional ~/.config/secrets/env fallback
+}
+
+// resolvePassphrasePlan picks the non-interactive passphrase source without
+// running a command or reading a secret. Environment variables beat config,
+// and within each layer a command beats a file:
 //
-// Precedence is TVAULT_PASSPHRASE (already in the environment, e.g. exported by
-// a shell) over the passphrase file, so an explicit env var still wins and the
-// file is the fallback for daemons that inherit no such variable. It returns
-// ("", nil) when neither source is configured, leaving the caller to prompt or
-// fail closed as it sees fit.
-func passphraseFromEnvOrFile(cfg Config) (string, error) {
-	if pass := os.Getenv("TVAULT_PASSPHRASE"); pass != "" {
-		return pass, nil
+//  1. TVAULT_PASSPHRASE
+//  2. TVAULT_PASSPHRASE_COMMAND
+//  3. TVAULT_PASSPHRASE_FILE
+//  4. agent.passphrase_command (config.yaml)
+//  5. agent.passphrase_file (config.yaml)
+//  6. ~/.config/secrets/env, only for the default vault and only when it
+//     actually defines TVAULT_PASSPHRASE
+//
+// So moving the passphrase into a password manager is one config line, and it
+// takes effect even while an old file still exists — yet a caller that names
+// an explicit source in its environment (CI, an MCP host stanza) still gets
+// exactly that source.
+func resolvePassphrasePlan(cfg Config) (passphrasePlan, error) {
+	if os.Getenv("TVAULT_PASSPHRASE") != "" {
+		return passphrasePlan{kind: passSourceEnv}, nil
 	}
-	path := passphraseFilePath(cfg)
+	if strings.TrimSpace(os.Getenv(envPassphraseCommand)) != "" {
+		argv, origin, err := passphraseCommand(cfg)
+		return passphrasePlan{kind: passSourceCommand, argv: argv, origin: origin}, err
+	}
+	if p := strings.TrimSpace(os.Getenv(envPassphraseFile)); p != "" {
+		return passphrasePlan{kind: passSourceFile, path: expandHome(p)}, nil
+	}
+	if len(cfg.Agent.PassphraseCommand) > 0 {
+		argv, origin, err := passphraseCommand(cfg)
+		return passphrasePlan{kind: passSourceCommand, argv: argv, origin: origin}, err
+	}
+	path, implicit := passphraseFileSource(cfg)
 	if path == "" {
+		return passphrasePlan{}, nil
+	}
+	if implicit {
+		if _, err := readPassphraseFile(path); errors.Is(err, errPassphraseFileUnusable) {
+			// Once the passphrase has moved out of it, the conventional file is
+			// just the user's shell environment, not an unlock source.
+			return passphrasePlan{}, nil
+		}
+	}
+	return passphrasePlan{kind: passSourceFile, path: path, implicit: implicit}, nil
+}
+
+// passphraseSource reports which non-interactive source would supply the
+// passphrase (see resolvePassphrasePlan), or "" when only a TTY prompt
+// remains. It never runs a command. A misconfigured command (e.g. an untrusted
+// config file) still reports passSourceCommand, so the unlock itself surfaces
+// the error instead of silently prompting.
+func passphraseSource(cfg Config) string {
+	plan, err := resolvePassphrasePlan(cfg)
+	if err != nil {
+		return passSourceCommand
+	}
+	return plan.kind
+}
+
+// nonInteractivePassphrase returns the passphrase for a non-interactive unlock
+// from the source resolvePassphrasePlan picks. It returns ("", nil) when
+// nothing is configured, leaving the caller to prompt or fail closed as it
+// sees fit. A configured source that fails (a loose file, a helper that exits
+// non-zero) is a hard error rather than a silent fall-through to the prompt,
+// so a broken deployment surfaces instead of hanging on a prompt.
+func nonInteractivePassphrase(cfg Config) (string, error) {
+	plan, err := resolvePassphrasePlan(cfg)
+	if err != nil {
+		return "", err
+	}
+	switch plan.kind {
+	case passSourceEnv:
+		return os.Getenv("TVAULT_PASSPHRASE"), nil
+	case passSourceCommand:
+		return runPassphraseCommand(plan.argv, plan.origin)
+	case passSourceFile:
+		return readPassphraseFile(plan.path)
+	default:
 		return "", nil
 	}
-	return readPassphraseFile(path)
 }
