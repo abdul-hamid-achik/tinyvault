@@ -94,6 +94,12 @@ func TestRotatedSnapshotsPruneOnlyTheirOwnFiles(t *testing.T) {
 	if err := os.WriteFile(other, []byte("keep me"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	// A hand-made vault-*.db must survive rotation too: only names rotation
+	// itself produces are pruned.
+	manual := filepath.Join(dir, "vault-before-migration.db")
+	if err := os.WriteFile(manual, []byte("manual"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	backupDirFlag, backupKeepFlag = dir, 2
 	for range 4 {
 		captureStdout(t, func() {
@@ -109,8 +115,10 @@ func TestRotatedSnapshotsPruneOnlyTheirOwnFiles(t *testing.T) {
 	if len(snaps) != 2 {
 		t.Fatalf("kept %d snapshots, want 2: %v", len(snaps), snaps)
 	}
-	if _, err := os.Stat(other); err != nil {
-		t.Fatalf("rotation touched a file it does not own: %v", err)
+	for _, p := range []string{other, manual} {
+		if _, err := os.Stat(p); err != nil {
+			t.Fatalf("rotation touched a file it does not own: %v", err)
+		}
 	}
 }
 
@@ -296,5 +304,28 @@ func TestRotatedSnapshotsAreCompressedAndRestorable(t *testing.T) {
 	defer v.Close()
 	if got, err := v.GetSecret("default", "WHICH"); err != nil || got != "old" {
 		t.Fatalf("after restore WHICH = %q, %v; want old", got, err)
+	}
+}
+
+func TestBackupRejectsNegativeKeep(t *testing.T) {
+	resetBackupFlags(t)
+	_, restore := setupVaultForCommandTest(t)
+	defer restore()
+	backupDirFlag, backupKeepFlag = t.TempDir(), -1
+	if err := runBackup(nil, nil); err == nil || !strings.Contains(err.Error(), "keep") {
+		t.Fatalf("negative --keep: err = %v", err)
+	}
+}
+
+func TestSSHInjectScriptSkipsInvalidKeys(t *testing.T) {
+	var script string
+	stderr := captureStderr(t, func() {
+		script = buildSSHInjectScript(map[string]string{"GOOD": "v", "BAD;id": "x"})
+	})
+	if strings.Contains(script, "BAD") || !strings.Contains(script, "export GOOD=v\n") {
+		t.Fatalf("script = %q", script)
+	}
+	if !strings.Contains(string(stderr), `"BAD;id"`) {
+		t.Fatalf("stderr = %q", stderr)
 	}
 }

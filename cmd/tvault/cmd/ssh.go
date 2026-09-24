@@ -147,6 +147,12 @@ func buildSSHInjectScript(secrets map[string]string) string {
 	var b strings.Builder
 	b.WriteString("set -e\n")
 	for _, k := range keys {
+		// Defense in depth: keys are validated on write, but the script is
+		// executed remotely, so never emit a name that is not an identifier.
+		if !shellIdentifier.MatchString(k) {
+			fmt.Fprintf(os.Stderr, "tvault: skipping %q: not a valid shell variable name\n", k)
+			continue
+		}
 		b.WriteString("export ")
 		b.WriteString(k)
 		b.WriteString("=")

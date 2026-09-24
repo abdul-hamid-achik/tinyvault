@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `tvault restore` works on Windows when a vault already exists (it released
+  the lock too late to rename over the open file), caps gzip expansion at
+  8 GiB, and names its fallback `vault.db.pre-restore-*` copy with
+  millisecond resolution so two quick restores cannot overwrite each other.
+- Backup rotation matches only the exact names it writes, so a hand-made
+  `vault-*.db` in the backup directory is never pruned; the directory is
+  fsync'd after each rename; `--keep` rejects negative values; the success
+  line reports the compressed size on disk.
+- `tvault env --format shell` and the `tvault ssh` script skip keys that are
+  not valid shell identifiers (defense in depth; keys are validated on write).
+
 ## [0.24.0] - 2026-09-23
 
 ### Added

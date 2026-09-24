@@ -28,6 +28,10 @@ func Error(format string, a ...any) {
 }
 
 // Warning prints a warning message in yellow.
+//
+// Warning, Info and Success write to stdout: never call them on a path that
+// can run under `tvault mcp`, where stdout is the JSON-RPC stream. Write to
+// os.Stderr there instead (see rotatedSnapshot).
 func Warning(format string, a ...any) {
 	_, _ = warningColor.Fprintf(os.Stdout, "⚠ "+format+"\n", a...)
 }

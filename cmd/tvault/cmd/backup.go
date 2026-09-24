@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -30,7 +32,7 @@ passphrase, is needed — while the database's operational metadata (project and
 key names, audit entries) remains readable.
 
 With a path, writes one snapshot there (gzip-compressed when the path ends in
-.gz). Without one, writes a compressed, timestamped vault-YYYYMMDD-HHMMSS.db.gz
+.gz). Without one, writes a compressed, timestamped vault-YYYYMMDD-HHMMSS.mmm.db.gz
 into --dir (or backup.dir in config.yaml) and deletes the oldest snapshots
 beyond --keep. The audit log dominates a vault's size and compresses ~10x. --immutable sets the macOS/BSD user
 immutable flag so an accidental 'rm -rf' cannot delete a snapshot (clear it
@@ -75,7 +77,7 @@ func init() {
 	rootCmd.AddCommand(backupCmd)
 	rootCmd.AddCommand(restoreCmd)
 	backupCmd.Flags().StringVar(&backupDirFlag, "dir", "", "Directory for timestamped, rotated snapshots (default: backup.dir in config.yaml)")
-	backupCmd.Flags().IntVar(&backupKeepFlag, "keep", 0, "Number of snapshots to keep in --dir (default: backup.keep, else 30)")
+	backupCmd.Flags().IntVar(&backupKeepFlag, "keep", 0, "Number of snapshots to keep in --dir (default: backup.keep, else 30; 0 means the default)")
 	backupCmd.Flags().BoolVar(&backupImmutable, "immutable", false, "Mark snapshots immutable (macOS/BSD user flag) so rm cannot delete them")
 	restoreCmd.Flags().BoolVarP(&restoreYes, "yes", "y", false, "Skip confirmation prompt")
 }
@@ -90,6 +92,11 @@ const (
 	snapshotPrefix = "vault-"
 	snapshotSuffix = ".db"
 )
+
+// rotatedSnapshotName matches only names rotatedSnapshot produces, so rotation
+// never prunes a file someone else put in the backup directory (a manual
+// "vault-before-migration.db" is left alone).
+var rotatedSnapshotName = regexp.MustCompile(`^vault-\d{8}-\d{6}\.\d{3}(-[a-z-]+)?\.db(\.gz)?$`)
 
 // backupSettings is the effective backup configuration: flags over config.
 type backupSettings struct {
@@ -124,6 +131,9 @@ func runBackup(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("read %s: %w", configPath(), err)
 	}
+	if backupKeepFlag < 0 || cfg.Backup.Keep < 0 {
+		return errors.New("keep must be a positive number of snapshots")
+	}
 	settings := resolveBackupSettings(cfg)
 	if len(args) == 0 && settings.dir == "" {
 		return errors.New("give a destination path, pass --dir, or set backup.dir in config.yaml")
@@ -146,7 +156,7 @@ func runBackup(_ *cobra.Command, args []string) error {
 				Warning("snapshot written but not marked immutable: %v", ierr)
 			}
 		}
-		Success("Vault snapshot (%s) written to %s", humanBytes(n), dst)
+		Success("Vault snapshot written to %s (%s)", dst, snapshotSizeNote(dst, n))
 		return nil
 	}
 
@@ -154,7 +164,7 @@ func runBackup(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("backup failed: %w", err)
 	}
-	Success("Vault snapshot (%s) written to %s", humanBytes(n), path)
+	Success("Vault snapshot written to %s (%s)", path, snapshotSizeNote(path, n))
 	return nil
 }
 
@@ -223,7 +233,19 @@ func snapshotTo(v *vault.Vault, dst string) (int64, error) {
 	if err := os.Rename(final, dst); err != nil {
 		return n, err
 	}
+	syncDir(dir)
 	return n, nil
+}
+
+// syncDir fsyncs a directory so a just-renamed entry survives a crash.
+// Best effort: not every platform supports syncing a directory handle.
+func syncDir(dir string) {
+	d, err := os.Open(dir)
+	if err != nil {
+		return
+	}
+	_ = d.Sync() //nolint:errcheck // best effort
+	_ = d.Close()
 }
 
 const gzipSuffix = ".gz"
@@ -301,8 +323,7 @@ func listSnapshots(dir string) ([]string, error) {
 	var out []string
 	for _, e := range entries {
 		name := e.Name()
-		if e.Type().IsRegular() && strings.HasPrefix(name, snapshotPrefix) &&
-			(strings.HasSuffix(name, snapshotSuffix) || strings.HasSuffix(name, snapshotSuffix+gzipSuffix)) {
+		if e.Type().IsRegular() && rotatedSnapshotName.MatchString(name) {
 			out = append(out, filepath.Join(dir, name))
 		}
 	}
@@ -411,18 +432,26 @@ func runRestore(_ *cobra.Command, args []string) error {
 		if strings.TrimSpace(cfg.Backup.Dir) != "" {
 			saved, _, err = rotatedSnapshot(v, resolveBackupSettings(cfg), "pre-restore")
 		} else {
-			saved = dst + ".pre-restore-" + time.Now().Format("20060102-150405")
+			saved = dst + ".pre-restore-" + time.Now().Format("20060102-150405.000")
 			_, err = snapshotTo(v, saved)
 		}
 		if err != nil {
 			return fmt.Errorf("restore aborted: could not save the current vault first: %w", err)
 		}
 		Info("Current vault saved to %s", saved)
+		// Windows cannot rename over a file that is still open, so release the
+		// vault there first (a tiny window where another tvault could write to
+		// the old file, whose state is already saved). POSIX keeps the lock
+		// through the swap.
+		if runtime.GOOS == "windows" {
+			_ = v.Close()
+		}
 	}
 
 	if err := os.Rename(stagedPath, dst); err != nil {
 		return fmt.Errorf("restore failed: %w", err)
 	}
+	syncDir(dir)
 	Success("Vault restored from %s", src)
 	return nil
 }
@@ -440,6 +469,9 @@ func humanBytes(n int64) string {
 	}
 	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
 }
+
+// maxRestoreBytes caps what restore will write from one backup (8 GiB).
+const maxRestoreBytes int64 = 8 << 30
 
 // stageBackup copies src to dst, transparently decompressing a gzip snapshot
 // (detected by its magic bytes, not its name).
@@ -463,13 +495,30 @@ func stageBackup(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(out, r); err != nil {
+	// Bound the expanded size: a crafted .gz must not fill the disk before
+	// verification rejects it.
+	n, err := io.Copy(out, io.LimitReader(r, maxRestoreBytes+1))
+	if err != nil {
 		_ = out.Close()
 		return err
+	}
+	if n > maxRestoreBytes {
+		_ = out.Close()
+		return fmt.Errorf("backup expands past %s; refusing to restore it", humanBytes(maxRestoreBytes))
 	}
 	if err := out.Sync(); err != nil {
 		_ = out.Close()
 		return err
 	}
 	return out.Close()
+}
+
+// snapshotSizeNote describes a written snapshot: its size on disk, plus the
+// uncompressed database size when the file is compressed.
+func snapshotSizeNote(path string, raw int64) string {
+	info, err := os.Stat(path)
+	if err != nil || info.Size() == raw {
+		return humanBytes(raw)
+	}
+	return fmt.Sprintf("%s, %s uncompressed", humanBytes(info.Size()), humanBytes(raw))
 }

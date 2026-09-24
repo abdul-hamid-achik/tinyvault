@@ -110,9 +110,10 @@ Security Scan, Build**. All four must be green.
   operation must not proceed — no case should let a delete/restore continue
   after a snapshot error.
 - **Rotation only touches files it owns.** `pruneSnapshots`/`listSnapshots`
-  match strictly on `vault-*.db` / `vault-*.db.gz` (`snapshotPrefix` +
-  `snapshotSuffix`/`gzipSuffix`) in the configured directory — never widen
-  that glob or rotation could delete something a user put there themselves.
+  match only `rotatedSnapshotName` (the exact
+  `vault-YYYYMMDD-HHMMSS.mmm[-reason].db[.gz]` names rotation writes) in the
+  configured directory. Never widen that pattern, or rotation could delete
+  something a user put there themselves.
 - **Snapshot warnings go to stderr, not stdout.** `stdout` is the MCP protocol
   stream under `tvault mcp`; a rotation or immutability warning written to
   stdout there would corrupt JSON-RPC framing. Keep using

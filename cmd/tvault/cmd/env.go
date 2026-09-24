@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/base64"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -87,6 +88,12 @@ func runEnv(_ *cobra.Command, _ []string) error {
 	switch envFormat {
 	case "shell":
 		for _, k := range keys {
+			// Keys are validated on write, but an eval'd line must never be
+			// able to inject through a legacy or foreign key name.
+			if !shellIdentifier.MatchString(k) {
+				fmt.Fprintf(os.Stderr, "tvault: skipping %q: not a valid shell variable name\n", k)
+				continue
+			}
 			v := secrets[k]
 			escaped := escapeShellValue(v)
 			if envExport {

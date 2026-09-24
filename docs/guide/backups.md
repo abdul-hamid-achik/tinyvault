@@ -43,7 +43,7 @@ With an explicit `[path]` argument, `tvault backup` writes exactly one snapshot 
 vault-YYYYMMDD-HHMMSS.mmm[-reason].db.gz
 ```
 
-into that directory, then **rotation** deletes the oldest snapshots beyond `--keep` / `backup.keep`. Rotation only ever touches files matching `vault-*.db` / `vault-*.db.gz` in that directory — it never removes anything else that happens to live there.
+into that directory, then **rotation** deletes the oldest snapshots beyond `--keep` / `backup.keep`. Rotation only ever touches files whose names match the exact pattern it writes (`vault-YYYYMMDD-HHMMSS.mmm[-reason].db[.gz]`), so a hand-made `vault-before-migration.db`, or anything else in that directory, is never removed.
 
 ::: tip The audit log usually dominates a vault's size
 For a real vault, the audit log is typically the largest thing in `vault.db` and compresses roughly 10x — a 120 MiB vault can produce a ~9 MiB `.gz` snapshot even though the secrets themselves might total only ~170 KiB. A rotated snapshot may therefore be noticeably smaller than `vault.db`, and that is expected, not a sign of missing data.
@@ -129,9 +129,9 @@ tvault restore ~/backups/vault-20260923-030000.000.db.gz -y   # skip the confirm
 
 `tvault restore <file>` accepts either a plain or a gzip-compressed snapshot — the format is detected from the file's magic bytes, not its name, so a `.db.gz` you renamed to `.db` still works. The sequence is:
 
-1. **Stage and verify first.** The backup is decompressed (if needed) into a temporary file next to `vault.db` and verified as a real TinyVault database. Nothing about the current vault is touched yet, so a corrupt or unrelated file is rejected before it can do any damage.
-2. **Save the current vault.** If a `vault.db` already exists, it is snapshotted first — into `backup.dir` (tagged `pre-restore`) when configured, otherwise next to `vault.db` as `vault.db.pre-restore-<timestamp>`. `tvault restore` reports the path it used.
-3. **Atomic swap.** The staged, verified file is renamed over `vault.db`.
+1. **Stage and verify first.** The backup is decompressed (if needed) into a temporary file next to `vault.db` and verified as a real TinyVault database. Decompression stops at 8 GiB, so a crafted `.gz` cannot fill the disk. Nothing about the current vault is touched yet, so a corrupt or unrelated file is rejected before it can do any damage.
+2. **Save the current vault.** If a `vault.db` already exists, it is snapshotted first — into `backup.dir` (tagged `pre-restore`) when configured, otherwise next to `vault.db` as `vault.db.pre-restore-<timestamp>` (millisecond resolution; these fallback copies are not rotated, so delete old ones yourself). `tvault restore` reports the path it used.
+3. **Atomic swap.** The staged, verified file is renamed over `vault.db` while the old vault stays locked (on Windows, which cannot rename over an open file, the lock is released just before the swap).
 
 ```bash
 tvault restore ~/backups/vault-20260601.db.gz
