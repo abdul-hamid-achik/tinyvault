@@ -470,8 +470,9 @@ func humanBytes(n int64) string {
 	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
 }
 
-// maxRestoreBytes caps what restore will write from one backup (8 GiB).
-const maxRestoreBytes int64 = 8 << 30
+// maxRestoreBytes caps what restore will write from one backup (8 GiB). A
+// var (not const) so tests can shrink it instead of staging 8 GiB.
+var maxRestoreBytes int64 = 8 << 30
 
 // stageBackup copies src to dst, transparently decompressing a gzip snapshot
 // (detected by its magic bytes, not its name).

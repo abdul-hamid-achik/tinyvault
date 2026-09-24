@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"bytes"
+	"compress/gzip"
 	"errors"
 	"os"
 	"path/filepath"
@@ -327,5 +329,97 @@ func TestSSHInjectScriptSkipsInvalidKeys(t *testing.T) {
 	}
 	if !strings.Contains(string(stderr), `"BAD;id"`) {
 		t.Fatalf("stderr = %q", stderr)
+	}
+}
+
+// A crafted .gz expanding past the cap must be refused before it fills the
+// disk, and the staged file must stop at the cap rather than keep copying.
+func TestRestoreRefusesExpandingGzip(t *testing.T) {
+	resetBackupFlags(t)
+	old := maxRestoreBytes
+	maxRestoreBytes = 4 * 1024
+	t.Cleanup(func() { maxRestoreBytes = old })
+
+	var raw bytes.Buffer
+	zw := gzip.NewWriter(&raw)
+	if _, err := zw.Write(make([]byte, 64*1024)); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	bomb := filepath.Join(t.TempDir(), "bomb.db.gz")
+	if err := os.WriteFile(bomb, raw.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	dst := filepath.Join(t.TempDir(), "staged.db")
+	err := stageBackup(bomb, dst)
+	if err == nil || !strings.Contains(err.Error(), "expands past") {
+		t.Fatalf("oversized gzip = %v, want a refusal naming the cap", err)
+	}
+	if info, serr := os.Stat(dst); serr != nil || info.Size() > maxRestoreBytes+1 {
+		t.Fatalf("staged file = %d bytes (%v); want it bounded by the cap", info.Size(), serr)
+	}
+}
+
+// --keep 0 means "use the default" (defaultBackupKeep), not "keep nothing":
+// a backup with --keep 0 must not prune existing snapshots.
+func TestKeepZeroMeansDefaultNotZero(t *testing.T) {
+	resetBackupFlags(t)
+	_, restore := setupVaultForCommandTest(t)
+	defer restore()
+	dir := t.TempDir()
+	backupDirFlag, backupKeepFlag = dir, 0
+	for range 3 {
+		captureStdout(t, func() {
+			if err := runBackup(nil, nil); err != nil {
+				t.Fatalf("backup: %v", err)
+			}
+		})
+	}
+	snaps, _ := listSnapshots(dir)
+	if len(snaps) != 3 {
+		t.Fatalf("--keep 0 pruned history: %d of 3 snapshots remain", len(snaps))
+	}
+}
+
+// Two restores in quick succession must save two distinct pre-restore copies:
+// fallback names carry milliseconds, so the second never overwrites the first.
+func TestRestoreTwiceKeepsBothPreRestoreCopies(t *testing.T) {
+	resetBackupFlags(t)
+	vaultPath, restore := setupVaultForCommandTest(t)
+	defer restore()
+	setVersionsForCLI(t, vaultPath, "WHICH", "old")
+	snapA := filepath.Join(t.TempDir(), "a.db")
+	snapB := filepath.Join(t.TempDir(), "b.db")
+	captureStdout(t, func() {
+		if err := runBackup(nil, []string{snapA}); err != nil {
+			t.Fatalf("backup A: %v", err)
+		}
+	})
+	setVersionsForCLI(t, vaultPath, "WHICH", "mid")
+	captureStdout(t, func() {
+		if err := runBackup(nil, []string{snapB}); err != nil {
+			t.Fatalf("backup B: %v", err)
+		}
+	})
+	setVersionsForCLI(t, vaultPath, "WHICH", "new")
+	restoreYes = true
+	for _, snap := range []string{snapA, snapB} {
+		captureStdout(t, func() {
+			if err := runRestore(nil, []string{snap}); err != nil {
+				t.Fatalf("restore %s: %v", snap, err)
+			}
+		})
+	}
+	matches, _ := filepath.Glob(filepath.Join(vaultPath, "vault.db.pre-restore-*"))
+	if len(matches) != 2 {
+		t.Fatalf("want 2 distinct pre-restore copies, got %v", matches)
+	}
+	for _, m := range matches {
+		if err := store.VerifySnapshot(m); err != nil {
+			t.Fatalf("%s is not a valid vault: %v", m, err)
+		}
 	}
 }
