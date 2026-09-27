@@ -186,6 +186,25 @@ export default function SecretsView({
 
   const { reveals, pending, show, hide } = useReveals(actions, project?.name ?? "");
 
+  // Screen-capture exclusion follows the values: on while anything is revealed
+  // or the editor holds a loaded value, off otherwise, so ordinary screenshots
+  // of the app keep working. Only sent on change to avoid toggling the window's
+  // sharing type on every render.
+  const protectionOn = useRef(false);
+  useEffect(() => {
+    const active = Object.keys(reveals).length > 0 || editor !== null;
+    if (active === protectionOn.current) return;
+    protectionOn.current = active;
+    void window.tvault.setProtectionActive(active);
+  }, [reveals, editor]);
+
+  useEffect(
+    () => () => {
+      void window.tvault.setProtectionActive(false);
+    },
+    []
+  );
+
   const rows = useMemo(() => {
     const q = filter.trim().toLowerCase();
     const list = q ? secrets.filter((s) => s.key.toLowerCase().includes(q)) : secrets;

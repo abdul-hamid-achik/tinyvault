@@ -97,10 +97,14 @@ The renderer is treated as potentially hostile:
   escape hatch, so a compromised renderer cannot reach a channel the app never
   wired up.
 - Strict CSP; `script-src 'self'` blocks inline script entirely.
-- Navigation is blocked, `window.open` is denied (http(s) links go to the real
-  browser), and every permission request is refused.
-- `setContentProtection(true)` keeps the window out of screen captures and
-  screen-share pickers. Toggle under View.
+- Navigation is blocked, `window.open` is denied (http(s) links are not forwarded
+  anywhere — see the invariants below), and every permission request is refused.
+- Screen-capture exclusion is **dynamic**: the window is excluded from
+  `screencapture` and screen-share pickers only while a value is actually on
+  screen (a revealed row, or the editor holding a loaded value). Always-on was
+  tried first and silently broke Cmd+Shift+4 and `screencapture` for this window
+  entirely — the user could not screenshot their own app. View → *Always exclude
+  from screen captures* forces it for a whole session.
 - The passphrase never reaches the renderer; it is resolved by the Go child.
 
 Secret values are transient by construction:
@@ -156,6 +160,14 @@ Each of these was a real bug found in review, not a stylistic choice:
 - **`setWindowOpenHandler` denies unconditionally.** Forwarding http(s) to
   `shell.openExternal` would give a compromised renderer an exfil channel that
   `connect-src` otherwise closes. This app renders no external links.
+- **Capture protection follows the values, not the window.** `setContentProtection`
+  at window creation excluded the window from every capture unconditionally and
+  broke ordinary screenshots. The renderer now drives it from reveal state
+  (`setProtectionActive`), and the View menu offers a force-always checkbox. Do
+  not set it back to always-on.
+- **The macOS traffic lights get their own empty drag band**, with the brand row
+  below it. `hiddenInset` draws them inside the window; reserving left padding
+  beside them still left them touching the logo.
 - **MCP calls and restarts share one promise queue**, and `connect()` publishes
   its client only if its generation still matches. Two overlapping restarts
   would otherwise orphan a child holding a derived KEK.

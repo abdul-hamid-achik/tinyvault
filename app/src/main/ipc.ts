@@ -27,6 +27,7 @@ import { writeSecretToClipboard } from "./clipboard";
 import { session } from "./mcp";
 import { vaultDir } from "./paths";
 import { readAgentStatus, readPolicy } from "./policy";
+import { setRevealActive } from "./protection";
 
 const ok = <T>(value: T): Result<T> => ({ ok: true, value });
 
@@ -290,5 +291,9 @@ export function registerIpc(): void {
       throw new Error("nothing to copy");
     }
     return writeSecretToClipboard(value);
+  });
+
+  handle(IPC.setProtectionActive, async (active: boolean): Promise<void> => {
+    setRevealActive(active === true);
   });
 }

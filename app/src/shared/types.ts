@@ -268,6 +268,17 @@ export interface TvaultApi {
    * timer must survive a renderer reload.
    */
   copySecret(value: string): Promise<Result<{ clearsInMs: number }>>;
+
+  /**
+   * Tells main whether a secret value is currently on screen. Main excludes the
+   * window from screen capture and screen sharing only while this is true (or
+   * while the user forces it from the View menu), so ordinary screenshots of the
+   * app keep working the rest of the time.
+   *
+   * Always-on protection was tried first and it silently broke Cmd+Shift+4 and
+   * `screencapture` for the window entirely — worse than the risk it prevented.
+   */
+  setProtectionActive(active: boolean): Promise<Result<void>>;
 }
 
 declare global {

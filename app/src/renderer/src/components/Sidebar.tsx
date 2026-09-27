@@ -65,8 +65,15 @@ export default function Sidebar({
 
   return (
     <aside className="flex w-[248px] shrink-0 flex-col border-r border-line bg-soft/60">
-      {/* Frameless-titlebar drag strip (macOS hiddenInset). */}
-      <div className={`drag flex h-11 shrink-0 items-center gap-2 pr-4 ${isMac ? "pl-[80px]" : "pl-4"}`}>
+      {/*
+        macOS hiddenInset draws the traffic lights inside the window. Give them
+        their own empty drag band and start the brand row below it — the layout
+        well-behaved macOS apps use — rather than squeezing the logo and title
+        in beside them, which always ends up touching.
+      */}
+      {isMac ? <div className="drag h-10 shrink-0" /> : null}
+
+      <div className="drag flex h-10 shrink-0 items-center gap-2 px-4">
         <span className="no-drag flex h-5 w-5 items-center justify-center rounded-[6px] bg-accent text-[10px] font-bold text-white dark:text-[#18130f]">
           T
         </span>

@@ -41,7 +41,9 @@ const api: TvaultApi = {
   backup: () => ipcRenderer.invoke(IPC.backup),
   doctor: () => ipcRenderer.invoke(IPC.doctor),
 
-  copySecret: (value) => ipcRenderer.invoke(IPC.copySecret, value)
+  copySecret: (value) => ipcRenderer.invoke(IPC.copySecret, value),
+
+  setProtectionActive: (active) => ipcRenderer.invoke(IPC.setProtectionActive, active)
 };
 
 contextBridge.exposeInMainWorld("tvault", api);

@@ -32,7 +32,9 @@ export const IPC = {
   backup: "tvault:backup",
   doctor: "tvault:doctor",
 
-  copySecret: "tvault:copy-secret"
+  copySecret: "tvault:copy-secret",
+
+  setProtectionActive: "tvault:set-protection-active"
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

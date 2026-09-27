@@ -6,13 +6,13 @@ import { app, BrowserWindow, Menu, nativeTheme, session } from "electron";
 import { flushClipboard } from "./clipboard";
 import { registerIpc } from "./ipc";
 import { mcpSessionForQuit } from "./lifecycle";
+import { applyProtection, isForceProtection, setForceProtection } from "./protection";
 
 // Works whether electron-vite emits ESM (import.meta) or CJS (__dirname).
 const here =
   typeof __dirname === "string" ? __dirname : fileURLToPath(new URL(".", import.meta.url));
 
 let mainWindow: BrowserWindow | null = null;
-let contentProtection = true;
 let quitting = false;
 
 /**
@@ -36,10 +36,10 @@ function createWindow(): void {
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#11120f" : "#fbfaf6",
     title: "TinyVault",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
-    // Three 12px lights, centres 20px apart: they occupy x≈20..72. The sidebar's
-    // header row reserves that band on macOS (see Sidebar) so the logo and title
-    // never sit under them. y=16 centres them in the 44px drag strip.
-    trafficLightPosition: { x: 20, y: 16 },
+    // The sidebar reserves an empty 40px drag band at the top on macOS (see
+    // Sidebar), so centre the lights in that band: (40 - 12) / 2 = 14. Three 12px
+    // lights with centres 20px apart occupy x≈20..72, all inside the band.
+    trafficLightPosition: { x: 20, y: 14 },
     webPreferences: {
       preload: join(here, "../preload/index.cjs"),
       contextIsolation: true,
@@ -57,8 +57,9 @@ function createWindow(): void {
     }
   });
 
-  // Keep the window out of screen captures and screen-share pickers by default.
-  mainWindow.setContentProtection(contentProtection);
+  // Capture exclusion is off by default and turns on only while a value is on
+  // screen (or when forced from the View menu) — see protection.ts.
+  applyProtection();
 
   mainWindow.on("ready-to-show", () => mainWindow?.show());
 
@@ -127,13 +128,10 @@ function buildMenu(): void {
   viewSubmenu.push(
     { type: "separator" },
     {
-      label: "Screen-capture protection",
+      label: "Always exclude from screen captures",
       type: "checkbox",
-      checked: contentProtection,
-      click: (item) => {
-        contentProtection = item.checked;
-        mainWindow?.setContentProtection(contentProtection);
-      }
+      checked: isForceProtection(),
+      click: (item) => setForceProtection(item.checked)
     },
     { type: "separator" },
     { role: "resetZoom" },
