@@ -3,7 +3,9 @@
 TinyVault is a **single Go binary**: a local-first secrets CLI (`tvault`) plus
 an MCP server (`tvault mcp`, alias `mcp-server`), backed by one local bbolt
 database whose secret payloads and key material are encrypted. No servers, no
-accounts, no cloud. There is no interactive TUI; humans use the CLI.
+accounts, no cloud. There is no interactive TUI; humans use the CLI. The optional
+Electron GUI in `app/` is a front end that drives `tvault mcp` — it never opens
+`vault.db` itself. See [app/README.md](app/README.md).
 
 **Read these first — they are the source of truth:**
 - [AGENTS.md](AGENTS.md) — project structure, code conventions, security

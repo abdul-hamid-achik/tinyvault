@@ -1,0 +1,45 @@
+# electron-builder config for local packaging only — the app is unsigned and
+# unnotarized, so a produced .app will trip Gatekeeper on first launch.
+# For daily local use `bunx electron .` is enough; this exists for when a
+# double-clickable bundle is wanted.
+#
+# Output goes to release/, NOT dist/: dist/ at the repo root already belongs to
+# GoReleaser and the root .gitignore claims it.
+
+appId: dev.tinyvault.desktop
+productName: TinyVault
+copyright: Copyright © 2026 abdulachik
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**
+  - package.json
+  - "!**/*.map"
+
+# The Go binary is NOT bundled into the asar. The app resolves `tvault` at
+# runtime (settings → TVAULT_BIN → npm platform package → PATH), which keeps the
+# bundle small and lets it track whatever tvault the user has installed.
+asar: true
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dir
+  # Unsigned by design; a real release would need Developer ID + notarization.
+  identity: null
+  hardenedRuntime: false
+  gatekeeperAssess: false
+
+linux:
+  category: Development
+  target:
+    - dir
+
+win:
+  target:
+    - dir
+
+npmRebuild: false

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Strict CSP. `script-src 'self'` blocks inline script and eval entirely, and
+      the built page loads exactly one external script.
+
+      Honest caveat: the two ws: entries in connect-src exist for Vite HMR in dev
+      and are NOT removed from the packaged build, because this is a static meta
+      tag. They are not inert — a compromised renderer could open a websocket to
+      a process already listening on localhost. That process is by definition
+      same-uid, which docs/reference/security.md already places inside the trust
+      boundary, so this does not widen the model; it is noted rather than solved.
+
+      frame-ancestors is deliberately omitted: browsers ignore it in a <meta>
+      element, and an Electron page cannot be framed anyway.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws://127.0.0.1:* ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'none'"
+    />
+    <meta name="referrer" content="no-referrer" />
+    <title>TinyVault</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

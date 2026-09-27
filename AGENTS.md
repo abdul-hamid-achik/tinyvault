@@ -209,6 +209,14 @@ internal/
   validation/
     validation.go            # Input validation (keys, project names)
 
+app/                         # Electron desktop GUI — a FRONT END over `tvault mcp`.
+  src/main/                  #  Spawns the binary and speaks MCP over stdio; it never
+  src/preload/               #  opens vault.db, because bbolt is single-writer and the
+  src/renderer/              #  Go server already reopens per request under a mutex.
+  src/shared/                #  Wire types mirroring internal/mcp structs + IPC channels.
+  scripts/verify-contracts.ts # 94 shape/security assertions vs a throwaway vault ($TMPDIR).
+                             #  See app/README.md. No CI job; not signed; local use only.
+
 specs/
   glyphrun/                  # End-to-end PTY specs for CLI commands (glyphrun)
 glyphrun.config.yml          # glyphrun runtime: env, terminal, passphrase redaction

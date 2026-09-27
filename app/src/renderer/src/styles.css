@@ -1,0 +1,209 @@
+@import "tailwindcss";
+
+/*
+ * Palette lifted from docs/.vitepress/theme/tokens.css so the desktop app reads
+ * as the same product as tinyvault.dev: warm paper/ink neutrals with a terracotta
+ * accent, not a generic blue-grey dark theme.
+ */
+:root {
+  --tv-accent: #a95f27;
+  --tv-accent-strong: #87471d;
+  --tv-accent-soft: rgba(169, 95, 39, 0.12);
+  --tv-accent-line: rgba(169, 95, 39, 0.34);
+  --tv-ink: #1b1c18;
+  --tv-muted: #66675f;
+  --tv-faint: #6c6d65;
+  --tv-paper: #fbfaf6;
+  --tv-paper-raised: #ffffff;
+  --tv-paper-soft: #f2efe7;
+  --tv-paper-deep: #e9e4d8;
+  --tv-line: rgba(27, 28, 24, 0.13);
+  --tv-line-strong: rgba(27, 28, 24, 0.22);
+  --tv-console: #171814;
+  --tv-console-raised: #1f211b;
+  --tv-console-line: rgba(255, 255, 255, 0.11);
+  --tv-console-text: #e6e5dd;
+  --tv-console-muted: #aaa99f;
+  --tv-success: #6f8a62;
+  --tv-warn: #b08034;
+  --tv-danger: #a94d43;
+  --tv-radius-sm: 8px;
+  --tv-radius-md: 14px;
+  --tv-shadow-sm: 0 1px 2px rgba(25, 22, 17, 0.04), 0 10px 30px rgba(25, 22, 17, 0.05);
+  --tv-shadow-lg: 0 30px 80px rgba(25, 22, 17, 0.13);
+}
+
+.dark {
+  --tv-accent: #d18e54;
+  --tv-accent-strong: #e1a66f;
+  --tv-accent-soft: rgba(209, 142, 84, 0.13);
+  --tv-accent-line: rgba(209, 142, 84, 0.35);
+  --tv-ink: #eeede6;
+  --tv-muted: #b4b3aa;
+  --tv-faint: #85867e;
+  --tv-paper: #11120f;
+  --tv-paper-raised: #171813;
+  --tv-paper-soft: #1b1c17;
+  --tv-paper-deep: #23241e;
+  --tv-line: rgba(238, 237, 230, 0.11);
+  --tv-line-strong: rgba(238, 237, 230, 0.2);
+  --tv-console: #0d0e0c;
+  --tv-console-raised: #151612;
+  --tv-console-line: rgba(255, 255, 255, 0.1);
+  --tv-console-text: #e9e8e0;
+  --tv-console-muted: #aaa99f;
+  --tv-success: #9ab48b;
+  --tv-warn: #d3a35c;
+  --tv-danger: #d67b71;
+  --tv-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2), 0 10px 30px rgba(0, 0, 0, 0.18);
+  --tv-shadow-lg: 0 30px 90px rgba(0, 0, 0, 0.34);
+}
+
+@theme inline {
+  --color-paper: var(--tv-paper);
+  --color-raised: var(--tv-paper-raised);
+  --color-soft: var(--tv-paper-soft);
+  --color-deep: var(--tv-paper-deep);
+  --color-ink: var(--tv-ink);
+  --color-muted: var(--tv-muted);
+  --color-faint: var(--tv-faint);
+  --color-line: var(--tv-line);
+  --color-line-strong: var(--tv-line-strong);
+  --color-accent: var(--tv-accent);
+  --color-accent-strong: var(--tv-accent-strong);
+  --color-accent-soft: var(--tv-accent-soft);
+  --color-accent-line: var(--tv-accent-line);
+  --color-console: var(--tv-console);
+  --color-console-raised: var(--tv-console-raised);
+  --color-console-line: var(--tv-console-line);
+  --color-console-text: var(--tv-console-text);
+  --color-console-muted: var(--tv-console-muted);
+  --color-success: var(--tv-success);
+  --color-warn: var(--tv-warn);
+  --color-danger: var(--tv-danger);
+
+  --radius-tv-sm: var(--tv-radius-sm);
+  --radius-tv-md: var(--tv-radius-md);
+
+  --font-sans:
+    "Geist Variable", "Geist", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono:
+    ui-monospace, "SFMono-Regular", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--tv-paper);
+  color: var(--tv-ink);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  /* Keys and values are selectable-on-demand; the chrome is not. */
+  user-select: none;
+  overflow: hidden;
+}
+
+code,
+.mono {
+  font-family: var(--font-mono);
+  font-feature-settings: "liga" 0;
+}
+
+input,
+textarea,
+[contenteditable] {
+  user-select: text;
+}
+
+/* Drag region for the frameless macOS titlebar. */
+.drag {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--tv-line-strong);
+  border-radius: 8px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--tv-accent);
+  outline-offset: 1px;
+}
+
+/* A masked value is deliberately not selectable, so it cannot be copied by
+   accident while hidden. */
+.masked {
+  user-select: none;
+  letter-spacing: 0.14em;
+}
+
+@keyframes tv-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-in {
+  animation: tv-fade-in 140ms ease-out both;
+}
+
+@keyframes tv-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-toast {
+  animation: tv-toast-in 160ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+@keyframes tv-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.animate-pulse-slow {
+  animation: tv-pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
