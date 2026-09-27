@@ -17,6 +17,7 @@ import {
   Check,
   ChevronDown,
   Copy,
+  Ellipsis,
   Eye,
   EyeOff,
   Folder,
@@ -30,6 +31,7 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  RotateCcw,
   Save,
   Search,
   Shield,
@@ -116,7 +118,13 @@ const ICONS = {
   lock: Lock,
   save: Save,
   diff: GitCompareArrows,
-  branch: GitBranch
+  branch: GitBranch,
+  // Horizontal ellipsis is the conventional "more actions" affordance; a lone
+  // chevron-down reads as "collapse", and this app already uses chevrons for
+  // collapsing the filter row and expanding audit metadata.
+  more: Ellipsis,
+  // Counter-clockwise rotate means undo/restore; RefreshCw means reload.
+  rollback: RotateCcw
 } as const satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;
@@ -128,6 +136,7 @@ export type IconName = keyof typeof ICONS;
  */
 const ICON_HOVER: Partial<Record<IconName, string>> = {
   refresh: "group-hover/icon:rotate-180",
+  rollback: "group-hover/icon:-rotate-90",
   history: "group-hover/icon:-rotate-45",
   branch: "group-hover/icon:-rotate-12",
   pencil: "group-hover/icon:-rotate-12",

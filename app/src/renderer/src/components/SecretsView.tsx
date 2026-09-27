@@ -546,7 +546,7 @@ function ProjectMenu({
   return (
     <div ref={ref} className="relative">
       <IconButton
-        icon="chevron"
+        icon="more"
         label="Project actions"
         onClick={() => setOpen((o) => !o)}
         className={open ? "bg-soft text-ink" : ""}
@@ -1012,7 +1012,7 @@ function HistoryModal({
                 ) : readOnly ? null : (
                   <Button
                     size="sm"
-                    icon="refresh"
+                    icon="rollback"
                     disabled={busy !== null}
                     onClick={() => void rollback(v.version)}
                   >
