@@ -35,11 +35,14 @@ function createWindow(): void {
     // Both values are --tv-paper from docs/.vitepress/theme/tokens.css.
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#11120f" : "#fbfaf6",
     title: "TinyVault",
+    // Ignored on macOS (the Dock uses the bundle icon); gives Linux/Windows task
+    // bars the vault-door mark instead of the default Electron atom in dev runs.
+    icon: join(here, "../../build/icon.png"),
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
-    // The sidebar reserves an empty 40px drag band at the top on macOS (see
-    // Sidebar), so centre the lights in that band: (40 - 12) / 2 = 14. Three 12px
-    // lights with centres 20px apart occupy x≈20..72, all inside the band.
-    trafficLightPosition: { x: 20, y: 14 },
+    // The sidebar's brand row shares this row and starts at pl-[84px] on macOS
+    // (see Sidebar), clear of the lights: three 12px buttons with centres 20px
+    // apart occupy x≈20..72. y=16 centres them in the 44px row.
+    trafficLightPosition: { x: 20, y: 16 },
     webPreferences: {
       preload: join(here, "../preload/index.cjs"),
       contextIsolation: true,
@@ -182,6 +185,13 @@ if (!gotLock) {
   });
 
   void app.whenReady().then(() => {
+    // In dev there is no .app bundle, so the Dock would show Electron's default
+    // atom. Packaged builds get the real icon from build/icon.icns via
+    // electron-builder; this covers the unpacked run.
+    if (process.platform === "darwin" && app.dock) {
+      app.dock.setIcon(join(here, "../../build/icon.png"));
+    }
+
     hardenSession();
     buildMenu();
     registerIpc();

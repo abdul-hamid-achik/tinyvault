@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import type { Bootstrap, ProjectOverview } from "@shared/types";
 
 import { Badge, Icon, IconButton, type IconName } from "./ui";
+import { Logo } from "./Logo";
 
 export type View = "secrets" | "groups" | "audit" | "setup";
 
@@ -66,25 +67,29 @@ export default function Sidebar({
   return (
     <aside className="flex w-[248px] shrink-0 flex-col border-r border-line bg-soft/60">
       {/*
-        macOS hiddenInset draws the traffic lights inside the window. Give them
-        their own empty drag band and start the brand row below it — the layout
-        well-behaved macOS apps use — rather than squeezing the logo and title
-        in beside them, which always ends up touching.
+        macOS hiddenInset draws the traffic lights inside the window, at
+        x≈20..72 and vertically centred in this row (trafficLightPosition in
+        main). The brand row shares the row and starts clear of them. Other
+        platforms get a native title bar, so the normal inset applies.
       */}
-      {isMac ? <div className="drag h-10 shrink-0" /> : null}
-
-      <div className="drag flex h-10 shrink-0 items-center gap-2 px-4">
-        <span className="no-drag flex h-5 w-5 items-center justify-center rounded-[6px] bg-accent text-[10px] font-bold text-white dark:text-[#18130f]">
-          T
-        </span>
-        <span className="no-drag text-[12.5px] font-semibold tracking-[-0.01em] text-ink">
-          TinyVault
-        </span>
+      <div
+        className={`drag flex h-11 shrink-0 items-center gap-2 pr-4 ${
+          isMac ? "pl-[84px]" : "pl-4"
+        }`}
+      >
         {boot?.status?.is_unlocked === false ? (
-          <span className="no-drag ml-auto">
+          <span className="no-drag">
             <Badge tone="danger">locked</Badge>
           </span>
         ) : null}
+        {/* The whole lockup (mark + wordmark) anchors the right edge; the traffic
+            lights own the left of this row. */}
+        <span className="no-drag ml-auto flex items-center gap-2">
+          <Logo size={20} />
+          <span className="text-[12.5px] font-semibold tracking-[-0.01em] text-ink">
+            TinyVault
+          </span>
+        </span>
       </div>
 
       <nav className="shrink-0 space-y-0.5 px-2.5 pb-3">

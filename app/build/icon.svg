@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none" role="img" aria-label="TinyVault">
+  <defs>
+    <linearGradient id="plate" x1="512" y1="0" x2="512" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#26271F"/>
+      <stop offset="1" stop-color="#12130E"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="176" y1="176" x2="848" y2="848" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFC861"/>
+      <stop offset="1" stop-color="#E8920C"/>
+    </linearGradient>
+  </defs>
+
+  <!-- macOS-style rounded plate; radius ≈22.5% of the edge -->
+  <rect width="1024" height="1024" rx="230" fill="url(#plate)"/>
+
+  <!--
+    The vault-door mark from docs/public/logo.svg, unchanged geometry, scaled
+    from its 48x48 box to 672px and centred: translate((1024-672)/2) scale(14).
+    ~66% of the tile reads as an app icon; smaller reads as a logo on a card.
+    Keeping the source mark identical is what makes this the same brand as
+    tinyvault.dev rather than a second logo.
+  -->
+  <g transform="translate(176 176) scale(14)">
+    <rect x="5.5" y="7.5" width="37" height="33" rx="6.5" stroke="url(#gold)" stroke-width="3"/>
+    <circle cx="23" cy="24" r="8.5" stroke="url(#gold)" stroke-width="3"/>
+    <circle cx="23" cy="24" r="2.4" fill="url(#gold)"/>
+    <g stroke="url(#gold)" stroke-width="3" stroke-linecap="round">
+      <path d="M23 15.5 V11.5"/>
+      <path d="M23 36.5 V32.5"/>
+      <path d="M31.5 24 H35.5"/>
+      <path d="M14.5 24 H10.5"/>
+    </g>
+    <path d="M37 24 H40.5" stroke="url(#gold)" stroke-width="3" stroke-linecap="round"/>
+  </g>
+</svg>
