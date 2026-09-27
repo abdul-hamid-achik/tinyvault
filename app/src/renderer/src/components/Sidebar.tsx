@@ -42,6 +42,11 @@ export default function Sidebar({
 }): React.JSX.Element {
   const [filter, setFilter] = useState("");
 
+  // The macOS traffic lights render inside the window at x≈20..72 (see the
+  // trafficLightPosition comment in main). On other platforms the native title
+  // bar owns them, so the header row starts at the normal inset.
+  const isMac = window.tvault.platform === "darwin";
+
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
     const list = q
@@ -61,7 +66,7 @@ export default function Sidebar({
   return (
     <aside className="flex w-[248px] shrink-0 flex-col border-r border-line bg-soft/60">
       {/* Frameless-titlebar drag strip (macOS hiddenInset). */}
-      <div className="drag flex h-11 shrink-0 items-center gap-2 px-4">
+      <div className={`drag flex h-11 shrink-0 items-center gap-2 pr-4 ${isMac ? "pl-[80px]" : "pl-4"}`}>
         <span className="no-drag flex h-5 w-5 items-center justify-center rounded-[6px] bg-accent text-[10px] font-bold text-white dark:text-[#18130f]">
           T
         </span>

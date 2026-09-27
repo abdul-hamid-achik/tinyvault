@@ -214,6 +214,13 @@ export interface Bootstrap {
 
 // --- the bridge surface exposed on window.tvault ---
 export interface TvaultApi {
+  /**
+   * Host platform, for layout only: the macOS traffic lights sit inside the
+   * window, so the leftmost header row must clear them. Sandboxed preloads can
+   * read process.platform even though the renderer cannot.
+   */
+  readonly platform: string;
+
   bootstrap(): Promise<Result<Bootstrap>>;
   restartSession(): Promise<Result<SessionInfo>>;
   /** Cheap read of the session counters — used to keep the reveal budget live. */

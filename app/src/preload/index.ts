@@ -9,6 +9,8 @@ import type { TvaultApi } from "@shared/types";
  * cannot call an IPC channel the app never intended to expose.
  */
 const api: TvaultApi = {
+  platform: process.platform,
+
   bootstrap: () => ipcRenderer.invoke(IPC.bootstrap),
   restartSession: () => ipcRenderer.invoke(IPC.restartSession),
   sessionInfo: () => ipcRenderer.invoke(IPC.sessionInfo),

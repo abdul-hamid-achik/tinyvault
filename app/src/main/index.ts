@@ -36,7 +36,10 @@ function createWindow(): void {
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#11120f" : "#fbfaf6",
     title: "TinyVault",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
-    trafficLightPosition: { x: 16, y: 18 },
+    // Three 12px lights, centres 20px apart: they occupy x≈20..72. The sidebar's
+    // header row reserves that band on macOS (see Sidebar) so the logo and title
+    // never sit under them. y=16 centres them in the 44px drag strip.
+    trafficLightPosition: { x: 20, y: 16 },
     webPreferences: {
       preload: join(here, "../preload/index.cjs"),
       contextIsolation: true,
