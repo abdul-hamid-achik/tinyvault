@@ -14,7 +14,7 @@ import (
 
 // EnvGroup is a named set of linked projects representing environments of the
 // same application (e.g. production, preview, staging). It is pure metadata —
-// no new crypto, no new buckets, no new key material. See SPEC-ENV-PROFILES.md.
+// no new crypto, no new buckets, no new key material. See docs/guide/env-groups.md.
 type EnvGroup struct {
 	Name         string                    `json:"name"`
 	Description  string                    `json:"description,omitempty"`
