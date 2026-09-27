@@ -140,7 +140,9 @@ export default function AuditView(): React.JSX.Element {
           />
         ) : (
           <table className="w-full border-collapse">
-            <thead className="sticky top-0 z-10 bg-paper">
+            {/* No z-index: sticky paints above in-flow rows on its own, and an
+                explicit z let this header beat portalled overlays above it. */}
+            <thead className="sticky top-0 bg-paper">
               <tr className="border-b border-line text-left">
                 <th className="w-44 px-6 py-2 text-[11px] font-semibold uppercase tracking-[0.07em] text-faint">
                   When

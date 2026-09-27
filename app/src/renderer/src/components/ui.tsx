@@ -11,6 +11,35 @@ import {
   type InputHTMLAttributes,
   type ReactNode
 } from "react";
+import { createPortal } from "react-dom";
+import {
+  ArrowRight,
+  Check,
+  ChevronDown,
+  Copy,
+  Eye,
+  EyeOff,
+  Folder,
+  GitBranch,
+  GitCompareArrows,
+  History,
+  KeyRound,
+  Layers,
+  Lock,
+  Moon,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Save,
+  Search,
+  Shield,
+  Sun,
+  Terminal,
+  Trash2,
+  TriangleAlert,
+  X,
+  type LucideIcon
+} from "lucide-react";
 
 // --- error boundary ------------------------------------------------------
 
@@ -57,66 +86,175 @@ export class ErrorBoundary extends Component<
 
 // --- icons ---------------------------------------------------------------
 
-const PATHS = {
-  key: "M15.5 8.5a3.5 3.5 0 1 1-3.2-3.49L4 13.3V17h3.7l1.3-1.3v-1.6h1.6L12 12.7v-1.5l3.5.01A3.5 3.5 0 0 1 15.5 8.5Z",
-  eye: "M12 5c-5 0-8.5 5.2-9.3 6.5a1 1 0 0 0 0 1C3.5 13.8 7 19 12 19s8.5-5.2 9.3-6.5a1 1 0 0 0 0-1C20.5 10.2 17 5 12 5Zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8Z",
-  eyeOff:
-    "M3.3 2.3 2.3 3.3l3 3C3.5 7.7 2.4 9.5 2.1 10.5a1 1 0 0 0 0 1C2.9 12.8 6.4 18 11.4 18c1.6 0 3-.5 4.2-1.2l3.1 3.1 1-1L3.3 2.3Zm8.7 12.7c-3.4 0-6-3.7-6.7-5 .5-.9 1.5-2.3 2.9-3.3l1.9 1.9a3 3 0 0 0 3.8 3.8l1.5 1.5c-.9.6-2 1.1-3.4 1.1Z",
-  copy: "M9 3h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm-4 4v12a2 2 0 0 0 2 2h9v-2H7a2 2 0 0 1-2-2V7H5Z",
-  check: "M20 6.5 9.4 17.1 4 11.7l1.4-1.4 4 4L18.6 5 20 6.5Z",
-  plus: "M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z",
-  trash:
-    "M9 3h6l1 2h4v2H4V5h4l1-2ZM6 8h12l-1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8Zm4 3v8h1.5v-8H10Zm3 0v8h1.5v-8H13Z",
-  pencil: "M4 20h4L20 8l-4-4L4 16v4Zm10.5-13.5 3 3L7 20H5v-2l9.5-9.5Z",
-  history:
-    "M12 4a8 8 0 1 1-7.7 10.1l1.9-.6A6 6 0 1 0 12 6v3L7.5 5.5 12 2v2Zm-1 4h2v4.4l3.2 1.9-1 1.7L11 16.5V8Z",
-  search: "M10 4a6 6 0 1 1-3.9 10.6l-3.4 3.4-1.4-1.4 3.4-3.4A6 6 0 0 1 10 4Zm0 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z",
-  refresh:
-    "M12 5V2L8 6l4 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7Zm7 7a7 7 0 0 1-1.4 4.2l1.6 1.2A9 9 0 0 0 21 12h-2Z",
-  shield:
-    "M12 2 4 5.5V11c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5.5L12 2Zm0 2.2 6 2.6V11c0 4-2.6 7.5-6 8.9-3.4-1.4-6-4.9-6-8.9V6.8l6-2.6Z",
-  folder: "M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Z",
-  layers:
-    "m12 2 9 5-9 5-9-5 9-5Zm0 2.3L6.6 7 12 9.7 17.4 7 12 4.3ZM3.5 10.4 12 15l8.5-4.6 1.5.8-10 5.5-10-5.5 1.5-.8Z",
-  alert:
-    "M12 2 1 21h22L12 2Zm0 4.5L18.5 19h-13L12 6.5ZM11 10v5h2v-5h-2Zm0 6v2h2v-2h-2Z",
-  x: "M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6 6.4 5Z",
-  terminal:
-    "M3 4h18a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm1 2v12h16V6H4Zm3 2.7 3 3.3-3 3.3-1.2-1.2 2-2.1-2-2.1L7 8.7ZM12 14h5v1.6h-5V14Z",
-  chevron: "m12 8 6 6-1.4 1.4L12 10.8l-4.6 4.6L6 14l6-6Z",
-  arrowRight: "M13 5l7 7-7 7-1.4-1.4 4.6-4.6H4v-2h12.2L11.6 6.4 13 5Z",
-  sun: "M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm-1-5h2v3h-2V2Zm0 17h2v3h-2v-3ZM2 11h3v2H2v-2Zm17 0h3v2h-3v-2ZM4.9 3.5l1.4 1.4-1.4 1.4L3.5 4.9l1.4-1.4Zm12.7 12.7 1.4 1.4-1.4 1.4-1.4-1.4 1.4-1.4ZM19.1 3.5l1.4 1.4-1.4 1.4-1.4-1.4 1.4-1.4ZM6.3 16.2l1.4 1.4-1.4 1.4-1.4-1.4 1.4-1.4Z",
-  moon: "M12.5 3a8.5 8.5 0 1 0 8.4 10 7 7 0 0 1-8.4-10Z",
-  lock: "M12 2a5 5 0 0 1 5 5v3h2v11H5V10h2V7a5 5 0 0 1 5-5Zm0 2a3 3 0 0 0-3 3v3h6V7a3 3 0 0 0-3-3Zm0 9a1.8 1.8 0 0 0-.8 3.4V19h1.6v-2.2A1.8 1.8 0 0 0 12 13Z",
-  save: "M5 3h11l3 3v15H5V3Zm2 2v4h8V5H7Zm0 8v6h10v-6H7Zm2 2h6v2H9v-2Z",
-  diff: "M8 3v14H4v2h4v2h2v-2h4v-2h-4V5H8Zm6 0v2h4v12h2V5h-4V3h-2Z",
-  branch:
-    "M7 3a2.5 2.5 0 0 1 1 4.8V10a4 4 0 0 0 4 4h3.2a2.5 2.5 0 1 1 0 2H12a6 6 0 0 1-6-6V7.8A2.5 2.5 0 0 1 7 3Zm10 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2ZM7 5a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"
-} as const;
+/**
+ * lucide-react: stroke-based marks on a consistent 24px grid. The hand-rolled
+ * fill paths they replace read thin and uneven next to these. Keeping the name
+ * map means the ~40 call sites do not change.
+ */
+const ICONS = {
+  key: KeyRound,
+  eye: Eye,
+  eyeOff: EyeOff,
+  copy: Copy,
+  check: Check,
+  plus: Plus,
+  trash: Trash2,
+  pencil: Pencil,
+  history: History,
+  search: Search,
+  refresh: RefreshCw,
+  shield: Shield,
+  folder: Folder,
+  layers: Layers,
+  alert: TriangleAlert,
+  x: X,
+  terminal: Terminal,
+  chevron: ChevronDown,
+  arrowRight: ArrowRight,
+  sun: Sun,
+  moon: Moon,
+  lock: Lock,
+  save: Save,
+  diff: GitCompareArrows,
+  branch: GitBranch
+} as const satisfies Record<string, LucideIcon>;
 
-export type IconName = keyof typeof PATHS;
+export type IconName = keyof typeof ICONS;
+
+/**
+ * Hover micro-animations, applied only inside a `group/icon` parent (i.e. an
+ * IconButton). Rotational ones suit icons whose meaning is motion; the rest get
+ * a small scale so every action acknowledges the pointer the same way.
+ */
+const ICON_HOVER: Partial<Record<IconName, string>> = {
+  refresh: "group-hover/icon:rotate-180",
+  history: "group-hover/icon:-rotate-45",
+  branch: "group-hover/icon:-rotate-12",
+  pencil: "group-hover/icon:-rotate-12",
+  arrowRight: "group-hover/icon:translate-x-0.5",
+  chevron: ""
+};
 
 export function Icon({
   name,
   size = 15,
-  className = ""
+  className = "",
+  animated = false
 }: {
   name: IconName;
   size?: number;
   className?: string;
+  /** Opt into the hover micro-animation; needs a `group/icon` ancestor. */
+  animated?: boolean;
 }): React.JSX.Element {
+  const Cmp = ICONS[name];
+  const hover = animated ? (ICON_HOVER[name] ?? "group-hover/icon:scale-110") : "";
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="currentColor"
+    <Cmp
+      size={size}
+      strokeWidth={2}
       aria-hidden="true"
-      className={className}
-      style={{ flexShrink: 0 }}
-    >
-      <path d={PATHS[name]} />
-    </svg>
+      className={`shrink-0 transition-transform duration-200 ease-out ${hover} ${className}`}
+    />
+  );
+}
+
+// --- tooltip -------------------------------------------------------------
+
+export type TooltipSide = "top" | "bottom" | "left" | "right";
+
+const TOOLTIP_DELAY_MS = 350;
+
+function place(rect: DOMRect, side: TooltipSide): { x: number; y: number; transform: string } {
+  switch (side) {
+    case "bottom":
+      return { x: rect.left + rect.width / 2, y: rect.bottom + 8, transform: "translate(-50%, 0)" };
+    case "left":
+      return { x: rect.left - 8, y: rect.top + rect.height / 2, transform: "translate(-100%, -50%)" };
+    case "right":
+      return { x: rect.right + 8, y: rect.top + rect.height / 2, transform: "translate(0, -50%)" };
+    case "top":
+    default:
+      return { x: rect.left + rect.width / 2, y: rect.top - 8, transform: "translate(-50%, -100%)" };
+  }
+}
+
+/**
+ * Portal-rendered so scroll containers (the secrets table, the sidebar list)
+ * cannot clip it. Native `title` tooltips wait ~1s, cannot be styled and do not
+ * animate, which left the icon-only actions effectively unlabelled.
+ */
+export function Tooltip({
+  label,
+  side = "top",
+  children
+}: {
+  label: string;
+  side?: TooltipSide;
+  children: ReactNode;
+}): React.JSX.Element {
+  const anchor = useRef<HTMLSpanElement>(null);
+  const timer = useRef<number | null>(null);
+  const [pos, setPos] = useState<{ x: number; y: number; transform: string } | null>(null);
+
+  const hide = useCallback(() => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+    setPos(null);
+  }, []);
+
+  const show = useCallback(() => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => {
+      const rect = anchor.current?.getBoundingClientRect();
+      if (!rect) return;
+      const p = place(rect, side);
+      // Keep top/bottom tooltips on screen near the window edges.
+      if (side === "top" || side === "bottom") {
+        p.x = Math.min(Math.max(p.x, 80), window.innerWidth - 80);
+      }
+      setPos(p);
+    }, TOOLTIP_DELAY_MS);
+  }, [side]);
+
+  // A tooltip anchored to a target that moved is worse than none.
+  useEffect(() => {
+    if (!pos) return;
+    window.addEventListener("scroll", hide, true);
+    window.addEventListener("resize", hide);
+    return () => {
+      window.removeEventListener("scroll", hide, true);
+      window.removeEventListener("resize", hide);
+    };
+  }, [pos, hide]);
+
+  useEffect(() => hide, [hide]);
+
+  return (
+    <>
+      <span
+        ref={anchor}
+        style={{ display: "inline-flex" }}
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        onPointerDown={hide}
+        onBlur={hide}
+      >
+        {children}
+      </span>
+      {pos
+        ? createPortal(
+            <div
+              role="tooltip"
+              className="tv-tooltip"
+              style={{ left: pos.x, top: pos.y, transform: pos.transform }}
+            >
+              {label}
+            </div>,
+            document.body
+          )
+        : null}
+    </>
   );
 }
 
@@ -148,11 +286,14 @@ export function Button({
   return (
     <button
       {...rest}
-      className={`inline-flex items-center justify-center rounded-tv-sm font-medium transition-colors
-        duration-100 disabled:opacity-40 disabled:pointer-events-none whitespace-nowrap ${pad}
+      className={`group/icon inline-flex items-center justify-center rounded-tv-sm font-medium
+        transition-all duration-150 ease-out hover:-translate-y-px
+        hover:shadow-[var(--tv-shadow-icon)] active:translate-y-0 active:scale-[0.97]
+        active:shadow-none disabled:pointer-events-none disabled:opacity-40
+        disabled:hover:translate-y-0 disabled:hover:shadow-none whitespace-nowrap ${pad}
         ${VARIANTS[variant]} ${className}`}
     >
-      {icon ? <Icon name={icon} size={size === "sm" ? 13 : 15} /> : null}
+      {icon ? <Icon name={icon} size={size === "sm" ? 13 : 15} animated /> : null}
       {children}
     </button>
   );
@@ -163,27 +304,35 @@ export function IconButton({
   label,
   className = "",
   tone = "muted",
+  tooltipSide = "top",
   ...rest
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   icon: IconName;
   label: string;
   tone?: "muted" | "danger" | "accent";
+  tooltipSide?: TooltipSide;
 }): React.JSX.Element {
   const tones = {
-    muted: "text-faint hover:text-ink hover:bg-soft",
-    danger: "text-faint hover:text-danger hover:bg-danger/10",
-    accent: "text-faint hover:text-accent hover:bg-accent-soft"
+    muted: "text-faint hover:text-ink hover:bg-raised hover:border-line",
+    danger: "text-faint hover:text-danger hover:bg-danger/10 hover:border-danger/30",
+    accent: "text-faint hover:text-accent hover:bg-accent-soft hover:border-accent-line"
   };
   return (
-    <button
-      {...rest}
-      title={label}
-      aria-label={label}
-      className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors
-        duration-100 disabled:opacity-30 disabled:pointer-events-none ${tones[tone]} ${className}`}
-    >
-      <Icon name={icon} size={14} />
-    </button>
+    <Tooltip label={label} side={tooltipSide}>
+      <button
+        {...rest}
+        aria-label={label}
+        className={`group/icon inline-flex h-7 w-7 items-center justify-center rounded-md
+          border border-transparent transition-all duration-150 ease-out
+          hover:-translate-y-px hover:shadow-[var(--tv-shadow-icon)]
+          active:translate-y-0 active:scale-90 active:shadow-none
+          disabled:pointer-events-none disabled:opacity-30 disabled:hover:translate-y-0
+          disabled:hover:shadow-none
+          ${tones[tone]} ${className}`}
+      >
+        <Icon name={icon} size={14} animated />
+      </button>
+    </Tooltip>
   );
 }
 

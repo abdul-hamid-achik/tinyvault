@@ -15,6 +15,7 @@ import {
   Spinner,
   TextArea,
   TextInput,
+  Tooltip,
   useToast
 } from "./ui";
 
@@ -341,7 +342,10 @@ export default function SecretsView({
           />
         ) : (
           <table className="w-full border-collapse">
-            <thead className="sticky top-0 z-10 bg-paper">
+            {/* No z-index on purpose: sticky already paints above in-flow rows,
+                and an explicit z here let the header beat portalled overlays
+                (tooltips, modals) that sit far above it in z. */}
+            <thead className="sticky top-0 bg-paper">
               <tr className="border-b border-line text-left">
                 <th className="px-6 py-2 text-[11px] font-semibold uppercase tracking-[0.07em] text-faint">
                   Key
@@ -374,13 +378,16 @@ export default function SecretsView({
                       <span className="mono text-[12.5px] text-ink">{s.key}</span>
                     </td>
                     <td className="px-2 py-2.5">
-                      <button
-                        onClick={() => setHistoryFor(s.key)}
-                        className="mono rounded px-1.5 py-0.5 text-[11.5px] text-muted transition-colors hover:bg-accent-soft hover:text-accent"
-                        title="Version history"
-                      >
-                        v{s.version}
-                      </button>
+                      <Tooltip label="Version history">
+                        <button
+                          onClick={() => setHistoryFor(s.key)}
+                          className="mono rounded px-1.5 py-0.5 text-[11.5px] text-muted
+                            transition-all duration-150 ease-out hover:scale-105
+                            hover:bg-accent-soft hover:text-accent"
+                        >
+                          v{s.version}
+                        </button>
+                      </Tooltip>
                     </td>
                     <td className="px-2 py-2.5">
                       <span className="text-[11.5px] text-faint" title={fullTime(s.updated_at)}>
@@ -408,19 +415,22 @@ export default function SecretsView({
                         </div>
                       ) : (
                         <button
-                          onClick={() => void show(s.key).catch((err: unknown) => {
-                            toast.error(
-                              "Reveal failed",
-                              err instanceof Error ? err.message : String(err)
-                            );
-                          })}
-                          className="flex items-center gap-2 text-faint transition-colors hover:text-accent"
+                          onClick={() =>
+                            void show(s.key).catch((err: unknown) => {
+                              toast.error(
+                                "Reveal failed",
+                                err instanceof Error ? err.message : String(err)
+                              );
+                            })
+                          }
+                          className="group/icon flex items-center gap-2 text-faint transition-all
+                            duration-150 ease-out hover:scale-[1.03] hover:text-accent"
                         >
                           {busy ? (
                             <Spinner size={12} />
                           ) : (
                             <>
-                              <Icon name="eye" size={13} />
+                              <Icon name="eye" size={13} animated />
                               <span className="masked text-[12px]">••••••••••••</span>
                               <span className="text-[11.5px] font-medium">Reveal</span>
                             </>

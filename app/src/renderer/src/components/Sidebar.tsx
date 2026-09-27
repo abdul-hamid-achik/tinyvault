@@ -97,14 +97,14 @@ export default function Sidebar({
           <button
             key={item.id}
             onClick={() => onView(item.id)}
-            className={`flex h-8 w-full items-center gap-2.5 rounded-tv-sm px-2.5 text-[12.5px] font-medium
-              transition-colors duration-100 ${
+            className={`group/icon flex h-8 w-full items-center gap-2.5 rounded-tv-sm px-2.5 text-[12.5px]
+              font-medium transition-all duration-150 ease-out hover:translate-x-0.5 ${
                 view === item.id
                   ? "bg-accent-soft text-accent"
                   : "text-muted hover:bg-deep/60 hover:text-ink"
               }`}
           >
-            <Icon name={item.icon} size={14} />
+            <Icon name={item.icon} size={14} animated />
             {item.label}
             {item.id === "secrets" && projects.length > 0 ? (
               <span className="mono ml-auto text-[11px] text-faint">
