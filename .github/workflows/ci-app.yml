@@ -1,0 +1,57 @@
+name: CI (desktop app)
+
+# Separate workflow so the Go jobs in ci.yml keep running on every push while
+# this one only burns a runner when the app subtree actually changes.
+on:
+  push:
+    branches: [main]
+    paths: ['app/**', '.github/workflows/ci-app.yml']
+  pull_request:
+    branches: [main]
+    paths: ['app/**', '.github/workflows/ci-app.yml']
+
+concurrency:
+  group: ci-app-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: Desktop app
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.26.6'
+          cache: true
+
+      - name: Set up bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          # Match the lockfile's toolchain; bump deliberately, not by accident.
+          bun-version: '1.4.2'
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Build
+        run: bun run build
+
+      - name: Build tvault binary for the contract test
+        # Repo root, not app/: this compiles the Go CLI the contract test spawns.
+        working-directory: .
+        run: go build -o "$RUNNER_TEMP/tvault" ./cmd/tvault
+
+      - name: Contract test
+        # verify-contracts.ts spawns `tvault mcp` against a throwaway vault in
+        # $TMPDIR and asserts the response shape of every tool the UI consumes.
+        # It never touches a real vault, and the runner has none.
+        run: TVAULT_BIN="$RUNNER_TEMP/tvault" bun run verify

@@ -7,6 +7,8 @@ import type {
   EnvDiffResult,
   EnvGroupDetail,
   GenerateResult,
+  IdentityCreated,
+  IdentityEntry,
   InheritedKey,
   ProjectOverview,
   PromoteRequest,
@@ -18,6 +20,8 @@ import type {
   SecretMeta,
   SecretVersionMeta,
   SessionInfo,
+  ShareResult,
+  UnshareResult,
   VaultStatus
 } from "@shared/types";
 
@@ -259,6 +263,41 @@ export function registerIpc(): void {
     const out = await session.call<EnvInheritedOut>("vault_env_inherited", { group, env });
     return out.keys ?? [];
   });
+
+  // --- sharing / identities ---
+  //
+  // Every one of these returns public halves only (tvault1…). The private key
+  // (tvault-key1…) is never returned by the Go side, and `tvault identity export`
+  // stays CLI-only and TTY-guarded, so this app cannot leak one.
+
+  handle(IPC.identities, async (): Promise<IdentityEntry[]> => {
+    const out = await session.call<{ identities: IdentityEntry[] }>("vault_identity_list");
+    return out.identities ?? [];
+  });
+
+  handle(IPC.newIdentity, async (name: string): Promise<IdentityCreated> =>
+    session.call("vault_identity_new", { name: name || undefined })
+  );
+
+  handle(IPC.recipients, async (project: string): Promise<string[]> => {
+    const out = await session.call<{ project: string; recipients: string[] }>(
+      "vault_project_recipients",
+      { project }
+    );
+    return out.recipients ?? [];
+  });
+
+  handle(
+    IPC.shareProject,
+    async (project: string, recipient: string): Promise<ShareResult> =>
+      session.call("vault_share_project", { project, recipient })
+  );
+
+  handle(
+    IPC.unshareProject,
+    async (project: string, recipient: string): Promise<UnshareResult> =>
+      session.call("vault_unshare_project", { project, recipient })
+  );
 
   // --- CLI-only operations (verified: no MCP tool exists for these) ---
 

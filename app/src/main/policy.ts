@@ -73,20 +73,44 @@ export function readPolicy(): PolicyInfo {
     return Number.isFinite(n) ? n : undefined;
   };
 
+  /**
+   * Reads a list field in either YAML style:
+   *
+   *   secrets_deny: ["A", "B"]      # flow / inline
+   *   secrets_deny:                 # block
+   *     - "A"
+   *     - "B"
+   *
+   * The Go loader accepts both, so the diagnostics badge must too — otherwise a
+   * block-style deny list silently looks empty here while still being enforced
+   * server-side.
+   */
   const list = (key: string): string[] | undefined => {
-    const v = scalar(key);
-    if (v === undefined) return undefined;
-    if (!v.startsWith("[")) return undefined;
-    try {
-      const parsed = JSON.parse(v.replace(/'/g, '"')) as unknown;
-      return Array.isArray(parsed) ? parsed.map(String) : undefined;
-    } catch {
-      return v
-        .slice(1, -1)
-        .split(",")
-        .map((s) => s.trim().replace(/^["']|["']$/g, ""))
-        .filter(Boolean);
+    const idx = lines.findIndex((l) => new RegExp(`^${key}\\s*:`).test(l));
+    if (idx === -1) return undefined;
+
+    const inline = lines[idx].slice(lines[idx].indexOf(":") + 1).trim();
+    if (inline.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(inline.replace(/'/g, '"')) as unknown;
+        return Array.isArray(parsed) ? parsed.map(String) : undefined;
+      } catch {
+        return inline
+          .slice(1, -1)
+          .split(",")
+          .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+          .filter(Boolean);
+      }
     }
+    if (inline !== "") return undefined; // a scalar, not a list
+
+    const out: string[] = [];
+    for (let i = idx + 1; i < lines.length; i++) {
+      const item = /^\s+-\s*(.*)$/.exec(lines[i]);
+      if (!item) break; // next top-level key, or a comment-only gap
+      out.push(item[1].trim().replace(/^["']|["']$/g, ""));
+    }
+    return out;
   };
 
   const mode = scalar("access_mode");

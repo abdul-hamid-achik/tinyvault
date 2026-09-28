@@ -1,15 +1,16 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Bootstrap, ProjectOverview } from "@shared/types";
 
 import { Badge, Icon, IconButton, type IconName } from "./ui";
 import { Logo } from "./Logo";
 
-export type View = "secrets" | "groups" | "audit" | "setup";
+export type View = "secrets" | "groups" | "sharing" | "audit" | "setup";
 
 const NAV: Array<{ id: View; label: string; icon: IconName }> = [
   { id: "secrets", label: "Secrets", icon: "key" },
   { id: "groups", label: "Environments", icon: "layers" },
+  { id: "sharing", label: "Sharing", icon: "branch" },
   { id: "audit", label: "Audit log", icon: "history" },
   { id: "setup", label: "Connection", icon: "shield" }
 ];
@@ -26,7 +27,8 @@ export default function Sidebar({
   boot,
   theme,
   onToggleTheme,
-  onRestartSession
+  onRestartSession,
+  focusToken
 }: {
   projects: ProjectOverview[];
   selected: string | null;
@@ -40,8 +42,15 @@ export default function Sidebar({
   theme: "light" | "dark";
   onToggleTheme: () => void;
   onRestartSession: () => void;
+  /** Incremented by the Cmd+K shortcut when this sidebar owns the focus target. */
+  focusToken: number;
 }): React.JSX.Element {
   const [filter, setFilter] = useState("");
+  const filterRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (focusToken > 0) filterRef.current?.focus();
+  }, [focusToken]);
 
   // The macOS traffic lights render inside the window at x≈20..72 (see the
   // trafficLightPosition comment in main). On other platforms the native title
@@ -120,6 +129,7 @@ export default function Sidebar({
           <Icon name="search" size={13} />
         </span>
         <input
+          ref={filterRef}
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder="Filter projects"

@@ -29,6 +29,12 @@ export const IPC = {
   envPromote: "tvault:env-promote",
   envInherited: "tvault:env-inherited",
 
+  identities: "tvault:identities",
+  newIdentity: "tvault:new-identity",
+  recipients: "tvault:recipients",
+  shareProject: "tvault:share-project",
+  unshareProject: "tvault:unshare-project",
+
   backup: "tvault:backup",
   doctor: "tvault:doctor",
 

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -26,6 +26,7 @@ export function vaultDir(): string {
 export interface Settings {
   binaryPath?: string;
   vaultDir?: string;
+  window?: { x: number; y: number; width: number; height: number };
 }
 
 function settingsFile(): string {
@@ -40,5 +41,15 @@ export function loadSettings(): Settings {
     return parsed && typeof parsed === "object" ? (parsed as Settings) : {};
   } catch {
     return {};
+  }
+}
+
+/** Read-modify-write; callers pass only the keys they own. */
+export function saveSettings(patch: Partial<Settings>): void {
+  const next = { ...loadSettings(), ...patch };
+  try {
+    writeFileSync(settingsFile(), `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
+  } catch {
+    // A settings file we cannot write is not worth failing a window move over.
   }
 }

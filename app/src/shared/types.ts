@@ -212,6 +212,30 @@ export interface Bootstrap {
   current_project: string | null;
 }
 
+// --- sharing / identities ---
+export interface IdentityEntry {
+  name: string;
+  recipient: string;
+}
+
+export interface IdentityCreated {
+  name: string;
+  recipient: string;
+  path: string;
+}
+
+export interface ShareResult {
+  project: string;
+  recipient: string;
+  shared: boolean;
+}
+
+export interface UnshareResult {
+  project: string;
+  recipient: string;
+  revoked: boolean;
+}
+
 // --- the bridge surface exposed on window.tvault ---
 export interface TvaultApi {
   /**
@@ -251,6 +275,15 @@ export interface TvaultApi {
   envDiff(group: string, values: boolean): Promise<Result<EnvDiffResult>>;
   envPromote(req: PromoteRequest): Promise<Result<PromoteResult>>;
   envInherited(group: string, env: string): Promise<Result<InheritedKey[]>>;
+
+  // Sharing. Identities and recipients are public halves only (tvault1…); the
+  // private key (tvault-key1…) is never returned by any of these, and exporting
+  // it stays a CLI-only, TTY-guarded operation.
+  identities(): Promise<Result<IdentityEntry[]>>;
+  newIdentity(name: string): Promise<Result<IdentityCreated>>;
+  recipients(project: string): Promise<Result<string[]>>;
+  shareProject(project: string, recipient: string): Promise<Result<ShareResult>>;
+  unshareProject(project: string, recipient: string): Promise<Result<UnshareResult>>;
 
   // Operations MCP does not expose (verified: no backup/restore/rotate tools in
   // internal/mcp). These shell out to the CLI instead.

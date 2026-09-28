@@ -1,11 +1,12 @@
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
-import { app, BrowserWindow, Menu, nativeTheme, session } from "electron";
+import { app, BrowserWindow, Menu, nativeTheme, screen, session } from "electron";
 
 import { flushClipboard } from "./clipboard";
 import { registerIpc } from "./ipc";
 import { mcpSessionForQuit } from "./lifecycle";
+import { loadSettings, saveSettings } from "./paths";
 import { applyProtection, isForceProtection, setForceProtection } from "./protection";
 
 // Works whether electron-vite emits ESM (import.meta) or CJS (__dirname).
@@ -24,10 +25,33 @@ let quitting = false;
  */
 const DEBUG = process.env.TVAULT_DESKTOP_DEBUG === "1";
 
+/**
+ * Restores the last window geometry, but only if it would land on a display that
+ * still exists — otherwise unplugging a monitor parks the window off-screen with
+ * no way back. The 40px overlap margin rejects geometries that are almost
+ * entirely outside every display.
+ */
+function restoredBounds(): { x: number; y: number; width: number; height: number } | null {
+  const b = loadSettings().window;
+  if (!b || !Number.isFinite(b.width) || !Number.isFinite(b.height)) return null;
+  if (b.width < 960 || b.height < 620) return null;
+  const visible = screen.getAllDisplays().some((d) => {
+    const r = d.bounds;
+    return (
+      b.x + b.width > r.x + 40 && b.x + 40 < r.x + r.width && b.y + b.height > r.y + 40 &&
+      b.y + 40 < r.y + r.height
+    );
+  });
+  return visible ? b : null;
+}
+
 function createWindow(): void {
+  const bounds = restoredBounds();
   mainWindow = new BrowserWindow({
-    width: 1320,
-    height: 860,
+    ...(bounds ? { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height } : {
+      width: 1320,
+      height: 860
+    }),
     minWidth: 960,
     minHeight: 620,
     show: false,
@@ -63,6 +87,21 @@ function createWindow(): void {
   // Capture exclusion is off by default and turns on only while a value is on
   // screen (or when forced from the View menu) — see protection.ts.
   applyProtection();
+
+  // Remember the geometry for the next launch. Debounced, and normal bounds only,
+  // so a maximized or fullscreen session does not get frozen in as the default.
+  let boundsTimer: NodeJS.Timeout | null = null;
+  const persistBounds = (): void => {
+    if (boundsTimer) clearTimeout(boundsTimer);
+    boundsTimer = setTimeout(() => {
+      boundsTimer = null;
+      const win = mainWindow;
+      if (!win || win.isDestroyed() || win.isMinimized()) return;
+      saveSettings({ window: win.getNormalBounds() });
+    }, 400);
+  };
+  mainWindow.on("resize", persistBounds);
+  mainWindow.on("move", persistBounds);
 
   mainWindow.on("ready-to-show", () => mainWindow?.show());
 
@@ -115,6 +154,7 @@ function createWindow(): void {
   }
 
   mainWindow.on("closed", () => {
+    if (boundsTimer) clearTimeout(boundsTimer);
     mainWindow = null;
   });
 }

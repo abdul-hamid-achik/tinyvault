@@ -168,7 +168,9 @@ export default function SecretsView({
   error,
   readOnly,
   actions,
-  onRefresh
+  onRefresh,
+  focusToken,
+  newSecretToken
 }: {
   project: ProjectOverview | null;
   secrets: SecretMeta[];
@@ -177,6 +179,10 @@ export default function SecretsView({
   readOnly: boolean;
   actions: SecretActions;
   onRefresh: () => void;
+  /** Incremented by Cmd+K while the secrets view owns the focus target. */
+  focusToken: number;
+  /** Incremented by Cmd+N to open the new-secret editor. */
+  newSecretToken: number;
 }): React.JSX.Element {
   const toast = useToast();
   const [filter, setFilter] = useState("");
@@ -218,6 +224,17 @@ export default function SecretsView({
   const hiddenByPolicy = project ? Math.max(0, project.secret_count - secrets.length) : 0;
 
   const openNew = (): void => setEditor({ key: "", value: "", isNew: true });
+
+  const keyFilterRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (focusToken > 0) keyFilterRef.current?.focus();
+  }, [focusToken]);
+  useEffect(() => {
+    if (newSecretToken > 0) openNew();
+    // openNew is a stable per-render closure over setEditor; the token is the
+    // only thing that should retrigger this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newSecretToken]);
 
   if (!project) {
     return (
@@ -286,6 +303,7 @@ export default function SecretsView({
               <Icon name="search" size={13} />
             </span>
             <input
+              ref={keyFilterRef}
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Filter keys in this project"
@@ -423,7 +441,7 @@ export default function SecretsView({
                               );
                             })
                           }
-                          className="group/icon flex items-center gap-2 text-faint transition-all
+                          className="group/icon flex items-center gap-2 text-muted transition-all
                             duration-150 ease-out hover:scale-[1.03] hover:text-accent"
                         >
                           {busy ? (
@@ -431,7 +449,7 @@ export default function SecretsView({
                           ) : (
                             <>
                               <Icon name="eye" size={13} animated />
-                              <span className="masked text-[12px]">••••••••••••</span>
+                              <span className="masked text-[12px] text-faint">••••••••••••</span>
                               <span className="text-[11.5px] font-medium">Reveal</span>
                             </>
                           )}
@@ -439,7 +457,7 @@ export default function SecretsView({
                       )}
                     </td>
                     <td className="px-6 py-2.5">
-                      <div className="flex items-center justify-end gap-0.5 opacity-40 transition-opacity duration-100 group-hover:opacity-100">
+                      <div className="flex items-center justify-end gap-0.5 opacity-70 transition-opacity duration-100 group-hover:opacity-100">
                         <IconButton
                           icon="history"
                           label="Version history"

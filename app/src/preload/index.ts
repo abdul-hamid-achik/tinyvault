@@ -38,6 +38,13 @@ const api: TvaultApi = {
   envPromote: (req) => ipcRenderer.invoke(IPC.envPromote, req),
   envInherited: (group, env) => ipcRenderer.invoke(IPC.envInherited, group, env),
 
+  identities: () => ipcRenderer.invoke(IPC.identities),
+  newIdentity: (name) => ipcRenderer.invoke(IPC.newIdentity, name),
+  recipients: (project) => ipcRenderer.invoke(IPC.recipients, project),
+  shareProject: (project, recipient) => ipcRenderer.invoke(IPC.shareProject, project, recipient),
+  unshareProject: (project, recipient) =>
+    ipcRenderer.invoke(IPC.unshareProject, project, recipient),
+
   backup: () => ipcRenderer.invoke(IPC.backup),
   doctor: () => ipcRenderer.invoke(IPC.doctor),
 

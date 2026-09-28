@@ -5,10 +5,19 @@ import type { Bootstrap, ProjectOverview, SecretMeta, SecretVersionMeta } from "
 import AuditView from "./components/AuditView";
 import EnvGroupsView from "./components/EnvGroupsView";
 import SecretsView, { type SecretActions } from "./components/SecretsView";
+import SharingView from "./components/SharingView";
 import SetupScreen from "./components/SetupScreen";
 import Sidebar, { type View } from "./components/Sidebar";
 import { Button, ErrorBoundary, Field, Modal, TextInput, ToastProvider, useToast } from "./components/ui";
-import { applyTheme, debug, initialTheme, unwrap, type Theme } from "./lib/api";
+import {
+  applyTheme,
+  debug,
+  initialTheme,
+  readLastProject,
+  unwrap,
+  writeLastProject,
+  type Theme
+} from "./lib/api";
 
 export default function App(): React.JSX.Element {
   const [theme, setTheme] = useState<Theme>(initialTheme);
@@ -93,12 +102,15 @@ function Shell({
   }, []);
 
   const loadProjects = useCallback(
-    async (preferred?: string | null): Promise<void> => {
+    async (explicit?: string | null, thenCurrent?: string | null): Promise<void> => {
       try {
         const list = await unwrap(window.tvault.projectsOverview());
         setProjects(list);
         setSelected((prev) => {
-          const wanted = preferred ?? prev;
+          // Precedence: an explicit request (just created), then what is already
+          // selected, then where the user left off last launch, then the vault's
+          // current project, then the first one alphabetically.
+          const wanted = explicit ?? prev ?? readLastProject() ?? thenCurrent ?? null;
           if (wanted && list.some((p) => p.name === wanted)) return wanted;
           return list[0]?.name ?? null;
         });
@@ -130,7 +142,7 @@ function Shell({
         session_error: result.session.last_error
       });
       if (result.session.connected && result.status) {
-        await loadProjects(result.current_project);
+        await loadProjects(undefined, result.current_project);
         // Land on the Connection screen when the vault is reachable but the app
         // cannot do anything useful: a missing policy denies every key, and a
         // zero read cap denies every reveal. Both are explained there.
@@ -174,10 +186,42 @@ function Shell({
     void loadSecrets(selected);
   }, [selected, view, loadSecrets]);
 
+  // Land where the user left off, next launch.
+  useEffect(() => {
+    if (selected) writeLastProject(selected);
+  }, [selected]);
+
+  // --- keyboard shortcuts -------------------------------------------------
+  // Tokens rather than direct calls: the inputs and the editor modal live in
+  // child components, and a counter prop keeps the coupling to one number.
+  const [filterToken, setFilterToken] = useState(0);
+  const [newSecretToken, setNewSecretToken] = useState(0);
+
   const refresh = useCallback(async (): Promise<void> => {
     await Promise.all([loadProjects(selected), syncSession()]);
     if (selected) await loadSecrets(selected);
   }, [loadProjects, loadSecrets, selected, syncSession]);
+
+  // Declared after `refresh`: the dependency array is evaluated during render,
+  // so referencing it above its declaration would be a TDZ ReferenceError.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === "k") {
+        e.preventDefault();
+        setFilterToken((t) => t + 1);
+      } else if (k === "n") {
+        e.preventDefault();
+        if (view === "secrets" && !readOnly) setNewSecretToken((t) => t + 1);
+      } else if (k === "r") {
+        e.preventDefault();
+        void refresh();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [view, readOnly, refresh]);
 
   const restartSession = useCallback(async (): Promise<void> => {
     try {
@@ -278,6 +322,7 @@ function Shell({
         theme={theme}
         onToggleTheme={onToggleTheme}
         onRestartSession={() => void restartSession()}
+        focusToken={view === "secrets" ? 0 : filterToken}
       />
 
       <main className="flex min-w-0 flex-1 flex-col">
@@ -297,9 +342,18 @@ function Shell({
               readOnly={readOnly}
               actions={actions}
               onRefresh={() => void refresh()}
+              focusToken={view === "secrets" ? filterToken : 0}
+              newSecretToken={newSecretToken}
             />
           ) : view === "groups" ? (
             <EnvGroupsView readOnly={readOnly} onChanged={() => void refresh()} />
+          ) : view === "sharing" ? (
+            <SharingView
+              readOnly={readOnly}
+              projects={projects.map((p) => p.name)}
+              defaultProject={selected}
+              onChanged={() => void refresh()}
+            />
           ) : view === "audit" ? (
             <AuditView />
           ) : (

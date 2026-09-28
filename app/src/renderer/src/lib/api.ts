@@ -69,6 +69,24 @@ export function clockTime(iso: string | undefined | null): string {
 }
 
 const THEME_KEY = "tv-theme";
+const LAST_PROJECT_KEY = "tv-last-project";
+
+/** Last project the user had selected, so a relaunch lands where they left off. */
+export function readLastProject(): string | null {
+  try {
+    return localStorage.getItem(LAST_PROJECT_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function writeLastProject(name: string): void {
+  try {
+    localStorage.setItem(LAST_PROJECT_KEY, name);
+  } catch {
+    // Storage unavailable; the session simply starts at the first project.
+  }
+}
 
 /**
  * True when the app was launched with `TVAULT_DESKTOP_DEBUG=1`; main forwards the
