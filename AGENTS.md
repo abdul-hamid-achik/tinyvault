@@ -393,7 +393,7 @@ libraries (bubbletea, lipgloss, bubbles, glamour).
 - **Architecture and threat model:** [Architecture](docs/reference/architecture.md) and [Security](docs/reference/security.md)
 - **Roadmap:** [ROADMAP.md](ROADMAP.md)
 - **Quickstart and feature list:** [README.md](README.md)
-- **Documentation site:** `docs/` (VitePress + Bun) → **[tinyvault.dev](https://tinyvault.dev)**. Vercel Root Directory is `docs/`. Git auto-builds **`main` only**, and only when `docs/`, lockfiles, or `docs/vercel.json` change. Feature branches do not create Preview deployments. Do not `vercel promote`; `main` is the docs release. CLI release is a separate tag pipeline. Local: `cd docs && bun run docs:dev`; gate with `bun run docs:build`.
+- **Documentation site:** `docs/` (VitePress + Bun) → **[tinyvault.dev](https://tinyvault.dev)**. Vercel Root Directory is `docs/`. Git auto-builds **`main` only**, and only when `docs/`, lockfiles, or `docs/vercel.json` change. The ignore command skips the build only when it can prove `docs/` is unchanged against the previously deployed commit; if that commit is absent from Vercel's shallow clone (e.g. after a multi-commit push) it builds instead of erroring — a `git diff` against a missing object fails the whole deployment. Feature branches do not create Preview deployments. Do not `vercel promote`; `main` is the docs release. CLI release is a separate tag pipeline. Local: `cd docs && bun run docs:dev`; gate with `bun run docs:build`.
 - **Contributing guide:** [CONTRIBUTING.md](CONTRIBUTING.md)
 - **CI:** `.github/workflows/ci.yml` (test, lint, govulncheck, build)
 - **Release:** `.github/workflows/release.yml` (GoReleaser on `v*` tags)

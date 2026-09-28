@@ -6,7 +6,7 @@
       "main": true
     }
   },
-  "ignoreCommand": "git diff --quiet ${VERCEL_GIT_PREVIOUS_SHA:-HEAD^} HEAD -- . package.json bun.lock package-lock.json vercel.json",
+  "ignoreCommand": "sh -c 'base=${VERCEL_GIT_PREVIOUS_SHA:-HEAD~1}; git cat-file -e \"$base\" 2>/dev/null || exit 1; git diff --quiet \"$base\" HEAD -- . package.json bun.lock package-lock.json vercel.json'",
   "framework": "vitepress",
   "buildCommand": "bun run docs:build",
   "installCommand": "bun install",
