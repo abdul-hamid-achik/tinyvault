@@ -236,6 +236,16 @@ export interface UnshareResult {
   revoked: boolean;
 }
 
+// --- backup report: the --json shape of `tvault backup` (cmd/tvault/cmd/backup.go) ---
+export interface BackupReport {
+  path: string;
+  bytes: number;
+  raw_bytes: number;
+  compressed: boolean;
+  immutable: boolean;
+  created_at: string;
+}
+
 // --- the bridge surface exposed on window.tvault ---
 export interface TvaultApi {
   /**
@@ -291,8 +301,10 @@ export interface TvaultApi {
   // `backup` deliberately takes no destination argument: the renderer must not be
   // able to aim a vault snapshot at an arbitrary path. With no argument the Go
   // side writes to `backup.dir` from config.yaml, which is the only place that
-  // should decide.
-  backup(): Promise<Result<{ stdout: string }>>;
+  // should decide. It reports the snapshot's metadata via `backup --json`; the
+  // snapshot is copied as opaque bytes and never decrypted, so there is no value
+  // in the report.
+  backup(): Promise<Result<BackupReport>>;
   doctor(): Promise<Result<{ healthy: boolean; failed: string[]; checks: unknown }>>;
 
   /**

@@ -202,11 +202,21 @@ per-field reveal, generate (value never returned), version history, rollback,
 projects, cross-project search, audit log, and environment groups (drift matrix,
 promote with dry-run preview, inheritance).
 
-**Not covered — no MCP tool exists**, so these stay CLI-only: `backup`, `restore`,
-`key rotate`, `ssh`, `docker`, `git-filter`, `identity export`, `self-update`,
-`ci init`, agent lifecycle. `backup` and `doctor` are shelled out to directly;
-`backup`, `restore` and `key rotate` have no `--json` output, so wiring them into
-the UI properly means adding that on the Go side first.
+**Not covered by MCP**, so these stay CLI-only: `restore`, `ssh`, `docker`,
+`git-filter`, `identity export`, `self-update`, `ci init`, agent lifecycle.
+`backup` and `doctor` are shelled out to directly; `backup` reports through
+`backup --json` — metadata only, since a snapshot is copied as opaque bytes and
+never decrypted. `restore` and `key rotate` gained `--json` in the same change
+but still have no screen here; `restore --json` requires `--yes`, because a
+confirmation prompt cannot be answered on a machine-readable stream.
+
+One security note from that change: `tvault sync --json` used to emit plaintext
+secret values. `sync.Conflict` carried both sides of a conflict with no json
+tags and the command marshals the whole result, so every conflict leaked both
+values to stdout. Nothing consumed those fields, so they are gone, and
+`json_output_test.go` holds a regression test asserting neither side reaches
+stdout. If you parse `sync --json` anywhere, its conflict entries are now
+`{key, resolution}` and the top level is snake_case.
 
 ---
 

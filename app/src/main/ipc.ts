@@ -3,6 +3,7 @@ import { ipcMain } from "electron";
 import { IPC } from "@shared/ipc";
 import type {
   AuditEntry,
+  BackupReport,
   Bootstrap,
   EnvDiffResult,
   EnvGroupDetail,
@@ -26,7 +27,7 @@ import type {
 } from "@shared/types";
 
 import { resolveBinary } from "./binary";
-import { runCli, runCliJson } from "./cli";
+import { runCliJson } from "./cli";
 import { writeSecretToClipboard } from "./clipboard";
 import { session } from "./mcp";
 import { vaultDir } from "./paths";
@@ -301,16 +302,14 @@ export function registerIpc(): void {
 
   // --- CLI-only operations (verified: no MCP tool exists for these) ---
 
-  handle(IPC.backup, async (): Promise<{ stdout: string }> => {
+  handle(IPC.backup, async (): Promise<BackupReport> => {
     // No destination argument by design — see TvaultApi.backup. Letting the
     // renderer choose a path would make this an arbitrary-file-write primitive.
-    const res = await runCli(["backup"], { timeoutMs: 120_000 });
-    if (res.exitCode !== 0) {
-      throw new Error(
-        `tvault backup failed (exit ${res.exitCode}): ${(res.stderr || res.stdout).trim().slice(0, 400)}`
-      );
-    }
-    return { stdout: res.stdout.trim() };
+    // `--json` exists for backup as of the single-encoder change, so parse the
+    // report instead of scraping the human-readable line.
+    const res = await runCliJson<BackupReport>(["backup", "--json"], { timeoutMs: 120_000 });
+    if (!res.ok) throw new Error(res.error);
+    return res.value;
   });
 
   handle(
