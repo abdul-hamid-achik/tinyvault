@@ -20,6 +20,7 @@ For agents: run `tvault docs features` for a machine-readable JSON manifest of e
 - [Core Concepts](https://www.tinyvault.dev/guide/concepts)
 - [Environment Groups](https://www.tinyvault.dev/guide/env-groups): link projects as environments, detect drift, promote values, inherit, and seal all envs in one blob.
 - [Codemap integration](https://www.tinyvault.dev/guide/codemap): the metadata-first MCP surface a code-graph indexer uses for rotation blast radius, least-privilege seals, credential freshness, and scoped execution.
+- [Desktop App](https://www.tinyvault.dev/guide/desktop): install the Electron GUI from the repo — a sandboxed front end over `tvault mcp` with per-field reveal, rollback, environment drift, sharing, and snapshot restore.
 - [Sharing Secrets](https://www.tinyvault.dev/guide/sharing) and [Committable Secrets](https://www.tinyvault.dev/guide/committable-secrets)
 
 ## Reference

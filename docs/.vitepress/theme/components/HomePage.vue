@@ -255,13 +255,13 @@ onBeforeUnmount(() => {
     <section class="tv-surfaces" aria-labelledby="tv-surfaces-title">
       <div class="tv-section-intro tv-section-intro--split">
         <div>
-          <p class="tv-kicker">One vault, two surfaces</p>
+          <p class="tv-kicker">One vault, three surfaces</p>
           <h2 id="tv-surfaces-title">Use the interface that fits the caller.</h2>
         </div>
         <p>
-          The CLI and MCP server use the same storage, encryption, project
-          boundaries, and audit trail. There is no sync layer to drift and no
-          second database to secure.
+          The CLI, the MCP server, and the desktop app use the same storage,
+          encryption, project boundaries, and audit trail. There is no sync layer
+          to drift and no second database to secure.
         </p>
       </div>
 
@@ -285,6 +285,17 @@ onBeforeUnmount(() => {
           </div>
           <p>Give an agent task-shaped tools, a disk-loaded policy, and value-minimizing defaults over stdio.</p>
           <code>tvault mcp</code>
+          <span class="tv-surface__arrow" aria-hidden="true">↗</span>
+        </a>
+
+        <a class="tv-surface" href="/guide/desktop">
+          <span class="tv-surface__number">03</span>
+          <div>
+            <p class="tv-surface__label">Humans who prefer a window</p>
+            <h3>Desktop</h3>
+          </div>
+          <p>An Electron GUI over the MCP server: reveal, edit, roll back, diff environments, share, and restore snapshots without living in a terminal.</p>
+          <code>bunx electron .</code>
           <span class="tv-surface__arrow" aria-hidden="true">↗</span>
         </a>
       </div>

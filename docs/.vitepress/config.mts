@@ -87,6 +87,7 @@ export default defineConfig({
             'Transparent git filters for commit-safe secrets',
             'Versioned secrets with rollback',
             'CLI audit log',
+            'Desktop GUI over the MCP server, built from source',
           ],
         },
         {
@@ -181,6 +182,7 @@ export default defineConfig({
           text: 'Interfaces',
           collapsed: false,
           items: [
+            { text: 'Desktop App', link: '/guide/desktop' },
             { text: 'Local Agent', link: '/guide/agent' },
             { text: 'For AI Agents', link: '/guide/for-ai-agents' },
           ],
