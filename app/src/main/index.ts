@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { app, BrowserWindow, Menu, nativeTheme, screen, session } from "electron";
@@ -12,6 +13,10 @@ import { applyProtection, isForceProtection, setForceProtection } from "./protec
 // Works whether electron-vite emits ESM (import.meta) or CJS (__dirname).
 const here =
   typeof __dirname === "string" ? __dirname : fileURLToPath(new URL(".", import.meta.url));
+
+// Present in dev (app/build/icon.png) but absent inside the packaged asar, where
+// the bundle's own icon covers the Dock and Linux/Windows task bars.
+const iconPath = join(here, "../../build/icon.png");
 
 let mainWindow: BrowserWindow | null = null;
 let quitting = false;
@@ -61,7 +66,7 @@ function createWindow(): void {
     title: "TinyVault",
     // Ignored on macOS (the Dock uses the bundle icon); gives Linux/Windows task
     // bars the vault-door mark instead of the default Electron atom in dev runs.
-    icon: join(here, "../../build/icon.png"),
+    ...(existsSync(iconPath) ? { icon: iconPath } : {}),
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     // The sidebar's brand row shares this row and starts at pl-[84px] on macOS
     // (see Sidebar), clear of the lights: three 12px buttons with centres 20px
@@ -227,9 +232,10 @@ if (!gotLock) {
   void app.whenReady().then(() => {
     // In dev there is no .app bundle, so the Dock would show Electron's default
     // atom. Packaged builds get the real icon from build/icon.icns via
-    // electron-builder; this covers the unpacked run.
-    if (process.platform === "darwin" && app.dock) {
-      app.dock.setIcon(join(here, "../../build/icon.png"));
+    // electron-builder; this covers the unpacked run. Inside the asar the file
+    // does not exist and the bundle icon already applies.
+    if (process.platform === "darwin" && app.dock && existsSync(iconPath)) {
+      app.dock.setIcon(iconPath);
     }
 
     hardenSession();
