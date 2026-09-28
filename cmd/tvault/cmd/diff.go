@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -131,9 +130,7 @@ func runDiff(_ *cobra.Command, args []string) error {
 	res.InSync = len(res.OnlyInVault) == 0 && len(res.OnlyInFile) == 0 && !valueDrift
 
 	if jsonOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(res)
+		return writeJSON(res)
 	}
 	printDiff(res)
 	return nil

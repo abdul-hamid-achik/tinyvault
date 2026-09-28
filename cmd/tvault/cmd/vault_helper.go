@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -122,8 +121,7 @@ func openAndUnlockVault() (*vault.Vault, error) {
 func nonInteractiveLockedError(v *vault.Vault) error {
 	v.Close()
 	if jsonOutput {
-		enc := json.NewEncoder(os.Stdout)
-		if err := enc.Encode(map[string]any{
+		if err := writeJSON(map[string]any{
 			"error":  "vault_locked",
 			"locked": true,
 		}); err != nil {

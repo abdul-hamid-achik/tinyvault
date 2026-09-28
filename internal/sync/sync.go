@@ -8,6 +8,7 @@
 package sync
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -44,6 +45,12 @@ func (d Direction) String() string {
 	}
 }
 
+// MarshalJSON emits the direction as its name, not its iota, so `sync --json`
+// reads "mirror" instead of 2.
+func (d Direction) MarshalJSON() ([]byte, error) {
+	return json.Marshal(d.String())
+}
+
 // ParseDirection parses a user-supplied direction string.
 func ParseDirection(s string) (Direction, error) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
@@ -59,26 +66,32 @@ func ParseDirection(s string) (Direction, error) {
 }
 
 // Conflict describes a key whose value differs between vault and .env.
+//
+// The conflicting VALUES are deliberately not carried here. They were, until
+// 2026-09-27: `tvault sync --json` marshals Result straight to stdout, and the
+// untagged fields put both plaintext sides of every conflict into
+// machine-readable output — a direct violation of the value-minimisation model
+// in docs/reference/security.md. Nothing consumed them (the human output prints
+// key + resolution only, and the MCP layer maps conflicts to key + resolution),
+// so the fields are removed rather than hidden behind json:"-".
 type Conflict struct {
-	Key        string
-	VaultValue string
-	EnvValue   string
-	Resolution string // "kept-vault" | "kept-env" | "kept-existing"
+	Key        string `json:"key"`
+	Resolution string `json:"resolution"` // "kept-vault" | "kept-env" | "kept-existing"
 }
 
 // Result is the summary of a Sync call.
 type Result struct {
-	Direction    Direction
-	Path         string
-	Created      []string // keys created in target
-	Updated      []string // keys updated in target
-	Skipped      []string // keys that already existed and were not overwritten
-	Unchanged    []string // keys whose value was already the same
-	Conflicts    []Conflict
-	EnvCreated   bool // true if the .env file was newly created
-	ProjectName  string
-	VaultEntries int
-	EnvEntries   int
+	Direction    Direction  `json:"direction"`
+	Path         string     `json:"path"`
+	Created      []string   `json:"created"`   // keys created in target
+	Updated      []string   `json:"updated"`   // keys updated in target
+	Skipped      []string   `json:"skipped"`   // keys that already existed and were not overwritten
+	Unchanged    []string   `json:"unchanged"` // keys whose value was already the same
+	Conflicts    []Conflict `json:"conflicts"`
+	EnvCreated   bool       `json:"env_created"` // true if the .env file was newly created
+	ProjectName  string     `json:"project"`
+	VaultEntries int        `json:"vault_entries"`
+	EnvEntries   int        `json:"env_entries"`
 }
 
 // Source is the read/write surface Sync needs from the vault. It is
@@ -235,11 +248,11 @@ func mirrorKey(src Source, project, k, vv, ev string, inVault, inEnv, overwrite 
 			}
 			res.Updated = append(res.Updated, k)
 			res.Conflicts = append(res.Conflicts, Conflict{
-				Key: k, VaultValue: vv, EnvValue: ev, Resolution: "kept-env",
+				Key: k, Resolution: "kept-env",
 			})
 		} else {
 			res.Conflicts = append(res.Conflicts, Conflict{
-				Key: k, VaultValue: vv, EnvValue: ev, Resolution: "kept-vault",
+				Key: k, Resolution: "kept-vault",
 			})
 			res.Skipped = append(res.Skipped, k)
 		}

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -98,9 +97,7 @@ func runProjectsList(_ *cobra.Command, _ []string) error {
 			for _, n := range names {
 				out = append(out, map[string]string{"name": n})
 			}
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(out)
+			return writeJSON(out)
 		}
 		for _, n := range names {
 			fmt.Println(n)
@@ -135,9 +132,7 @@ func runProjectsList(_ *cobra.Command, _ []string) error {
 				Current:     p.Name == currentProject,
 			})
 		}
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(list)
+		return writeJSON(list)
 	}
 
 	if len(projects) == 0 {

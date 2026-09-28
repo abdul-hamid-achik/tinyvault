@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -562,32 +561,32 @@ func emitHelp(w io.Writer, topic string, asJSON bool) error {
 
 	if asJSON {
 		// JSON: emit only the relevant slice, or the full content.
-		enc := json.NewEncoder(w)
-		enc.SetIndent("", "  ")
-		if topic == "" {
-			return enc.Encode(c)
-		}
+		// writeJSONTo keeps escaping and indentation identical to every
+		// other --json surface (no HTML escaping of &, <, >).
+		var payload any = c
 		switch topic {
+		case "":
 		case "workflow":
-			return enc.Encode(struct {
+			payload = struct {
 				Topic     string     `json:"topic"`
 				Lifecycle []HelpStep `json:"lifecycle"`
-			}{"workflow", c.Lifecycle})
+			}{"workflow", c.Lifecycle}
 		case "safety":
-			return enc.Encode(c.Safety)
+			payload = c.Safety
 		case "recipes":
-			return enc.Encode(c.Recipes)
+			payload = c.Recipes
 		case "output":
-			return enc.Encode(c.Output)
+			payload = c.Output
 		case "agent":
-			return enc.Encode(c.AgentGuide)
+			payload = c.AgentGuide
 		case "troubleshooting":
-			return enc.Encode(c.Troubleshoot)
+			payload = c.Troubleshoot
 		case "topics":
-			return enc.Encode(c.Topics)
+			payload = c.Topics
 		default:
 			return fmt.Errorf("unknown topic %q (try: workflow, safety, recipes, output, agent, troubleshooting, topics)", topic)
 		}
+		return writeJSONTo(w, payload)
 	}
 
 	// Text form.

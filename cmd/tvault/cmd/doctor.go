@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -74,10 +73,8 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 	}
 
 	if jsonOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		if err := enc.Encode(map[string]any{"healthy": failed == 0, "failed": failed, "checks": checks}); err != nil {
-			return err
+		if err := writeJSON(map[string]any{"healthy": failed == 0, "failed": failed, "checks": checks}); err != nil {
+			return fmt.Errorf("write doctor JSON: %w", err)
 		}
 	} else {
 		fmt.Fprintln(os.Stdout, "tvault doctor")

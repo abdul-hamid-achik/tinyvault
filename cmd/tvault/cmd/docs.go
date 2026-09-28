@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -96,15 +94,7 @@ func runDocs(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("no topic or feature %q; try `tvault docs topics` or `tvault docs features`", topic)
 	}
 
-	out, err := json.MarshalIndent(cat, "", "  ")
-	if err != nil {
-		return err
-	}
-	if _, err := os.Stdout.Write(out); err != nil {
-		return err
-	}
-	fmt.Println()
-	return nil
+	return writeJSON(cat)
 }
 
 func findFeature(cat docsCatalog, name string) (docsFeature, bool) {
@@ -137,12 +127,7 @@ var docsFeaturesCmd = &cobra.Command{
 	Use:   "features",
 	Short: "JSON manifest of all features",
 	RunE: func(_ *cobra.Command, _ []string) error {
-		out, err := json.MarshalIndent(fullCatalog().Features, "", "  ")
-		if err != nil {
-			return err
-		}
-		fmt.Println(string(out))
-		return nil
+		return writeJSON(fullCatalog().Features)
 	},
 }
 
@@ -150,12 +135,7 @@ var docsTopicsCmd = &cobra.Command{
 	Use:   "topics",
 	Short: "JSON manifest of all topics (with examples)",
 	RunE: func(_ *cobra.Command, _ []string) error {
-		out, err := json.MarshalIndent(fullCatalog().Topics, "", "  ")
-		if err != nil {
-			return err
-		}
-		fmt.Println(string(out))
-		return nil
+		return writeJSON(fullCatalog().Topics)
 	},
 }
 
@@ -327,8 +307,8 @@ func fullCatalog() docsCatalog {
 			{
 				Name:        "passphrase-rotation",
 				Summary:     "Re-encrypt every project DEK under a new KEK derived from a new passphrase.",
-				Commands:    []string{"tvault key rotate"},
-				Description: "Secret values are never re-encrypted; only the DEK wrapping changes. Old encrypted .env files are invalidated by design.",
+				Commands:    []string{"tvault key rotate", "tvault key rotate --json"},
+				Description: "Secret values are never re-encrypted; only the DEK wrapping changes. Old encrypted .env files are invalidated by design. --json emits {rotated, vault_dir, rotated_at}; the passphrase prompts go to stderr, so stdout stays one JSON document and no passphrase or value is ever reported.",
 			},
 			{
 				Name:        "generate-secret",
@@ -361,9 +341,9 @@ func fullCatalog() docsCatalog {
 			{
 				Name:        "backups",
 				Summary:     "Consistent, compressed, rotated vault snapshots, plus a safety snapshot before every destructive operation.",
-				Commands:    []string{"tvault backup", "tvault backup --dir ~/Backups/tvault --keep 30 --immutable", "tvault restore <snapshot>"},
+				Commands:    []string{"tvault backup", "tvault backup --dir ~/Backups/tvault --keep 30 --immutable", "tvault backup --json", "tvault restore <snapshot>", "tvault restore <snapshot> --yes --json"},
 				SeeAlso:     []string{"tvault help backup", "tvault help restore"},
-				Description: "`tvault backup` writes a transactional snapshot (bbolt Tx.WriteTo, never a torn copy), verified and atomically renamed, 0600; no unlock needed since payloads stay encrypted (project/key names and the audit log stay readable). Without a path it writes gzip-compressed vault-<time>.db.gz into --dir / backup.dir and keeps --keep / backup.keep (default 30). --immutable / backup.immutable sets the macOS/BSD user-immutable flag so rm cannot delete a snapshot. With backup.dir set, delete, projects delete, restore and the MCP delete tools snapshot first and refuse to run if that fails. restore accepts plain or .gz snapshots, verifies before touching anything, and saves the current vault first. doctor warns when backups are unconfigured or older than 7 days.",
+				Description: "`tvault backup` writes a transactional snapshot (bbolt Tx.WriteTo, never a torn copy), verified and atomically renamed, 0600; no unlock needed since payloads stay encrypted (project/key names and the audit log stay readable). Without a path it writes gzip-compressed vault-<time>.db.gz into --dir / backup.dir and keeps --keep / backup.keep (default 30). --immutable / backup.immutable sets the macOS/BSD user-immutable flag so rm cannot delete a snapshot. With backup.dir set, delete, projects delete, restore and the MCP delete tools snapshot first and refuse to run if that fails. restore accepts plain or .gz snapshots, verifies before touching anything, and saves the current vault first. doctor warns when backups are unconfigured or older than 7 days. `backup --json` emits {path, bytes, raw_bytes, compressed, immutable, created_at} and `restore --yes --json` emits {restored, source, vault_dir, saved_snapshot, restored_at}: metadata only — a snapshot is copied, never decrypted, so no secret value can appear. restore --json requires --yes because a confirmation prompt cannot be answered on a machine-readable stream.",
 			},
 			{
 				Name:        "diagnostics",

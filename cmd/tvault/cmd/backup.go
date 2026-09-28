@@ -42,10 +42,15 @@ When backup.dir is configured, destructive commands (delete, projects delete,
 restore, and the MCP delete tools) take a snapshot first and refuse to run if
 it fails.
 
+--json reports {path, bytes, raw_bytes, compressed, immutable, created_at} —
+snapshot metadata only. The snapshot is never opened or decrypted, so no
+secret value can appear in it.
+
 Examples:
   tvault backup ~/backups/vault.db.bak
   tvault backup --dir ~/Backups/tvault --keep 30 --immutable
-  tvault backup                     # uses backup.dir / keep / immutable from config.yaml`,
+  tvault backup                     # uses backup.dir / keep / immutable from config.yaml
+  tvault backup --json | jq -r .path`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runBackup,
 }
@@ -67,8 +72,14 @@ anything is touched, the current vault is first
 saved as a snapshot (into backup.dir when configured, else next to vault.db as
 vault.db.pre-restore-<time>), and the database is then replaced atomically.
 
+--json reports {restored, source, vault_dir, saved_snapshot, restored_at} —
+paths and a timestamp only; the database is swapped as opaque bytes and never
+decrypted. It requires --yes: a confirmation prompt cannot be answered on a
+machine-readable stream.
+
 Examples:
-  tvault restore ~/backups/vault.db.bak`,
+  tvault restore ~/backups/vault.db.bak
+  tvault restore ~/backups/vault.db.bak --yes --json`,
 	Args: cobra.ExactArgs(1),
 	RunE: runRestore,
 }
@@ -85,6 +96,41 @@ func init() {
 // defaultBackupKeep is how many rotated snapshots survive when neither --keep
 // nor backup.keep says otherwise.
 const defaultBackupKeep = 30
+
+// backupJSON is the --json shape of `tvault backup`. It mirrors what the
+// human-readable line reports — where the snapshot went and how big it is —
+// as machine-readable fields.
+//
+// A snapshot is never opened or decrypted here, so there is no value to leak:
+// only a path, two byte counts, and a timestamp.
+type backupJSON struct {
+	Path       string `json:"path"`
+	Bytes      int64  `json:"bytes"`     // size on disk (compressed for a .gz snapshot)
+	RawBytes   int64  `json:"raw_bytes"` // uncompressed database size
+	Compressed bool   `json:"compressed"`
+	Immutable  bool   `json:"immutable"`  // the immutable flag was actually applied
+	CreatedAt  string `json:"created_at"` // RFC3339, UTC
+}
+
+// snapshotJSON describes a snapshot that was just written. It is the JSON
+// counterpart of snapshotSizeNote: the on-disk size, the uncompressed size,
+// and whether the file is compressed. A failed stat is not fatal — the byte
+// count returned by the snapshot write is still correct, and CreatedAt simply
+// stays empty rather than failing an otherwise successful backup.
+func snapshotJSON(path string, raw int64, immutable bool) backupJSON {
+	out := backupJSON{
+		Path:       path,
+		Bytes:      raw,
+		RawBytes:   raw,
+		Compressed: strings.HasSuffix(path, gzipSuffix),
+		Immutable:  immutable,
+	}
+	if info, err := os.Stat(path); err == nil {
+		out.Bytes = info.Size()
+		out.CreatedAt = info.ModTime().UTC().Format(time.RFC3339)
+	}
+	return out
+}
 
 // snapshotPrefix names rotated snapshots; rotation only ever touches files
 // matching snapshotPrefix + "*" + snapshotSuffix in the backup directory.
@@ -151,21 +197,41 @@ func runBackup(_ *cobra.Command, args []string) error {
 		if serr != nil {
 			return fmt.Errorf("backup failed: %w", serr)
 		}
+		immutable := false
 		if settings.immutable {
 			if ierr := setImmutable(dst, true); ierr != nil {
-				Warning("snapshot written but not marked immutable: %v", ierr)
+				warnImmutableFailed(ierr)
+			} else {
+				immutable = true
 			}
+		}
+		if jsonOutput {
+			return writeJSON(snapshotJSON(dst, n, immutable))
 		}
 		Success("Vault snapshot written to %s (%s)", dst, snapshotSizeNote(dst, n))
 		return nil
 	}
 
-	path, n, err := rotatedSnapshot(v, settings, "")
+	path, n, immutable, err := rotatedSnapshot(v, settings, "")
 	if err != nil {
 		return fmt.Errorf("backup failed: %w", err)
 	}
+	if jsonOutput {
+		return writeJSON(snapshotJSON(path, n, immutable))
+	}
 	Success("Vault snapshot written to %s (%s)", path, snapshotSizeNote(path, n))
 	return nil
+}
+
+// warnImmutableFailed reports a snapshot that was written but could not be
+// marked immutable. Under --json stdout is the JSON document, so the warning
+// goes to stderr there — the same rule rotatedSnapshot already follows.
+func warnImmutableFailed(err error) {
+	if jsonOutput {
+		fmt.Fprintf(os.Stderr, "tvault: warning: snapshot written but not marked immutable: %v\n", err)
+		return
+	}
+	Warning("snapshot written but not marked immutable: %v", err)
 }
 
 // openVaultForSnapshot opens the vault without unlocking it, retrying briefly
@@ -291,8 +357,10 @@ func gzipFile(src, dir string) (string, error) {
 // rotatedSnapshot writes vault-<timestamp>[-<reason>].db into the backup
 // directory, optionally marks it immutable, and prunes the oldest snapshots
 // beyond keep. Warnings go to stderr: under `tvault mcp` stdout is the
-// protocol stream.
-func rotatedSnapshot(v *vault.Vault, s backupSettings, reason string) (string, int64, error) {
+// protocol stream. The third result reports whether the immutable flag was
+// actually applied, so `backup --json` can state it honestly instead of
+// echoing the request.
+func rotatedSnapshot(v *vault.Vault, s backupSettings, reason string) (string, int64, bool, error) {
 	name := snapshotPrefix + time.Now().Format("20060102-150405.000")
 	if reason != "" {
 		name += "-" + reason
@@ -300,17 +368,20 @@ func rotatedSnapshot(v *vault.Vault, s backupSettings, reason string) (string, i
 	path := filepath.Join(s.dir, name+snapshotSuffix+gzipSuffix)
 	n, err := snapshotTo(v, path)
 	if err != nil {
-		return "", n, err
+		return "", n, false, err
 	}
+	immutable := false
 	if s.immutable {
 		if ierr := setImmutable(path, true); ierr != nil {
 			fmt.Fprintf(os.Stderr, "tvault: warning: snapshot written but not marked immutable: %v\n", ierr)
+		} else {
+			immutable = true
 		}
 	}
 	if perr := pruneSnapshots(s.dir, s.keep); perr != nil {
 		fmt.Fprintf(os.Stderr, "tvault: warning: snapshot written, but pruning old snapshots failed: %v\n", perr)
 	}
-	return path, n, nil
+	return path, n, immutable, nil
 }
 
 // listSnapshots returns the rotated snapshots in dir, oldest first. The
@@ -368,7 +439,7 @@ func snapshotBeforeDestructive(v *vault.Vault, reason string) error {
 		return nil
 	}
 	s := resolveBackupSettings(cfg)
-	path, _, err := rotatedSnapshot(v, s, reason)
+	path, _, _, err := rotatedSnapshot(v, s, reason)
 	if err != nil {
 		return fmt.Errorf("safety snapshot before %s failed (nothing was changed; fix backup.dir or remove it from %s): %w",
 			reason, configPath(), err)
@@ -377,6 +448,18 @@ func snapshotBeforeDestructive(v *vault.Vault, reason string) error {
 		fmt.Fprintf(os.Stderr, "tvault: safety snapshot: %s\n", path)
 	}
 	return nil
+}
+
+// restoreJSON is the --json shape of `tvault restore`. It mirrors the two
+// human-readable lines the command prints — where the current vault was saved
+// and which backup was restored — and nothing else: the database is swapped as
+// opaque bytes and never decrypted, so there is no value to report.
+type restoreJSON struct {
+	Restored      bool   `json:"restored"`
+	Source        string `json:"source"`
+	VaultDir      string `json:"vault_dir"`
+	SavedSnapshot string `json:"saved_snapshot,omitempty"`
+	RestoredAt    string `json:"restored_at"` // RFC3339, UTC
 }
 
 func runRestore(_ *cobra.Command, args []string) error {
@@ -388,6 +471,13 @@ func runRestore(_ *cobra.Command, args []string) error {
 	dst := filepath.Join(dir, "vault.db")
 
 	if !restoreYes {
+		// An interactive prompt and a machine-readable stdout cannot share a
+		// stream: the prompt (and its "Canceled" answer) is human text. Fail
+		// loudly rather than either corrupt the JSON or silently skip the
+		// confirmation on an operation that replaces the whole vault.
+		if jsonOutput {
+			return errors.New("restore needs --yes with --json (a confirmation prompt cannot be answered on a machine-readable stream)")
+		}
 		Warning("This will replace the current vault database (a snapshot of it is kept first).")
 		if !PromptConfirm("Restore from backup?") {
 			Info("Canceled")
@@ -418,6 +508,7 @@ func runRestore(_ *cobra.Command, args []string) error {
 
 	// Keep the current vault first, holding its lock through the swap so no
 	// other tvault writes to the old file in between.
+	var savedSnapshot string
 	if _, statErr := os.Stat(dst); statErr == nil {
 		v, oerr := openVaultForSnapshot()
 		if oerr != nil {
@@ -430,7 +521,7 @@ func runRestore(_ *cobra.Command, args []string) error {
 		}
 		var saved string
 		if strings.TrimSpace(cfg.Backup.Dir) != "" {
-			saved, _, err = rotatedSnapshot(v, resolveBackupSettings(cfg), "pre-restore")
+			saved, _, _, err = rotatedSnapshot(v, resolveBackupSettings(cfg), "pre-restore")
 		} else {
 			saved = dst + ".pre-restore-" + time.Now().Format("20060102-150405.000")
 			_, err = snapshotTo(v, saved)
@@ -438,7 +529,12 @@ func runRestore(_ *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("restore aborted: could not save the current vault first: %w", err)
 		}
-		Info("Current vault saved to %s", saved)
+		savedSnapshot = saved
+		// Info writes to stdout, which is the JSON document under --json;
+		// the same path is reported there as saved_snapshot.
+		if !jsonOutput {
+			Info("Current vault saved to %s", saved)
+		}
 		// Windows cannot rename over a file that is still open, so release the
 		// vault there first (a tiny window where another tvault could write to
 		// the old file, whose state is already saved). POSIX keeps the lock
@@ -452,6 +548,15 @@ func runRestore(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("restore failed: %w", err)
 	}
 	syncDir(dir)
+	if jsonOutput {
+		return writeJSON(restoreJSON{
+			Restored:      true,
+			Source:        src,
+			VaultDir:      dir,
+			SavedSnapshot: savedSnapshot,
+			RestoredAt:    time.Now().UTC().Format(time.RFC3339),
+		})
+	}
 	Success("Vault restored from %s", src)
 	return nil
 }

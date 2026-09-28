@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -87,9 +85,7 @@ func runSearch(_ *cobra.Command, _ []string) error {
 	}
 
 	if jsonOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(map[string]any{
+		return writeJSON(map[string]any{
 			"query":   q,
 			"count":   len(refs),
 			"results": refs,

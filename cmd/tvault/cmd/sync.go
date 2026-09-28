@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -71,9 +69,7 @@ func runSync(_ *cobra.Command, _ []string) error {
 	}
 
 	if jsonOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(result)
+		return writeJSON(result)
 	}
 
 	fmt.Printf("Direction: %s\n", result.Direction)

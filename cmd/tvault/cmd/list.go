@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -94,9 +93,7 @@ func runList(_ *cobra.Command, _ []string) error {
 	sort.Strings(keys)
 
 	if jsonOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(keys)
+		return writeJSON(keys)
 	}
 
 	if len(keys) == 0 {

@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -33,9 +31,7 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	v, err := vault.Open(dir)
 	if err != nil {
 		if jsonOutput {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(map[string]any{
+			return writeJSON(map[string]any{
 				"initialized": false,
 				"vault_dir":   dir,
 			})
@@ -70,9 +66,7 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	locked := !st.IsUnlocked && !canUseAgent
 
 	if jsonOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(map[string]any{
+		return writeJSON(map[string]any{
 			"initialized":      true,
 			"locked":           locked,
 			"agent_running":    agentRunning,
