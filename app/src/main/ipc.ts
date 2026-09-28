@@ -1,9 +1,13 @@
+import { readdirSync, statSync, type Dirent } from "node:fs";
+import { join, resolve as resolvePath } from "node:path";
+
 import { ipcMain } from "electron";
 
 import { IPC } from "@shared/ipc";
 import type {
   AuditEntry,
   BackupReport,
+  BackupSnapshot,
   Bootstrap,
   EnvDiffResult,
   EnvGroupDetail,
@@ -22,6 +26,7 @@ import type {
   SecretVersionMeta,
   SessionInfo,
   ShareResult,
+  RestoreReport,
   UnshareResult,
   VaultStatus
 } from "@shared/types";
@@ -29,12 +34,64 @@ import type {
 import { resolveBinary } from "./binary";
 import { runCliJson } from "./cli";
 import { writeSecretToClipboard } from "./clipboard";
+import { readBackupDir } from "./config";
 import { session } from "./mcp";
 import { vaultDir } from "./paths";
 import { readAgentStatus, readPolicy } from "./policy";
 import { setRevealActive } from "./protection";
 
 const ok = <T>(value: T): Result<T> => ({ ok: true, value });
+
+// Snapshot naming, mirroring cmd/tvault/cmd/backup.go: rotated snapshots are
+// vault-<timestamp>.db[.gz]; when backup.dir is unset the pre-restore safety
+// copy lands next to the database as vault.db.pre-restore-<timestamp>.
+const SNAPSHOT_RE = /^vault-.*\.db(\.gz)?$/;
+const PRE_RESTORE_RE = /^vault\.db\.pre-restore-.+$/;
+
+function backupDirs(): string[] {
+  const dirs = new Set<string>();
+  const configured = readBackupDir();
+  if (configured) dirs.add(configured);
+  dirs.add(vaultDir());
+  return [...dirs];
+}
+
+/**
+ * Scans the backup directory (and the vault directory, where snapshots fall
+ * when backup.dir is unset) for files matching the snapshot conventions.
+ * Filenames and sizes only — a snapshot is never opened, so nothing sensitive
+ * is read here.
+ */
+function listSnapshots(): BackupSnapshot[] {
+  const out: BackupSnapshot[] = [];
+  for (const dir of backupDirs()) {
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      if (!SNAPSHOT_RE.test(entry.name) && !PRE_RESTORE_RE.test(entry.name)) continue;
+      const path = join(dir, entry.name);
+      try {
+        const st = statSync(path);
+        out.push({
+          path,
+          name: entry.name,
+          dir,
+          bytes: st.size,
+          created_at: st.mtime.toISOString(),
+          compressed: entry.name.endsWith(".gz")
+        });
+      } catch {
+        continue;
+      }
+    }
+  }
+  return out.sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
 
 const fail = (err: unknown): Result<never> => ({
   ok: false,
@@ -323,6 +380,29 @@ export function registerIpc(): void {
       return res.value;
     }
   );
+
+  // --- snapshots and restore ---
+
+  handle(IPC.listBackups, async (): Promise<BackupSnapshot[]> => listSnapshots());
+
+  handle(IPC.restore, async (requested: string): Promise<RestoreReport> => {
+    // Restore replaces the vault database, so the path is not the renderer's to
+    // choose. The only acceptable values are the ones listSnapshots() returned:
+    // a regular file, in backup.dir or the vault directory, matching the
+    // snapshot naming convention. Anything else is refused outright.
+    const allowed = new Set(listSnapshots().map((s) => s.path));
+    const resolved = resolvePath(requested);
+    if (!allowed.has(resolved)) {
+      throw new Error(
+        "refusing to restore: the path is not a snapshot this app listed (backup.dir or the vault directory)"
+      );
+    }
+    const res = await runCliJson<RestoreReport>(["restore", resolved, "--yes", "--json"], {
+      timeoutMs: 300_000
+    });
+    if (!res.ok) throw new Error(res.error);
+    return res.value;
+  });
 
   handle(IPC.copySecret, async (value: string): Promise<{ clearsInMs: number }> => {
     if (typeof value !== "string" || value.length === 0) {

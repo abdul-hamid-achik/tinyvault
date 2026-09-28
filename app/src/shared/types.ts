@@ -246,6 +246,25 @@ export interface BackupReport {
   created_at: string;
 }
 
+// --- snapshots on disk, listed by main; the renderer never scans the fs ---
+export interface BackupSnapshot {
+  path: string;
+  name: string;
+  dir: string;
+  bytes: number;
+  created_at: string;
+  compressed: boolean;
+}
+
+// --- the --json shape of `tvault restore` ---
+export interface RestoreReport {
+  restored: boolean;
+  source: string;
+  vault_dir: string;
+  saved_snapshot?: string;
+  restored_at: string;
+}
+
 // --- the bridge surface exposed on window.tvault ---
 export interface TvaultApi {
   /**
@@ -306,6 +325,20 @@ export interface TvaultApi {
   // in the report.
   backup(): Promise<Result<BackupReport>>;
   doctor(): Promise<Result<{ healthy: boolean; failed: string[]; checks: unknown }>>;
+
+  /**
+   * Snapshots main found in `backup.dir` (or next to vault.db when unset).
+   * Restore accepts only one of these paths — see TvaultApi.restore.
+   */
+  listBackups(): Promise<Result<BackupSnapshot[]>>;
+
+  /**
+   * Replaces the vault database with a snapshot. Main re-validates the path
+   * against its own listing and the snapshot naming convention, so a
+   * compromised renderer cannot aim this at an arbitrary file. The CLI takes a
+   * pre-restore safety snapshot first and refuses if that fails.
+   */
+  restore(path: string): Promise<Result<RestoreReport>>;
 
   /**
    * Copies a value to the OS clipboard and schedules its own clearing. Handled in

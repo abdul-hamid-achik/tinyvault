@@ -8,6 +8,7 @@ import SecretsView, { type SecretActions } from "./components/SecretsView";
 import SharingView from "./components/SharingView";
 import SetupScreen from "./components/SetupScreen";
 import Sidebar, { type View } from "./components/Sidebar";
+import VaultView from "./components/VaultView";
 import { Button, ErrorBoundary, Field, Modal, TextInput, ToastProvider, useToast } from "./components/ui";
 import {
   applyTheme,
@@ -344,6 +345,8 @@ function Shell({
               onRefresh={() => void refresh()}
               focusToken={view === "secrets" ? filterToken : 0}
               newSecretToken={newSecretToken}
+              projectsEmpty={projects.length === 0}
+              onCreateProject={() => setNewProject(true)}
             />
           ) : view === "groups" ? (
             <EnvGroupsView readOnly={readOnly} onChanged={() => void refresh()} />
@@ -354,6 +357,8 @@ function Shell({
               defaultProject={selected}
               onChanged={() => void refresh()}
             />
+          ) : view === "vault" ? (
+            <VaultView readOnly={readOnly} onChanged={() => void refresh()} />
           ) : view === "audit" ? (
             <AuditView />
           ) : (

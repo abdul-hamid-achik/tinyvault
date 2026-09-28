@@ -5,12 +5,13 @@ import type { Bootstrap, ProjectOverview } from "@shared/types";
 import { Badge, Icon, IconButton, type IconName } from "./ui";
 import { Logo } from "./Logo";
 
-export type View = "secrets" | "groups" | "sharing" | "audit" | "setup";
+export type View = "secrets" | "groups" | "sharing" | "vault" | "audit" | "setup";
 
 const NAV: Array<{ id: View; label: string; icon: IconName }> = [
   { id: "secrets", label: "Secrets", icon: "key" },
   { id: "groups", label: "Environments", icon: "layers" },
   { id: "sharing", label: "Sharing", icon: "branch" },
+  { id: "vault", label: "Vault", icon: "lock" },
   { id: "audit", label: "Audit log", icon: "history" },
   { id: "setup", label: "Connection", icon: "shield" }
 ];

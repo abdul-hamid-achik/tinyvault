@@ -47,6 +47,8 @@ const api: TvaultApi = {
 
   backup: () => ipcRenderer.invoke(IPC.backup),
   doctor: () => ipcRenderer.invoke(IPC.doctor),
+  listBackups: () => ipcRenderer.invoke(IPC.listBackups),
+  restore: (path) => ipcRenderer.invoke(IPC.restore, path),
 
   copySecret: (value) => ipcRenderer.invoke(IPC.copySecret, value),
 

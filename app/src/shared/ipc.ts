@@ -37,6 +37,8 @@ export const IPC = {
 
   backup: "tvault:backup",
   doctor: "tvault:doctor",
+  listBackups: "tvault:list-backups",
+  restore: "tvault:restore",
 
   copySecret: "tvault:copy-secret",
 

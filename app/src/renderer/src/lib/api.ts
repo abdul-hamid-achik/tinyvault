@@ -88,6 +88,40 @@ export function writeLastProject(name: string): void {
   }
 }
 
+// --- secrets table sort ---------------------------------------------------
+
+export type SortColumn = "key" | "version" | "updated";
+
+export interface SortState {
+  column: SortColumn;
+  dir: "asc" | "desc";
+}
+
+const SORT_KEY = "tv-secret-sort";
+const DEFAULT_SORT: SortState = { column: "key", dir: "asc" };
+
+/** Persisted so the table opens the way the user left it, not alphabetically. */
+export function readSort(): SortState {
+  try {
+    const raw = localStorage.getItem(SORT_KEY);
+    if (!raw) return DEFAULT_SORT;
+    const parsed = JSON.parse(raw) as Partial<SortState>;
+    const columnOk = parsed.column === "key" || parsed.column === "version" || parsed.column === "updated";
+    const dirOk = parsed.dir === "asc" || parsed.dir === "desc";
+    return columnOk && dirOk ? { column: parsed.column as SortColumn, dir: parsed.dir as "asc" | "desc" } : DEFAULT_SORT;
+  } catch {
+    return DEFAULT_SORT;
+  }
+}
+
+export function writeSort(sort: SortState): void {
+  try {
+    localStorage.setItem(SORT_KEY, JSON.stringify(sort));
+  } catch {
+    // Non-fatal: the sort simply resets next launch.
+  }
+}
+
 /**
  * True when the app was launched with `TVAULT_DESKTOP_DEBUG=1`; main forwards the
  * renderer console to stdout in that mode.

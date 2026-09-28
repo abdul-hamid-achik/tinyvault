@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { REVEAL_AUTOHIDE_MS } from "@shared/ipc";
 import type { ProjectOverview, RollbackResult, SecretMeta, SecretVersionMeta } from "@shared/types";
 
-import { fullTime, maskValue, relTime } from "../lib/api";
+import { fullTime, maskValue, readSort, relTime, writeSort, type SortColumn, type SortState } from "../lib/api";
 import {
   Badge,
   Button,
@@ -170,7 +170,9 @@ export default function SecretsView({
   actions,
   onRefresh,
   focusToken,
-  newSecretToken
+  newSecretToken,
+  projectsEmpty,
+  onCreateProject
 }: {
   project: ProjectOverview | null;
   secrets: SecretMeta[];
@@ -183,6 +185,9 @@ export default function SecretsView({
   focusToken: number;
   /** Incremented by Cmd+N to open the new-secret editor. */
   newSecretToken: number;
+  /** True when the vault itself has no projects, so this is a first run. */
+  projectsEmpty: boolean;
+  onCreateProject: () => void;
 }): React.JSX.Element {
   const toast = useToast();
   const [filter, setFilter] = useState("");
@@ -212,11 +217,36 @@ export default function SecretsView({
     []
   );
 
+  const [sort, setSort] = useState<SortState>(readSort);
+  useEffect(() => {
+    writeSort(sort);
+  }, [sort]);
+
+  const toggleSort = (column: SortColumn): void => {
+    setSort((prev) =>
+      prev.column === column
+        ? { column, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { column, dir: "asc" }
+    );
+  };
+
   const rows = useMemo(() => {
     const q = filter.trim().toLowerCase();
     const list = q ? secrets.filter((s) => s.key.toLowerCase().includes(q)) : secrets;
-    return [...list].sort((a, b) => a.key.localeCompare(b.key));
-  }, [secrets, filter]);
+    const mul = sort.dir === "asc" ? 1 : -1;
+    return [...list].sort((a, b) => {
+      switch (sort.column) {
+        case "version":
+          return (a.version - b.version) * mul || a.key.localeCompare(b.key);
+        case "updated": {
+          const delta = (Date.parse(a.updated_at) || 0) - (Date.parse(b.updated_at) || 0);
+          return delta * mul || a.key.localeCompare(b.key);
+        }
+        default:
+          return a.key.localeCompare(b.key) * mul;
+      }
+    });
+  }, [secrets, filter, sort]);
 
   // vault_projects_overview counts secrets before policy filtering, while
   // vault_list_secrets_detailed filters through secrets_deny. A gap between the
@@ -237,6 +267,45 @@ export default function SecretsView({
   }, [newSecretToken]);
 
   if (!project) {
+    if (projectsEmpty) {
+      return (
+        <div className="flex h-full flex-col items-center justify-center gap-5 px-10 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-tv-md border border-accent-line bg-accent-soft text-accent">
+            <Icon name="lock" size={24} />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-[17px] font-semibold tracking-[-0.01em] text-ink">
+              This vault is empty
+            </h2>
+            <p className="mx-auto max-w-md text-[13px] leading-relaxed text-muted">
+              A project is a namespace with its own encryption key, so compromising one never
+              exposes the others. Create the first one here, or bring an existing{" "}
+              <span className="mono text-ink">.env</span> across from the terminal.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {!readOnly ? (
+              <Button variant="primary" icon="plus" onClick={onCreateProject}>
+                Create your first project
+              </Button>
+            ) : null}
+            <Button
+              variant="default"
+              icon="copy"
+              onClick={() => {
+                // A command, not a secret: plain clipboard is fine.
+                navigator.clipboard
+                  .writeText("tvault import .env")
+                  .then(() => toast.success("Import command copied"))
+                  .catch(() => toast.error("Copy failed"));
+              }}
+            >
+              Copy “tvault import .env”
+            </Button>
+          </div>
+        </div>
+      );
+    }
     return (
       <EmptyState
         icon="folder"
@@ -365,15 +434,9 @@ export default function SecretsView({
                 (tooltips, modals) that sit far above it in z. */}
             <thead className="sticky top-0 bg-paper">
               <tr className="border-b border-line text-left">
-                <th className="px-6 py-2 text-[11px] font-semibold uppercase tracking-[0.07em] text-faint">
-                  Key
-                </th>
-                <th className="w-16 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.07em] text-faint">
-                  Ver
-                </th>
-                <th className="w-28 px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.07em] text-faint">
-                  Updated
-                </th>
+                <SortHeader label="Key" column="key" sort={sort} onSort={toggleSort} className="pl-6 pr-2" />
+                <SortHeader label="Ver" column="version" sort={sort} onSort={toggleSort} className="w-16 px-2" />
+                <SortHeader label="Updated" column="updated" sort={sort} onSort={toggleSort} className="w-28 px-2" />
                 <th className="w-[38%] px-2 py-2 text-[11px] font-semibold uppercase tracking-[0.07em] text-faint">
                   Value
                 </th>
@@ -537,6 +600,47 @@ export default function SecretsView({
         }}
       />
     </div>
+  );
+}
+
+function SortHeader({
+  label,
+  column,
+  sort,
+  onSort,
+  className = ""
+}: {
+  label: string;
+  column: SortColumn;
+  sort: SortState;
+  onSort: (c: SortColumn) => void;
+  className?: string;
+}): React.JSX.Element {
+  const active = sort.column === column;
+  return (
+    <th className={`py-2 ${className}`}>
+      <button
+        onClick={() => onSort(column)}
+        className={`group/sort flex items-center gap-1 text-[11px] font-semibold uppercase
+          tracking-[0.07em] transition-colors duration-100 ${
+            active ? "text-accent" : "text-faint hover:text-ink"
+          }`}
+        title={
+          active
+            ? `Sorted ${sort.dir === "asc" ? "ascending" : "descending"} — click to flip`
+            : `Sort by ${label.toLowerCase()}`
+        }
+      >
+        {label}
+        <span
+          className={`transition-opacity duration-100 ${
+            active ? "opacity-100" : "opacity-0 group-hover/sort:opacity-60"
+          }`}
+        >
+          <Icon name="chevron" size={11} className={active && sort.dir === "asc" ? "rotate-180" : ""} />
+        </span>
+      </button>
+    </th>
   );
 }
 
