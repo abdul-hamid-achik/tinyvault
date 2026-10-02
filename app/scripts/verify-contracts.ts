@@ -12,7 +12,7 @@
  * renders `undefined`.
  */
 import { execFileSync } from "node:child_process";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -49,6 +49,11 @@ function assertObject(name: string, value: unknown): Record<string, unknown> {
   const isObj = typeof value === "object" && value !== null && !Array.isArray(value);
   check(`${name} is an object`, isObj, value);
   return isObj ? (value as Record<string, unknown>) : {};
+}
+
+/** Permission bits as an octal string, for the 0600 claims this app makes. */
+function perm(path: string): string {
+  return (statSync(path).mode & 0o777).toString(8);
 }
 
 function textOf(res: RawResult): string {
@@ -89,7 +94,34 @@ async function main(): Promise<void> {
   const dir = mkdtempSync(join(tmpdir(), "tvault-contract-"));
   scratchDir = dir;
   chmodSync(dir, 0o700);
-  const env = { ...process.env, TVAULT_DIR: dir, TVAULT_PASSPHRASE: PASSPHRASE };
+
+  // Hermetic on purpose. These knobs come from the developer's shell (or CI's)
+  // and would otherwise change what this test proves:
+  //   TVAULT_IDENTITY_KEY  — `open_sealed` falls back to it when no identity file
+  //                          matches, so a key in the environment would make the
+  //                          "unknown identity is refused" case succeed instead.
+  //   TVAULT_PASSPHRASE_FILE / _COMMAND — shadow the passphrase set below.
+  //   TVAULT_CONFIG        — a personal config.yaml (backup.dir, agent.*) leaks in.
+  //   TVAULT_AGENT_TOKEN   — belongs to some other agent, not this test.
+  // TVAULT_NO_AGENT is set (not stripped) so a `tvault agent` running on the
+  // machine cannot change which backend answers: this test exercises the
+  // passphrase/KEK path, deterministically.
+  const stripped = new Set([
+    "TVAULT_IDENTITY",
+    "TVAULT_IDENTITY_KEY",
+    "TVAULT_PASSPHRASE_FILE",
+    "TVAULT_PASSPHRASE_COMMAND",
+    "TVAULT_CONFIG",
+    "TVAULT_AGENT_TOKEN"
+  ]);
+  const env: Record<string, string> = {
+    TVAULT_DIR: dir,
+    TVAULT_PASSPHRASE: PASSPHRASE,
+    TVAULT_NO_AGENT: "1"
+  };
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined && !stripped.has(key) && !(key in env)) env[key] = value;
+  }
 
   console.log(`scratch vault: ${dir}\n`);
 
@@ -144,11 +176,34 @@ async function main(): Promise<void> {
     "vault_secret_history",
     "vault_rollback_secret",
     "vault_audit_log",
+    "vault_audit_log_since",
     "vault_env_group_create",
     "vault_env_group_list",
+    "vault_env_group_show",
+    "vault_env_group_add",
+    "vault_env_group_remove",
+    "vault_env_group_delete",
     "vault_env_diff",
     "vault_env_promote",
-    "vault_env_inherited"
+    "vault_env_inherit",
+    "vault_env_inherited",
+    "vault_env_pin",
+    "vault_env_unpin",
+    "vault_env_seal",
+    "vault_identity_new",
+    "vault_identity_list",
+    "vault_project_recipients",
+    "vault_share_project",
+    "vault_unshare_project",
+    "vault_seal_for_recipients",
+    "vault_open_sealed",
+    "vault_export_env_encrypted",
+    "vault_list_env_files",
+    "vault_preview_env_import",
+    "vault_import_env_files",
+    "vault_diff_env",
+    "vault_sync_env",
+    "vault_export_env"
   ];
   for (const t of required) check(`tool present: ${t}`, names.has(t));
   console.log(`  (${tools.length} tools total)\n`);
@@ -312,6 +367,38 @@ async function main(): Promise<void> {
   const leaked = audit.entries.some((e) => JSON.stringify(e).includes(setValue));
   check("no secret value appears anywhere in the audit log", !leaked);
 
+  // The relational query the Audit screen's filters run on.
+  const since = new Date(Date.now() - 60_000).toISOString();
+  const ranged = await call<{ entries: Array<Record<string, unknown>> }>("vault_audit_log_since", {
+    since,
+    limit: 50
+  });
+  check("audit_log_since → {entries}", Array.isArray(ranged.entries), Object.keys(ranged));
+  check("audit_log_since returns the activity just generated", ranged.entries.length > 0, {
+    n: ranged.entries.length
+  });
+  check(
+    "audit_log_since honours `since`",
+    ranged.entries.every((e) => Date.parse(String(e.timestamp)) >= Date.parse(since) - 1000),
+    ranged.entries.slice(0, 2)
+  );
+  // Derive the action from the log itself rather than hardcoding a string the Go
+  // side is free to rename.
+  const someAction = String(entry.action ?? "");
+  const byAction = await call<{ entries: Array<Record<string, unknown>> }>("vault_audit_log_since", {
+    action: someAction,
+    limit: 50
+  });
+  check(
+    `audit_log_since filters by action (${someAction})`,
+    byAction.entries.length > 0 && byAction.entries.every((e) => e.action === someAction),
+    byAction.entries.slice(0, 3)
+  );
+  check(
+    "audit_log_since never carries a value",
+    !JSON.stringify(ranged).includes(setValue) && !JSON.stringify(byAction).includes(setValue)
+  );
+
   console.log("\nenv groups:");
   await call("vault_env_group_create", {
     name: "contract",
@@ -362,6 +449,393 @@ async function main(): Promise<void> {
     env: "preview"
   });
   check("env_inherited → {keys:[...]}", Array.isArray(inherited.keys), inherited);
+
+  console.log("\nenv group management (the Environments screen's write path):");
+  const shown = await call<Record<string, unknown>>("vault_env_group_show", { name: "contract" });
+  check(
+    "group_show → {name, environments, diff_status}",
+    shown.name === "contract" &&
+      Array.isArray(shown.environments) &&
+      typeof shown.diff_status === "string",
+    Object.keys(shown)
+  );
+  check(
+    "group_show.diff_status is ok|drift|unknown",
+    ["ok", "drift", "unknown"].includes(String(shown.diff_status)),
+    shown.diff_status
+  );
+  check("group_show carries no value", !JSON.stringify(shown).includes(setValue));
+
+  // These two tools take `env_name`, not `env` — unlike every other env-group
+  // tool. Pinned here because the reference docs once said `env`, which makes an
+  // agent send a call with a missing required argument.
+  const wrongField = await callFails("vault_env_group_add", {
+    group: "contract",
+    env: "staging",
+    project: "contract-app"
+  });
+  check(
+    "group_add rejects `env` — the field is env_name",
+    wrongField.length > 0,
+    wrongField.slice(0, 160)
+  );
+
+  await call("vault_create_project", { name: "contract-staging", description: "staging" });
+  const added = await call<{ environments: Array<Record<string, unknown>> }>("vault_env_group_add", {
+    group: "contract",
+    env_name: "staging",
+    project: "contract-staging"
+  });
+  check(
+    "group_add returns the updated group with the new environment",
+    Array.isArray(added.environments) && added.environments.length === 3,
+    added.environments
+  );
+
+  const removed = await call<{ environments: Array<Record<string, unknown>> }>(
+    "vault_env_group_remove",
+    { group: "contract", env_name: "staging" }
+  );
+  check(
+    "group_remove detaches the environment",
+    Array.isArray(removed.environments) && removed.environments.length === 2,
+    removed.environments
+  );
+  const afterRemove = await call<{ projects: Array<{ name: string }> }>("vault_projects_overview");
+  check(
+    "group_remove does NOT delete the underlying project",
+    afterRemove.projects.some((p) => p.name === "contract-staging"),
+    afterRemove.projects.map((p) => p.name)
+  );
+
+  console.log("\ninheritance (pin / unpin move a value and never report it):");
+  const inherit = await call<{ group: string; env: string; inherits_from: string }>(
+    "vault_env_inherit",
+    { group: "contract", env: "preview", from: "production" }
+  );
+  check(
+    "env_inherit → {group, env, inherits_from}",
+    inherit.env === "preview" && inherit.inherits_from === "production",
+    inherit
+  );
+  const shownInheriting = await call<{ inheritance?: Record<string, string> }>("vault_env_group_show", {
+    name: "contract"
+  });
+  check(
+    "group_show reports the inheritance pointer",
+    shownInheriting.inheritance?.preview === "production",
+    shownInheriting.inheritance
+  );
+
+  const beforePin = await call<{ keys: Array<Record<string, unknown>> }>("vault_env_inherited", {
+    group: "contract",
+    env: "preview"
+  });
+  check(
+    "the child resolves DATABASE_URL from the base",
+    beforePin.keys.some((k) => k.key === "DATABASE_URL" && k.source === "inherited:production"),
+    beforePin.keys
+  );
+
+  const pinOut = await call<Record<string, unknown>>("vault_env_pin", {
+    group: "contract",
+    env: "preview",
+    key: "DATABASE_URL"
+  });
+  check("env_pin returns an empty object — no value", Object.keys(pinOut).length === 0, pinOut);
+  const afterPin = await call<{ keys: Array<Record<string, unknown>> }>("vault_env_inherited", {
+    group: "contract",
+    env: "preview"
+  });
+  const pinnedKey = afterPin.keys.find((k) => k.key === "DATABASE_URL") ?? {};
+  check(
+    "pin makes the key local and pinned",
+    pinnedKey.pinned === true && pinnedKey.source === "local",
+    pinnedKey
+  );
+  check("env_inherited still reports no value", !JSON.stringify(afterPin).includes(setValue));
+
+  const unpinOut = await call<Record<string, unknown>>("vault_env_unpin", {
+    group: "contract",
+    env: "preview",
+    key: "DATABASE_URL"
+  });
+  check("env_unpin returns an empty object — no value", Object.keys(unpinOut).length === 0, unpinOut);
+  const afterUnpin = await call<{ keys: Array<Record<string, unknown>> }>("vault_env_inherited", {
+    group: "contract",
+    env: "preview"
+  });
+  const unpinnedKey = afterUnpin.keys.find((k) => k.key === "DATABASE_URL") ?? {};
+  check(
+    "unpin restores inheritance",
+    unpinnedKey.pinned === false && unpinnedKey.source === "inherited:production",
+    unpinnedKey
+  );
+
+  console.log("\nsealing — ciphertext out, plaintext never:");
+  const ident = await call<{ name: string; recipient: string; path: string }>("vault_identity_new", {
+    name: "contract-ci"
+  });
+  check(
+    "identity_new → {name, recipient, path}",
+    ident.name === "contract-ci" && ident.recipient.startsWith("tvault1"),
+    Object.keys(ident)
+  );
+  check(
+    "identity_new never returns the private key",
+    !JSON.stringify(ident).includes("tvault-key1"),
+    Object.keys(ident)
+  );
+
+  const shared = await call<{ project: string; recipient: string; shared: boolean }>(
+    "vault_share_project",
+    { project: "contract-app", recipient: ident.recipient }
+  );
+  check("share_project → {project, recipient, shared:true}", shared.shared === true, shared);
+
+  const sealPath = join(dir, "sealed.env.encrypted");
+  const sealed = await call<Record<string, unknown>>("vault_seal_for_recipients", {
+    project: "contract-app",
+    recipients: [ident.recipient],
+    output_path: sealPath
+  });
+  for (const field of ["path", "bytes", "count", "keys", "recipient_count"]) {
+    check(`seal_for_recipients has ${field}`, field in sealed, Object.keys(sealed));
+  }
+  check("seal wrote to the requested path", sealed.path === sealPath, sealed.path);
+  check(
+    "seal omits the blob when given a path (so it never lands in renderer memory)",
+    sealed.sealed_base64 === undefined || sealed.sealed_base64 === "",
+    typeof sealed.sealed_base64
+  );
+  check("seal response carries no plaintext", !JSON.stringify(sealed).includes(setValue));
+  check("the sealed file is 0600", perm(sealPath) === "600", perm(sealPath));
+  check(
+    "the sealed file does not contain the plaintext value",
+    !readFileSync(sealPath, "utf8").includes(setValue)
+  );
+
+  const openedPath = join(dir, "opened.env");
+  const opened = await call<{ path: string; count: number; keys: string[] }>("vault_open_sealed", {
+    path: sealPath,
+    identity: "contract-ci",
+    output_path: openedPath
+  });
+  check(
+    "open_sealed → {path, count, keys}",
+    opened.path === openedPath && typeof opened.count === "number" && Array.isArray(opened.keys),
+    Object.keys(opened)
+  );
+  check("open_sealed returns no value", !JSON.stringify(opened).includes(setValue), Object.keys(opened));
+  check("the opened dotenv is 0600", perm(openedPath) === "600", perm(openedPath));
+  check(
+    "the opened dotenv holds the plaintext on disk (why the UI warns before opening)",
+    readFileSync(openedPath, "utf8").includes(setValue)
+  );
+  const wrongIdentity = await callFails("vault_open_sealed", {
+    path: sealPath,
+    identity: "not-an-identity-here",
+    output_path: join(dir, "should-not-exist.env")
+  });
+  check("open_sealed refuses an unknown identity", wrongIdentity.length > 0, wrongIdentity.slice(0, 160));
+
+  const envSealPath = join(dir, "group.env.encrypted");
+  const envSealed = await call<Record<string, unknown>>("vault_env_seal", {
+    group: "contract",
+    recipients: [ident.recipient],
+    output_path: envSealPath
+  });
+  for (const field of ["path", "bytes", "environments", "keys", "recipient_count"]) {
+    check(`env_seal has ${field}`, field in envSealed, Object.keys(envSealed));
+  }
+  check("env_seal wrote to the requested path", envSealed.path === envSealPath, envSealed.path);
+  check("env_seal response carries no plaintext", !JSON.stringify(envSealed).includes(setValue));
+  check(
+    "env_seal names the environments it sealed",
+    Array.isArray(envSealed.environments) && (envSealed.environments as string[]).length >= 1,
+    envSealed.environments
+  );
+
+  const encPath = join(dir, "export.env.encrypted");
+  const encrypted = await call<Record<string, unknown>>("vault_export_env_encrypted", {
+    project: "contract-app",
+    output_path: encPath
+  });
+  for (const field of ["path", "bytes", "count", "keys", "recipient_count"]) {
+    check(`export_env_encrypted has ${field}`, field in encrypted, Object.keys(encrypted));
+  }
+  check("export_env_encrypted response carries no plaintext", !JSON.stringify(encrypted).includes(setValue));
+  check(
+    "export_env_encrypted seals to the project's recipients",
+    Number(encrypted.recipient_count) >= 1,
+    encrypted.recipient_count
+  );
+
+  console.log("\ndotenv workflows — key names and verdicts, never values:");
+  const projDir = join(dir, "project");
+  mkdirSync(projDir, { mode: 0o700 });
+  writeFileSync(join(projDir, ".env"), `DATABASE_URL=${setValue}\nNEW_KEY=from-file\n`, {
+    mode: 0o600
+  });
+
+  const listed = await call<Record<string, unknown>>("vault_list_env_files", { directory: projDir });
+  check(
+    "list_env_files → {directory, files, suggested_files}",
+    listed.directory === projDir && Array.isArray(listed.files) && Array.isArray(listed.suggested_files),
+    Object.keys(listed)
+  );
+  const listedFile = (listed.files as Array<Record<string, unknown>>)[0] ?? {};
+  for (const field of ["path", "key_count", "diagnostic_count"]) {
+    check(`list_env_files.files[] has ${field}`, field in listedFile, listedFile);
+  }
+  check("list_env_files returns no value", !JSON.stringify(listed).includes(setValue));
+
+  const preview = await call<Record<string, unknown>>("vault_preview_env_import", {
+    project: "contract-app",
+    directory: projDir
+  });
+  for (const field of [
+    "project",
+    "files",
+    "keys",
+    "create_count",
+    "overwrite_count",
+    "skip_count",
+    "blocked_count",
+    "blocked_keys",
+    "diagnostic_count",
+    "diagnostics"
+  ]) {
+    check(`preview_env_import has ${field}`, field in preview, Object.keys(preview));
+  }
+  const previewKey = (preview.keys as Array<Record<string, unknown>>)[0] ?? {};
+  for (const field of ["action", "key", "source_path"]) {
+    check(`preview_env_import.keys[] has ${field}`, field in previewKey, previewKey);
+  }
+  check(
+    "preview reports NEW_KEY as a create",
+    (preview.keys as Array<Record<string, unknown>>).some(
+      (k) => k.key === "NEW_KEY" && k.action === "create"
+    ),
+    preview.keys
+  );
+  check("preview carries no plaintext", !JSON.stringify(preview).includes(setValue));
+
+  const imported = await call<Record<string, unknown>>("vault_import_env_files", {
+    project: "contract-app",
+    directory: projDir
+  });
+  for (const field of [
+    "project",
+    "files",
+    "imported_keys",
+    "skipped_keys",
+    "create_count",
+    "overwrite_count",
+    "skip_count",
+    "blocked_count",
+    "blocked_keys",
+    "diagnostics"
+  ]) {
+    check(`import_env_files has ${field}`, field in imported, Object.keys(imported));
+  }
+  check(
+    "import created NEW_KEY",
+    (imported.imported_keys as string[]).includes("NEW_KEY"),
+    imported.imported_keys
+  );
+  check(
+    "import skipped the key that already exists",
+    (imported.skipped_keys as string[]).includes("DATABASE_URL"),
+    imported.skipped_keys
+  );
+  check("import response carries no plaintext", !JSON.stringify(imported).includes(setValue));
+
+  const fileDiff = await call<Record<string, unknown>>("vault_diff_env", {
+    file: join(projDir, ".env"),
+    project: "contract-app",
+    compare_values: true
+  });
+  for (const field of [
+    "project",
+    "file",
+    "only_in_vault",
+    "only_in_file",
+    "in_both",
+    "in_sync"
+  ]) {
+    check(`diff_env has ${field}`, field in fileDiff, Object.keys(fileDiff));
+  }
+  check(
+    "diff_env value verdicts are same|differs|error only",
+    Object.values((fileDiff.value_diffs ?? {}) as Record<string, string>).every((v) =>
+      ["same", "differs", "error"].includes(v)
+    ),
+    fileDiff.value_diffs
+  );
+  check("diff_env carries no plaintext", !JSON.stringify(fileDiff).includes(setValue));
+
+  const synced = await call<Record<string, unknown>>("vault_sync_env", {
+    direction: "pull",
+    path: join(projDir, ".env"),
+    project: "contract-app"
+  });
+  for (const field of [
+    "direction",
+    "project",
+    "path",
+    "env_created",
+    "vault_entries",
+    "env_entries",
+    "created",
+    "updated",
+    "skipped",
+    "unchanged",
+    "conflicts"
+  ]) {
+    check(`sync_env has ${field}`, field in synced, Object.keys(synced));
+  }
+  check(
+    "sync_env reports key names, not values",
+    (synced.conflicts as Array<Record<string, unknown>>).every(
+      (c) => !("value" in c) && !("vault_value" in c) && !("env_value" in c)
+    ),
+    synced.conflicts
+  );
+  check("sync_env response carries no plaintext", !JSON.stringify(synced).includes(setValue));
+
+  const exportPath = join(dir, "exported.env");
+  const exported = await call<{ path: string; count: number; keys: string[] }>("vault_export_env", {
+    project: "contract-app",
+    output_path: exportPath
+  });
+  check(
+    "export_env → {path, count, keys}",
+    exported.path === exportPath && typeof exported.count === "number" && Array.isArray(exported.keys),
+    Object.keys(exported)
+  );
+  check("export_env response carries no plaintext", !JSON.stringify(exported).includes(setValue));
+  check("the exported dotenv is 0600", perm(exportPath) === "600", perm(exportPath));
+  check(
+    "the exported dotenv holds plaintext on disk (why the UI confirms before exporting)",
+    readFileSync(exportPath, "utf8").includes(setValue)
+  );
+
+  console.log("\nenv group delete (metadata only):");
+  const deletedGroup = await call<Record<string, unknown>>("vault_env_group_delete", {
+    name: "contract"
+  });
+  check("group_delete returns an empty object", Object.keys(deletedGroup).length === 0, deletedGroup);
+  const groupsAfter = await call<{ groups: unknown[] }>("vault_env_group_list");
+  check("the group is gone", groupsAfter.groups.length === 0, groupsAfter.groups);
+  const projectsAfter = await call<{ projects: Array<{ name: string }> }>("vault_projects_overview");
+  check(
+    "group_delete left every project intact",
+    ["contract-app", "contract-preview", "contract-staging"].every((name) =>
+      projectsAfter.projects.some((p) => p.name === name)
+    ),
+    projectsAfter.projects.map((p) => p.name)
+  );
 
   console.log("\ndestructive ops:");
   const deleted = await call<{ key: string; deleted: boolean }>("vault_delete_secret", {

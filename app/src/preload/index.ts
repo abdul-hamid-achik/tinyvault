@@ -32,11 +32,22 @@ const api: TvaultApi = {
   searchSecrets: (req) => ipcRenderer.invoke(IPC.searchSecrets, req),
 
   auditLog: (limit) => ipcRenderer.invoke(IPC.auditLog, limit),
+  auditLogSince: (req) => ipcRenderer.invoke(IPC.auditLogSince, req),
 
   envGroups: () => ipcRenderer.invoke(IPC.envGroups),
+  envGroupCreate: (req) => ipcRenderer.invoke(IPC.envGroupCreate, req),
   envDiff: (group, values) => ipcRenderer.invoke(IPC.envDiff, group, values),
   envPromote: (req) => ipcRenderer.invoke(IPC.envPromote, req),
   envInherited: (group, env) => ipcRenderer.invoke(IPC.envInherited, group, env),
+  envGroupShow: (name) => ipcRenderer.invoke(IPC.envGroupShow, name),
+  envGroupAdd: (group, envName, project) =>
+    ipcRenderer.invoke(IPC.envGroupAdd, group, envName, project),
+  envGroupRemove: (group, envName) => ipcRenderer.invoke(IPC.envGroupRemove, group, envName),
+  envGroupDelete: (name) => ipcRenderer.invoke(IPC.envGroupDelete, name),
+  envInherit: (group, env, from) => ipcRenderer.invoke(IPC.envInherit, group, env, from),
+  envPin: (group, env, key) => ipcRenderer.invoke(IPC.envPin, group, env, key),
+  envUnpin: (group, env, key) => ipcRenderer.invoke(IPC.envUnpin, group, env, key),
+  envSeal: (req) => ipcRenderer.invoke(IPC.envSeal, req),
 
   identities: () => ipcRenderer.invoke(IPC.identities),
   newIdentity: (name) => ipcRenderer.invoke(IPC.newIdentity, name),
@@ -44,6 +55,21 @@ const api: TvaultApi = {
   shareProject: (project, recipient) => ipcRenderer.invoke(IPC.shareProject, project, recipient),
   unshareProject: (project, recipient) =>
     ipcRenderer.invoke(IPC.unshareProject, project, recipient),
+  sealForRecipients: (req) => ipcRenderer.invoke(IPC.sealForRecipients, req),
+  openSealed: (req) => ipcRenderer.invoke(IPC.openSealed, req),
+
+  pickDirectory: (title) => ipcRenderer.invoke(IPC.pickDirectory, title),
+  pickSaveFile: (title, defaultName) => ipcRenderer.invoke(IPC.pickSaveFile, title, defaultName),
+  pickEnvFile: (title) => ipcRenderer.invoke(IPC.pickEnvFile, title),
+  listEnvFiles: (directory, environment) =>
+    ipcRenderer.invoke(IPC.listEnvFiles, directory, environment),
+  previewEnvImport: (req) => ipcRenderer.invoke(IPC.previewEnvImport, req),
+  importEnvFiles: (req) => ipcRenderer.invoke(IPC.importEnvFiles, req),
+  diffEnv: (file, project, compareValues) =>
+    ipcRenderer.invoke(IPC.diffEnv, file, project, compareValues),
+  syncEnv: (req) => ipcRenderer.invoke(IPC.syncEnv, req),
+  exportEnv: (req) => ipcRenderer.invoke(IPC.exportEnv, req),
+  exportEnvEncrypted: (req) => ipcRenderer.invoke(IPC.exportEnvEncrypted, req),
 
   backup: () => ipcRenderer.invoke(IPC.backup),
   doctor: () => ipcRenderer.invoke(IPC.doctor),

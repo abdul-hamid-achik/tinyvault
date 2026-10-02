@@ -149,6 +149,252 @@ export interface SearchRequest {
   limit?: number;
 }
 
+// --- vault_audit_log_since → auditLogSinceInput / store.AuditEntry ---
+export interface AuditSinceRequest {
+  /** RFC3339. Entries at or after this instant. */
+  since?: string;
+  /** RFC3339. Entries at or before this instant. */
+  until?: string;
+  /** Exact action, e.g. `secret.read`. */
+  action?: string;
+  /** Exact resource type, e.g. `secret`. */
+  resource_type?: string;
+  /** Default 100, max 1000. */
+  limit?: number;
+}
+
+// --- vault_env_group_create → envGroupCreateInput ---
+export interface EnvGroupCreateRequest {
+  name: string;
+  description?: string;
+  /** At least one environment → existing project link. Creates no project. */
+  environments: Array<{ name: string; project: string }>;
+  /** Overwrite an existing group, or re-link a project already in another group. */
+  force?: boolean;
+}
+
+// --- vault_env_group_show → envGroupShowOutput ---
+export interface EnvGroupFull {
+  name: string;
+  description?: string;
+  environments: EnvGroupEntry[];
+  /** `ok` | `drift` | `unknown` — unknown when the group could not be compared. */
+  diff_status: string;
+  /** Child environment → base environment, for environments that inherit. */
+  inheritance?: Record<string, string>;
+}
+
+// --- vault_env_inherit → envInheritOutput ---
+export interface InheritResult {
+  group: string;
+  env: string;
+  inherits_from: string;
+}
+
+// --- sealing: vault_seal_for_recipients / vault_export_env_encrypted ---
+//
+// Ciphertext only, by construction. The app always supplies an output path, so
+// `sealed_base64` stays empty and no blob is ever held in renderer memory.
+export interface SealResult {
+  path?: string;
+  sealed_base64?: string;
+  bytes: number;
+  count: number;
+  keys: string[];
+  recipient_count: number;
+}
+
+/** vault_export_env_encrypted returns the same shape. */
+export type ExportEncryptedResult = SealResult;
+
+// --- vault_env_seal → envSealOutput (environments instead of a key count) ---
+export interface EnvSealResult {
+  path?: string;
+  sealed_base64?: string;
+  bytes: number;
+  environments: string[];
+  keys: string[];
+  recipient_count: number;
+}
+
+// --- vault_open_sealed → openSealedOutput ---
+// The decrypted dotenv is written to disk at 0600; only its path and key names
+// come back. Plaintext never crosses the bridge.
+export interface OpenSealedResult {
+  path: string;
+  count: number;
+  keys: string[];
+}
+
+export interface SealRequest {
+  project?: string;
+  recipients: string[];
+  keys?: string[];
+  /** Must be a path main issued through a save dialog. */
+  outputPath: string;
+}
+
+export interface EnvSealRequest {
+  group: string;
+  recipients: string[];
+  keys?: string[];
+  envs?: string[];
+  /** Must be a path main issued through a save dialog. */
+  outputPath: string;
+}
+
+export interface OpenSealedRequest {
+  /** A v2 `.env.encrypted` blob, chosen through a file dialog. */
+  path: string;
+  /** Identity name; defaults to $TVAULT_IDENTITY, else `default`. */
+  identity?: string;
+  /** Where to write the 0600 dotenv; must be dialog-issued. */
+  outputPath: string;
+}
+
+// --- dotenv discovery: vault_list_env_files → listEnvFilesOutput ---
+export interface EnvFileInfo {
+  diagnostic_count: number;
+  key_count: number;
+  path: string;
+  suggested?: boolean;
+}
+
+export interface EnvFileList {
+  directory: string;
+  environment?: string;
+  files: EnvFileInfo[];
+  suggested_files: string[];
+}
+
+// --- dotenv import: vault_preview_env_import / vault_import_env_files ---
+// Neither carries a value: the preview reports key names and actions, the import
+// reports which key names landed.
+export interface DotenvDiagnostic {
+  path: string;
+  line?: number;
+  key?: string;
+  message: string;
+}
+
+export interface EnvImportKeyPreview {
+  /** `create` | `overwrite` | `skip` */
+  action: string;
+  key: string;
+  source_path: string;
+}
+
+export interface EnvImportRequest {
+  project?: string;
+  /** Must be a directory main issued through a folder dialog. */
+  directory?: string;
+  /** Must be paths main issued (dialog, or discovered by listEnvFiles). */
+  files?: string[];
+  environment?: string;
+  overwrite?: boolean;
+}
+
+export interface EnvImportPreview {
+  blocked_count: number;
+  create_count: number;
+  diagnostic_count: number;
+  diagnostics: DotenvDiagnostic[];
+  files: string[];
+  keys: EnvImportKeyPreview[];
+  blocked_keys: string[];
+  overwrite_count: number;
+  project: string;
+  skip_count: number;
+}
+
+export interface EnvImportResult {
+  blocked_count: number;
+  blocked_keys: string[];
+  create_count: number;
+  diagnostic_count: number;
+  diagnostics: DotenvDiagnostic[];
+  files: string[];
+  imported_keys: string[];
+  overwrite_count: number;
+  project: string;
+  skipped_keys: string[];
+  skip_count: number;
+}
+
+// --- vault_diff_env → diffEnvOutput ---
+export interface EnvFileDiff {
+  project: string;
+  file: string;
+  only_in_vault: string[];
+  only_in_file: string[];
+  in_both: string[];
+  /** Per shared key: `same` | `differs` | `error`. Present only with compareValues. */
+  value_diffs?: Record<string, string>;
+  in_sync: boolean;
+}
+
+// --- vault_sync_env → syncEnvOutput ---
+export type SyncDirection = "pull" | "push" | "mirror";
+
+export interface SyncConflict {
+  key: string;
+  resolution: string;
+}
+
+export interface EnvSyncRequest {
+  direction: SyncDirection;
+  /**
+   * Required, and must be a path main issued. The Go tool defaults to `.env`
+   * relative to the *server's* working directory, which for a GUI app is
+   * whatever directory the binary happened to be launched from — so this app
+   * never relies on that default.
+   */
+  path: string;
+  project?: string;
+  overwrite?: boolean;
+}
+
+export interface EnvSyncResult {
+  direction: string;
+  project: string;
+  path: string;
+  env_created: boolean;
+  vault_entries: number;
+  env_entries: number;
+  created: string[];
+  updated: string[];
+  skipped: string[];
+  unchanged: string[];
+  conflicts: SyncConflict[];
+}
+
+// --- vault_export_env → exportEnvOutput ---
+// Writes PLAINTEXT to disk and returns only the path, count, and key names.
+export interface ExportEnvRequest {
+  project?: string;
+  format?: "dotenv" | "json" | "shell";
+  keys?: string[];
+  group?: string;
+  env?: string;
+  /** Must be a path main issued through a save dialog. */
+  outputPath: string;
+}
+
+export interface ExportEnvResult {
+  path: string;
+  count: number;
+  keys: string[];
+}
+
+// --- vault_export_env_encrypted → exportEnvEncryptedInput ---
+// Takes no recipients: it seals to the project's current recipient set.
+export interface ExportEncryptedRequest {
+  project?: string;
+  keys?: string[];
+  /** Must be a path main issued through a save dialog. */
+  outputPath: string;
+}
+
 // --- diagnostics ---
 export interface BinaryInfo {
   path: string;
@@ -299,11 +545,35 @@ export interface TvaultApi {
   searchSecrets(req: SearchRequest): Promise<Result<SearchHit[]>>;
 
   auditLog(limit: number): Promise<Result<AuditEntry[]>>;
+  /**
+   * Time-range and action filters over the same metadata-only log. Timestamps
+   * are RFC3339; omit a bound to leave that side open.
+   */
+  auditLogSince(req: AuditSinceRequest): Promise<Result<AuditEntry[]>>;
 
   envGroups(): Promise<Result<EnvGroupDetail[]>>;
+  /**
+   * Links existing projects as named environments of one application. Creates no
+   * project and copies no value — a group is pure metadata.
+   */
+  envGroupCreate(req: EnvGroupCreateRequest): Promise<Result<EnvGroupDetail>>;
   envDiff(group: string, values: boolean): Promise<Result<EnvDiffResult>>;
   envPromote(req: PromoteRequest): Promise<Result<PromoteResult>>;
   envInherited(group: string, env: string): Promise<Result<InheritedKey[]>>;
+  /** One group with its drift status and inheritance pointers. No values. */
+  envGroupShow(name: string): Promise<Result<EnvGroupFull>>;
+  envGroupAdd(group: string, envName: string, project: string): Promise<Result<EnvGroupDetail>>;
+  /** Detaches an environment; the underlying project and its secrets survive. */
+  envGroupRemove(group: string, envName: string): Promise<Result<EnvGroupDetail>>;
+  /** Deletes the group only — never a project or a secret. */
+  envGroupDelete(name: string): Promise<Result<Record<string, never>>>;
+  envInherit(group: string, env: string, from: string): Promise<Result<InheritResult>>;
+  /** Writes the resolved value into the child, breaking inheritance for that key. */
+  envPin(group: string, env: string, key: string): Promise<Result<Record<string, never>>>;
+  /** Deletes the pinned value, restoring inheritance. Returns no value. */
+  envUnpin(group: string, env: string, key: string): Promise<Result<Record<string, never>>>;
+  /** Seals every (or some) environment into one recipient-sealed v2 blob. */
+  envSeal(req: EnvSealRequest): Promise<Result<EnvSealResult>>;
 
   // Sharing. Identities and recipients are public halves only (tvault1…); the
   // private key (tvault-key1…) is never returned by any of these, and exporting
@@ -313,6 +583,47 @@ export interface TvaultApi {
   recipients(project: string): Promise<Result<string[]>>;
   shareProject(project: string, recipient: string): Promise<Result<ShareResult>>;
   unshareProject(project: string, recipient: string): Promise<Result<UnshareResult>>;
+
+  /**
+   * Seals a project's secrets to X25519 recipients and writes a commit-safe v2
+   * `.env.encrypted`. Returns metadata about the ciphertext — never plaintext,
+   * and (because the path is always supplied) never the blob itself either.
+   */
+  sealForRecipients(req: SealRequest): Promise<Result<SealResult>>;
+
+  /**
+   * Opens a v2 blob with a local identity and writes a `0600` dotenv. Only the
+   * path, a count, and key names come back; the decrypted values stay on disk.
+   * Both paths are re-validated in main against the ones it issued.
+   */
+  openSealed(req: OpenSealedRequest): Promise<Result<OpenSealedResult>>;
+
+  // --- dotenv workflows ---------------------------------------------------
+  //
+  // Path handling is the whole security story here. `export_env` writes
+  // PLAINTEXT, `sync_env --direction pull` overwrites a file, and `diff_env` /
+  // `import_env_files` read one. So the renderer never authors a path: it asks
+  // main for a dialog, and main records what the user actually chose (see
+  // main/fsaccess.ts). Every handler below re-validates against that record.
+
+  /** Folder picker. Resolves null when the user cancelled. */
+  pickDirectory(title: string): Promise<Result<string | null>>;
+  /** Save dialog, for files this app is about to write. Null on cancel. */
+  pickSaveFile(title: string, defaultName: string): Promise<Result<string | null>>;
+  /** Open dialog, for an existing file this app is about to read. Null on cancel. */
+  pickEnvFile(title: string): Promise<Result<string | null>>;
+
+  /** Dotenv-family files in a directory: names, key counts, parse diagnostics. */
+  listEnvFiles(directory: string, environment?: string): Promise<Result<EnvFileList>>;
+  previewEnvImport(req: EnvImportRequest): Promise<Result<EnvImportPreview>>;
+  importEnvFiles(req: EnvImportRequest): Promise<Result<EnvImportResult>>;
+  /** Drift between a `.env` and the project. Verdicts only, never values. */
+  diffEnv(file: string, project: string, compareValues: boolean): Promise<Result<EnvFileDiff>>;
+  syncEnv(req: EnvSyncRequest): Promise<Result<EnvSyncResult>>;
+  /** Writes plaintext to the dialog-chosen path and returns only its metadata. */
+  exportEnv(req: ExportEnvRequest): Promise<Result<ExportEnvResult>>;
+  /** Commit-safe v2 export, sealed to the project's current recipients. */
+  exportEnvEncrypted(req: ExportEncryptedRequest): Promise<Result<ExportEncryptedResult>>;
 
   // Operations MCP does not expose (verified: no backup/restore/rotate tools in
   // internal/mcp). These shell out to the CLI instead.

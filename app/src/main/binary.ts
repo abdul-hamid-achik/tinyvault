@@ -189,8 +189,9 @@ function findBinary(): BinaryInfo {
   }
 
   throw new Error(
-    "Could not find the tvault binary. Install TinyVault (brew install tvault, or " +
-      "npm i -g @thelacanians/tinyvault), or set an explicit path in Settings."
+    "Could not find the tvault binary. Install TinyVault (brew install --cask " +
+      "abdul-hamid-achik/tap/tvault, or npm i -g @thelacanians/tinyvault), or set " +
+      "an explicit path in Settings."
   );
 }
 

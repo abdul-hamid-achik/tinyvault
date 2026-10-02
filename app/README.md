@@ -5,7 +5,12 @@ second implementation: all vault access goes through `tvault mcp`, so the Go cod
 keeps sole ownership of the crypto, the audit log and the single-writer bbolt
 lock.
 
-Personal/local use. Not signed, not notarized, not distributed.
+**Unsigned and unnotarized** — this project holds no Developer ID or Authenticode
+certificate, so Gatekeeper and SmartScreen warn on first launch. It *is*
+distributed, though: `.github/workflows/release-app.yml` runs after the Release
+workflow and attaches `TinyVault-<version>-{mac,linux,win}-<arch>` artifacts to the
+same GitHub Release. There is no auto-update, and the app does not bundle the Go
+binary — it resolves `tvault` at runtime.
 
 ---
 
@@ -17,6 +22,21 @@ bun install
 bun run dev          # HMR
 bun run build && bunx electron .   # production bundle
 ```
+
+`bun run build` is not optional before `bunx electron .`: `out/` is gitignored and
+`package.json` points Electron's `main` at `out/main/index.js`.
+
+### Packaging
+
+```bash
+bun run package      # electron-builder --dir: an unpacked app under release/, for local use
+bun run dist         # real artifacts (dmg / AppImage / nsis) under release/
+```
+
+CI builds the artifacts, not this directory — see
+`.github/workflows/release-app.yml`. It stamps the release version into
+`package.json` before packaging, which is why the version there is not kept in
+sync by hand.
 
 ### Prerequisites
 
@@ -79,10 +99,13 @@ inherits it by construction. `AGENTS.md` calls that invariant non-negotiable.
 ```
 src/shared/     types.ts (wire shapes mirroring internal/mcp structs), ipc.ts (channel names)
 src/main/       index.ts (window + hardening), mcp.ts (session), cli.ts (argv runner),
-                binary.ts (resolution + PATH), policy.ts, paths.ts, clipboard.ts, ipc.ts
+                binary.ts (resolution + PATH), policy.ts, paths.ts, clipboard.ts, ipc.ts,
+                fsaccess.ts (dialog-issued paths), config.ts (settings.json),
+                lifecycle.ts (quit ordering), protection.ts (screen-capture exclusion)
 src/preload/    index.ts — the entire bridge surface
 src/renderer/   React UI
-scripts/        spike-mcp.ts (handshake probe), verify-contracts.ts (shape contract test)
+scripts/        spike-mcp.ts (handshake probe), verify-contracts.ts (shape contract test),
+                make-icons.mjs (build/ icon regeneration), shot-hover.mjs (screenshot helper)
 ```
 
 ---
@@ -197,18 +220,47 @@ Each of these was a real bug found in review, not a stylistic choice:
 
 ## Coverage
 
-`tvault mcp` exposes 50 tools and this app drives most of them: secrets CRUD,
+`tvault mcp` exposes 50 tools and this app calls 43 of them: secrets CRUD,
 per-field reveal, generate (value never returned), version history, rollback,
-projects, cross-project search, audit log, and environment groups (drift matrix,
-promote with dry-run preview, inheritance).
+projects, cross-project search, the audit log including the relational
+`vault_audit_log_since` query behind the time/action/resource filters,
+environment groups (create, drift matrix, promote with dry-run preview, add and
+remove environments, delete, inheritance, pin/unpin, seal), sharing (identities,
+recipients, share/unshare, seal for recipients, open a sealed blob), and the whole
+dotenv surface (list files, preview, import, diff, sync, export, export
+encrypted).
 
-**Not covered by MCP**, so these stay CLI-only: `restore`, `ssh`, `docker`,
-`git-filter`, `identity export`, `self-update`, `ci init`, agent lifecycle.
-`backup` and `doctor` are shelled out to directly; `backup` reports through
-`backup --json` — metadata only, since a snapshot is copied as opaque bytes and
-never decrypted. `restore` and `key rotate` gained `--json` in the same change
-but still have no screen here; `restore --json` requires `--yes`, because a
-confirmation prompt cannot be answered on a machine-readable stream.
+The contract test asserts 44: those 43 plus `vault_list_secrets`, which the UI
+deliberately does **not** call. It is asserted so the trap stays documented — that
+tool's `version` field is hardcoded to `1` for every key (`secretMeta{Key: k,
+Version: 1}` in `tools_secrets.go`), so it carries no information at all. Real
+version numbers come from `vault_list_secrets_detailed`, which is what the secrets
+screen uses.
+
+The seven it does not call, and why:
+
+- `vault_run_with_secrets` — the shipped policy sets `allow_exec: false`, and
+  running arbitrary commands is the CLI's job.
+- `vault_list_projects` and `vault_count_secrets` — `vault_projects_overview`
+  returns both in one call.
+- `vault_list_secrets` — see above.
+- `vault_list_secrets_by_prefix` and `vault_search_secrets` — the secrets screen
+  filters client-side over a list it already holds; cross-project search uses
+  `vault_list_secrets_global`.
+- `vault_search_projects` — the sidebar's filter box already narrows the loaded
+  project list.
+
+The authoritative list is the `required` array at the top of
+`scripts/verify-contracts.ts`: add a tool there when a screen starts calling it,
+and the contract test asserts its shape from then on.
+
+**Not covered by MCP**, so these stay CLI-only: `ssh`, `docker`, `git-filter`,
+`identity export`, `self-update`, `ci init`, agent lifecycle, and passphrase
+rotation. `backup`, `restore`, and `doctor` are shelled out to directly through
+`cli.ts`, all three through `--json` — metadata only, since a snapshot is copied
+as opaque bytes and never decrypted. `restore --json` requires `--yes`, because a
+confirmation prompt cannot be answered on a machine-readable stream; that is why
+the Vault screen's restore confirmation is the app's, not the CLI's.
 
 One security note from that change: `tvault sync --json` used to emit plaintext
 secret values. `sync.Conflict` carried both sides of a conflict with no json
@@ -225,23 +277,42 @@ stdout. If you parse `sync --json` anywhere, its conflict entries are now
 ```bash
 bun run typecheck    # both tsconfig projects
 bun run build        # main (ESM) + preload (CJS) + renderer
-bun run verify       # 94 assertions against a THROWAWAY vault in $TMPDIR
+bun run verify       # assertions against a THROWAWAY vault in $TMPDIR
 bun run spike        # minimal handshake probe
 ```
 
 `verify` never touches `~/.tvault`. It builds a scratch vault, writes a policy
 with `max_reads_per_session: 3`, and asserts the response shape of every tool the
-UI consumes plus the security properties it depends on:
+UI consumes plus the security properties it depends on. It prints its own pass
+count, so the number is never stale in prose:
 
 - `vault_list_secrets` reports `version: 1` for every key — the trap that makes
   the UI use `vault_list_secrets_detailed` instead.
+- `vault_env_group_add` / `_remove` reject `env`: the field is `env_name`, unlike
+  every other env-group tool. The reference docs once said `env`.
 - values survive `&`, `<`, `>` without HTML escaping.
 - `vault_generate_secret` has no `value` field in its response.
 - the 4th plaintext read is refused once the budget is spent.
 - no secret value appears anywhere in the audit log.
 - history, diff and search responses carry no value field.
+- `vault_diff_env` reports only `same` / `differs` / `error` verdicts, and
+  `vault_sync_env` only key names — including in its `conflicts` list, which is
+  where the CLI once leaked both sides of a conflict.
+- every file the server writes for us is `0600`: sealed blobs, opened blobs, and
+  plaintext exports. Sealed and exported responses carry no plaintext; the
+  plaintext export does land on disk, which is why the UI confirms first.
+- `vault_env_seal` honours `output_path` and returns the path instead of the
+  blob. It used to ignore it and always return base64.
+- `vault_env_group_remove` and `vault_env_group_delete` leave every project (and
+  every secret) intact — they detach metadata only.
+- `vault_open_sealed` refuses an identity that does not exist.
 - a read-only policy refuses writes server-side, so the UI's disabled buttons are
   backed by a real control and not just cosmetics.
+
+The scratch environment is hermetic: `TVAULT_NO_AGENT=1` is forced and
+`TVAULT_IDENTITY_KEY`, `TVAULT_PASSPHRASE_FILE`/`_COMMAND`, `TVAULT_CONFIG` and
+`TVAULT_AGENT_TOKEN` are stripped, so a key or a running agent in your shell
+cannot change what the test proves.
 
 Run it after any change to `internal/mcp` output structs — that is the drift this
 test exists to catch.
@@ -269,11 +340,20 @@ whose command line quotes this README will otherwise match too. Verified
 
 ---
 
-## Not wired into CI
+## CI
 
-The repo's four CI jobs are Go-only. This subtree has no CI job; run `typecheck`,
-`build` and `verify` locally before committing. Adding a Node job gated on
-`paths: app/**` is the obvious next step if the app becomes something used daily.
+`.github/workflows/ci-app.yml` runs on changes under `app/**`: `bun install
+--frozen-lockfile`, `typecheck`, `build`, then `go build ./cmd/tvault` and
+`TVAULT_BIN=… bun run verify`. The other workflows are Go-only and run on every
+push. Run the same three locally before committing — `verify` spawns a real
+`tvault`, so point it at your own build:
+
+```bash
+TVAULT_BIN=../bin/tvault bun run verify
+```
+
+`--frozen-lockfile` means a dependency bump has to commit an updated `bun.lock`,
+or CI fails on install before it ever typechecks.
 
 `dist/` in the repo root belongs to GoReleaser, which is why this package builds
 to `out/` and would package to `release/`.

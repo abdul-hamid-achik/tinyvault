@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Bootstrap, ProjectOverview, SecretMeta, SecretVersionMeta } from "@shared/types";
 
 import AuditView from "./components/AuditView";
+import DotEnvView from "./components/DotEnvView";
 import EnvGroupsView from "./components/EnvGroupsView";
 import SecretsView, { type SecretActions } from "./components/SecretsView";
 import SharingView from "./components/SharingView";
@@ -297,6 +298,10 @@ function Shell({
     [projects, selected]
   );
 
+  // Views that act on a project other than the selected one (groups, dotenv,
+  // sharing) need the name list, not the overview rows.
+  const projectNames = useMemo(() => projects.map((p) => p.name), [projects]);
+
   return (
     <div className="flex h-full overflow-hidden bg-paper">
       <Sidebar
@@ -349,11 +354,22 @@ function Shell({
               onCreateProject={() => setNewProject(true)}
             />
           ) : view === "groups" ? (
-            <EnvGroupsView readOnly={readOnly} onChanged={() => void refresh()} />
+            <EnvGroupsView
+              readOnly={readOnly}
+              projects={projectNames}
+              onChanged={() => void refresh()}
+            />
+          ) : view === "dotenv" ? (
+            <DotEnvView
+              readOnly={readOnly}
+              projects={projectNames}
+              defaultProject={selected}
+              onChanged={() => void refresh()}
+            />
           ) : view === "sharing" ? (
             <SharingView
               readOnly={readOnly}
-              projects={projects.map((p) => p.name)}
+              projects={projectNames}
               defaultProject={selected}
               onChanged={() => void refresh()}
             />

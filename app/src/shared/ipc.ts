@@ -23,17 +23,42 @@ export const IPC = {
   searchSecrets: "tvault:search-secrets",
 
   auditLog: "tvault:audit-log",
+  auditLogSince: "tvault:audit-log-since",
 
   envGroups: "tvault:env-groups",
+  envGroupCreate: "tvault:env-group-create",
   envDiff: "tvault:env-diff",
   envPromote: "tvault:env-promote",
   envInherited: "tvault:env-inherited",
+  envGroupShow: "tvault:env-group-show",
+  envGroupAdd: "tvault:env-group-add",
+  envGroupRemove: "tvault:env-group-remove",
+  envGroupDelete: "tvault:env-group-delete",
+  envInherit: "tvault:env-inherit",
+  envPin: "tvault:env-pin",
+  envUnpin: "tvault:env-unpin",
+  envSeal: "tvault:env-seal",
 
   identities: "tvault:identities",
   newIdentity: "tvault:new-identity",
   recipients: "tvault:recipients",
   shareProject: "tvault:share-project",
   unshareProject: "tvault:unshare-project",
+  sealForRecipients: "tvault:seal-for-recipients",
+  openSealed: "tvault:open-sealed",
+
+  // Dotenv workflows. Every path crosses the bridge through a dialog answered in
+  // main (see main/fsaccess.ts), so these channels never author a path.
+  pickDirectory: "tvault:pick-directory",
+  pickSaveFile: "tvault:pick-save-file",
+  pickEnvFile: "tvault:pick-env-file",
+  listEnvFiles: "tvault:list-env-files",
+  previewEnvImport: "tvault:preview-env-import",
+  importEnvFiles: "tvault:import-env-files",
+  diffEnv: "tvault:diff-env",
+  syncEnv: "tvault:sync-env",
+  exportEnv: "tvault:export-env",
+  exportEnvEncrypted: "tvault:export-env-encrypted",
 
   backup: "tvault:backup",
   doctor: "tvault:doctor",
