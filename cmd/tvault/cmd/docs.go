@@ -36,7 +36,15 @@ type docsTopic struct {
 var docsCmd = &cobra.Command{
 	Use:   "docs <topic>",
 	Short: "Read documentation about tvault features (designed for agents)",
-	Long: `Read machine-readable documentation about tvault's features,
+	// Long is built in init() from the topic registry — see docsLongHelp.
+	RunE: runDocs,
+}
+
+// docsLongHelp renders `tvault docs --help`. The topic list comes from
+// fullCatalog() rather than a literal, because a hardcoded list silently
+// omitted six topics that the registry already served.
+func docsLongHelp() string {
+	return `Read machine-readable documentation about tvault's features,
 topics, and workflows.
 
 This command is the primary discovery surface for AI agents. Calling
@@ -46,22 +54,37 @@ descriptions. Agents should call this once at the start of a session
 to learn what tvault can do.
 
 Available subcommands:
-  features         JSON manifest of all features
-  topics           JSON manifest of all topics (with examples)
-  run              How ` + "`tvault run`" + ` works (env vars, interpolation)
-  mcp              How the MCP server integrates with AI agents
-  interpolate      tvault:// reference syntax and resolution
-  sync             Two-way sync between .env files and the vault
-  encrypted-env    The .env.encrypted format (v1 passphrase, v2 recipient)
-  committable-secrets  Commit secrets to a repo (git filters / v2 files)
-  safety           Threat model and safety properties
-  quickstart       Five-line getting-started
-  codemap          Codemap integration surface (rotation impact, seals, audit)
+` + docsTopicHelp() + `
 
 Any topic or feature can also be named directly, e.g.
 ` + "`tvault docs committable-secrets`" + `. If nothing is named, the full
-catalog is printed.`,
-	RunE: runDocs,
+catalog is printed.`
+}
+
+// docsTopicHelp renders the subcommand list for `docs --help`: the two manifest
+// subcommands followed by every registered topic, padded to the widest name so
+// the descriptions align.
+func docsTopicHelp() string {
+	topics := fullCatalog().Topics
+	rows := make([][2]string, 0, len(topics)+2)
+	rows = append(rows,
+		[2]string{"features", "JSON manifest of all features"},
+		[2]string{"topics", "JSON manifest of all topics (with examples)"},
+	)
+
+	width := 0
+	for _, t := range topics {
+		rows = append(rows, [2]string{t.Slug, t.Title})
+		if len(t.Slug) > width {
+			width = len(t.Slug)
+		}
+	}
+
+	var b strings.Builder
+	for _, row := range rows {
+		fmt.Fprintf(&b, "  %-*s%s\n", width+2, row[0], row[1])
+	}
+	return strings.TrimSuffix(b.String(), "\n")
 }
 
 var (
@@ -69,6 +92,7 @@ var (
 )
 
 func init() {
+	docsCmd.Long = docsLongHelp()
 	rootCmd.AddCommand(docsCmd)
 	docsCmd.Flags().StringVarP(&docsTopicFlag, "topic", "t", "", "Topic to print (alias for the first positional argument)")
 	docsCmd.AddCommand(docsFeaturesCmd, docsTopicsCmd, docsRunCmd, docsMCPCmd, docsInterpolateCmd, docsSyncCmd, docsEncryptedEnvCmd, docsSafetyCmd, docsQuickstartCmd, docsCodemapCmd)
