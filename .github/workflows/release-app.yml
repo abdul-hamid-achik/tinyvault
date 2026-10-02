@@ -1,0 +1,190 @@
+name: Release (desktop app)
+
+# Builds the Electron app and attaches the artifacts to the SAME GitHub Release
+# the CLI uses, so one release page carries the binary archives and the desktop
+# downloads.
+#
+# Triggered by `workflow_run` (like npm-publish.yml) rather than by the tag push
+# itself: GoReleaser owns creating the Release, and uploading to a release that
+# does not exist yet would race it. The version is resolved from the release, and
+# the source is checked out at that exact tag — `workflow_run` runs on the
+# default branch, so the ref has to be pinned explicitly or a build could pick up
+# commits made after the tag.
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+  # Manual fallback: attach artifacts to an existing release, e.g. after fixing a
+  # runner problem. Empty = latest GitHub release.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to attach to (e.g. 0.25.0). Empty = latest GitHub release."
+        required: false
+        type: string
+
+# Needed to upload release assets and to edit the release body.
+permissions:
+  contents: write
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.version }}" ]]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="$(curl -fsSL "https://api.github.com/repos/${{ github.repository }}/releases/latest" | jq -r .tag_name)"
+          fi
+          VERSION="${VERSION#v}"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "invalid version: $VERSION" >&2; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: resolve
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      # One platform failing (a moved runner image, an appimagetool download)
+      # must not take the other artifacts down with it.
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+          - runner: ubuntu-latest
+          - runner: windows-latest
+    env:
+      # appimagetool wants FUSE, which hosted runners do not have.
+      APPIMAGE_EXTRACT_AND_RUN: 1
+      # There is no signing certificate in this project; stop electron-builder
+      # from picking one up out of a runner's keychain if one ever appears.
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: v${{ needs.resolve.outputs.version }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: "24"
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          # Match the lockfile's toolchain, same as ci-app.yml.
+          bun-version: "1.4.2"
+
+      - name: Install dependencies
+        working-directory: app
+        run: bun install --frozen-lockfile
+
+      - name: Stamp the release version into app/package.json
+        working-directory: app
+        shell: bash
+        # electron-builder names artifacts from this version. Stamping it here
+        # rather than committing a bump per release means the app subtree does
+        # not have to change on every CLI tag.
+        run: |
+          set -euo pipefail
+          node -e 'const fs=require("node:fs");const p=JSON.parse(fs.readFileSync("package.json","utf8"));p.version=process.argv[1];fs.writeFileSync("package.json",JSON.stringify(p,null,2)+"\n");' "${{ needs.resolve.outputs.version }}"
+          node -p '"stamped " + require("./package.json").version'
+
+      - name: Typecheck
+        working-directory: app
+        run: bun run typecheck
+
+      - name: Build main, preload, and renderer
+        working-directory: app
+        run: bun run build
+
+      - name: Package
+        working-directory: app
+        shell: bash
+        # Each runner builds every architecture its OS supports. npmRebuild is
+        # off and the app has no native modules, so cross-arch packaging is only
+        # a different Electron download — no cross toolchain involved.
+        run: |
+          set -euo pipefail
+          case "${{ runner.os }}" in
+            macOS)   bunx electron-builder --mac ;;
+            Linux)   bunx electron-builder --linux ;;
+            Windows) bunx electron-builder --win ;;
+            *) echo "unsupported runner OS: ${{ runner.os }}" >&2; exit 1 ;;
+          esac
+
+      - name: Upload artifacts to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(app/release/*.dmg app/release/*.AppImage app/release/*.exe)
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "electron-builder produced no artifacts under app/release/" >&2
+            ls -la app/release || true
+            exit 1
+          fi
+          printf 'artifact: %s\n' "${files[@]}"
+          # --clobber so a re-run replaces the assets instead of failing.
+          gh release upload "v${{ needs.resolve.outputs.version }}" "${files[@]}" --clobber
+
+  notes:
+    needs: [resolve, build]
+    if: always() && needs.resolve.result == 'success' && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Add the desktop download notes to the release body
+        shell: bash
+        # Idempotent: the marker check means a re-run cannot stack duplicate
+        # sections. The body is read first so GoReleaser's changelog survives.
+        run: |
+          set -euo pipefail
+          tag="v${{ needs.resolve.outputs.version }}"
+          marker="<!-- tinyvault-desktop-notes -->"
+          body="$(gh release view "$tag" --json body --jq .body)"
+          if [[ "$body" == *"$marker"* ]]; then
+            echo "desktop notes already present; leaving the body alone"
+            exit 0
+          fi
+          printf '%s\n' "$body" > /tmp/body.md
+          cat >> /tmp/body.md <<'EOF'
+
+          <!-- tinyvault-desktop-notes -->
+          ## Desktop app
+
+          The `TinyVault-*` assets on this release are the Electron GUI. It is a
+          front end over `tvault mcp`, so **install the CLI too** — from this
+          release's archives, the Homebrew cask, or npm. The app looks for
+          `tvault` on `PATH` and cannot open a vault without it.
+
+          These builds are **unsigned and unnotarized**: there is no Developer ID
+          or Authenticode certificate in this project.
+
+          - **macOS** — Gatekeeper blocks the first launch. Move the app to
+            `/Applications`, then either right-click → Open, or run
+            `xattr -dr com.apple.quarantine /Applications/TinyVault.app`.
+          - **Windows** — SmartScreen warns; choose *More info* → *Run anyway*.
+          - **Linux** — `chmod +x` the AppImage; if FUSE is unavailable, run it
+            with `--appimage-extract-and-run`.
+
+          There is no auto-update. To upgrade, download the new asset. To build
+          from the tag instead, see the desktop guide at
+          https://tinyvault.dev/guide/desktop.
+          EOF
+          gh release edit "$tag" --notes-file /tmp/body.md
+          echo "release notes updated for $tag"

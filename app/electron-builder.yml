@@ -1,7 +1,12 @@
-# electron-builder config for local packaging only — the app is unsigned and
-# unnotarized, so a produced .app will trip Gatekeeper on first launch.
-# For daily local use `bunx electron .` is enough; this exists for when a
-# double-clickable bundle is wanted.
+# electron-builder config.
+#
+# The app is UNSIGNED and UNNOTARIZED: `identity: null` on macOS is deliberate
+# (there is no Developer ID certificate in this project), so a downloaded bundle
+# trips Gatekeeper on first launch. That is documented in docs/guide/desktop.md
+# and in the release notes — do not remove those warnings when touching this file.
+#
+# `bun run package` passes --dir, which ignores the targets below and produces an
+# unpacked app for local use. CI (release-app.yml) builds the real artifacts.
 #
 # Output goes to release/, NOT dist/: dist/ at the repo root already belongs to
 # GoReleaser and the root .gitignore claims it.
@@ -24,22 +29,46 @@ files:
 # bundle small and lets it track whatever tvault the user has installed.
 asar: true
 
+# Stable, platform-explicit names: the release page lists these beside the CLI
+# archives, so a reader must be able to tell arm64 from x64 at a glance.
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+
 mac:
   category: public.app-category.developer-tools
+  # dmg only. A zip of the same unsigned bundle would double the release size
+  # (~130 MB each) without giving the user anything the dmg does not: mount,
+  # drag to /Applications, then clear quarantine.
   target:
-    - dir
-  # Unsigned by design; a real release would need Developer ID + notarization.
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  # Unsigned by design; a signed release would need Developer ID + notarization.
   identity: null
   hardenedRuntime: false
   gatekeeperAssess: false
 
 linux:
   category: Development
+  # AppImage only: one file that runs anywhere, and the CLI release already
+  # ships .deb/.rpm/.apk for people who prefer a package manager.
   target:
-    - dir
+    - target: AppImage
+      arch:
+        - x64
+        - arm64
 
 win:
   target:
-    - dir
+    - target: nsis
+      arch:
+        - x64
+        - arm64
+  # No Authenticode certificate in this project, so SmartScreen will warn.
+  signAndEditExecutable: false
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
 
 npmRebuild: false
