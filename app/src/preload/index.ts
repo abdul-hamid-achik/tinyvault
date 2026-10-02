@@ -59,7 +59,8 @@ const api: TvaultApi = {
   openSealed: (req) => ipcRenderer.invoke(IPC.openSealed, req),
 
   pickDirectory: (title) => ipcRenderer.invoke(IPC.pickDirectory, title),
-  pickSaveFile: (title, defaultName) => ipcRenderer.invoke(IPC.pickSaveFile, title, defaultName),
+  pickSaveFile: (title, defaultName, defaultDir) =>
+    ipcRenderer.invoke(IPC.pickSaveFile, title, defaultName, defaultDir),
   pickEnvFile: (title) => ipcRenderer.invoke(IPC.pickEnvFile, title),
   listEnvFiles: (directory, environment) =>
     ipcRenderer.invoke(IPC.listEnvFiles, directory, environment),

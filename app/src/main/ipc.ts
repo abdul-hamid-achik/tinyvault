@@ -629,8 +629,20 @@ export function registerIpc(): void {
     pickDirectory(str(title) ?? "Choose a project folder")
   );
 
-  handle(IPC.pickSaveFile, async (title: string, defaultName: string): Promise<string | null> =>
-    pickSaveFile(str(title) ?? "Save file", str(defaultName) ?? ".env")
+  handle(
+    IPC.pickSaveFile,
+    async (title: string, defaultName: string, defaultDir?: string): Promise<string | null> => {
+      // The seed folder must itself be one main issued — a folder the user picked
+      // with pickDirectory. Otherwise the dialog's initial location would become
+      // a way to probe arbitrary paths, which is the exact thing fsaccess exists
+      // to prevent.
+      const seed = str(defaultDir);
+      return pickSaveFile(
+        str(title) ?? "Save file",
+        str(defaultName) ?? ".env",
+        seed === undefined ? undefined : assertIssued(seed, "save dialog")
+      );
+    }
   );
 
   handle(IPC.pickEnvFile, async (title: string): Promise<string | null> =>

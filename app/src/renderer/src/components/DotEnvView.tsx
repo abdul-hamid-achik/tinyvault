@@ -296,7 +296,10 @@ export default function DotEnvView({
       const path = await unwrap(
         window.tvault.pickSaveFile(
           plain ? "Where should the PLAINTEXT export be written?" : "Where should the sealed file go?",
-          plain ? name : ".env.encrypted"
+          plain ? name : ".env.encrypted",
+          // Seed the dialog with the folder being scanned: the usual intent is to
+          // write the export back into that project.
+          directory ?? undefined
         )
       );
       if (!path) return;

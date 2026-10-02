@@ -609,7 +609,12 @@ export interface TvaultApi {
   /** Folder picker. Resolves null when the user cancelled. */
   pickDirectory(title: string): Promise<Result<string | null>>;
   /** Save dialog, for files this app is about to write. Null on cancel. */
-  pickSaveFile(title: string, defaultName: string): Promise<Result<string | null>>;
+  pickSaveFile(
+    title: string,
+    defaultName: string,
+    /** Seed folder — must itself be a path main issued (a folder you picked). */
+    defaultDir?: string
+  ): Promise<Result<string | null>>;
   /** Open dialog, for an existing file this app is about to read. Null on cancel. */
   pickEnvFile(title: string): Promise<Result<string | null>>;
 
