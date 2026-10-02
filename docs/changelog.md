@@ -29,6 +29,15 @@ If `tvault` was installed from the retired formula, migrate once with
 
 ## Unreleased
 
+### Changed
+
+- Desktop release artifacts are now built one Windows architecture per invocation,
+  so a release carries `-win-x64.exe` and `-win-arm64.exe` only. Given both arches
+  at once, electron-builder's NSIS target also emits a combined installer whose
+  `${arch}` is empty — v0.25.0 therefore has a redundant 211 MB
+  `TinyVault-0.25.0-win.exe` beside the two named ones. It is not produced from the
+  next release.
+
 ## 0.25.0 — 2026-10-01
 
 ### Added
@@ -55,7 +64,7 @@ If `tvault` was installed from the retired formula, migrate once with
   discovered inside a folder you picked, and main refuses any path it did not
   issue. See [Desktop App](/guide/desktop).
 - **Desktop release artifacts.** Each `v*` release now also carries
-  `TinyVault-<version>-mac-{arm64,x64}.dmg`, `-linux-{x64,arm64}.AppImage`, and
+  `TinyVault-<version>-mac-{arm64,x64}.dmg`, `-linux-{x86_64,arm64}.AppImage`, and
   `-win-{x64,arm64}.exe`, built from the same tag as the CLI. They are **unsigned
   and unnotarized** and have no auto-update, so Gatekeeper and SmartScreen warn
   until you clear them — [the desktop guide](/guide/desktop) has the exact steps.

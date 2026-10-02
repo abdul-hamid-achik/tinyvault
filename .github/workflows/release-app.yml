@@ -113,12 +113,19 @@ jobs:
         # Each runner builds every architecture its OS supports. npmRebuild is
         # off and the app has no native modules, so cross-arch packaging is only
         # a different Electron download — no cross toolchain involved.
+        #
+        # Windows is built one arch per invocation on purpose. Given both arches
+        # at once, electron-builder's NSIS target also emits a combined
+        # installer whose ${arch} is empty — a third, 211 MB `…-win.exe` sitting
+        # next to the two clearly-named ones. Separate runs produce exactly the
+        # per-arch installers.
         run: |
           set -euo pipefail
           case "${{ runner.os }}" in
             macOS)   bunx electron-builder --mac ;;
             Linux)   bunx electron-builder --linux ;;
-            Windows) bunx electron-builder --win ;;
+            Windows) bunx electron-builder --win --x64
+                     bunx electron-builder --win --arm64 ;;
             *) echo "unsupported runner OS: ${{ runner.os }}" >&2; exit 1 ;;
           esac
 

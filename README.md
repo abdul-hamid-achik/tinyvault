@@ -470,7 +470,7 @@ bunx electron .        # or: bun run package -> release/mac-arm64/TinyVault.app
 
 Browse and reveal secrets (values auto-hide after 30s, the clipboard self-clears), roll back versions, search across projects, filter the audit log, diff and promote environment groups, share and revoke recipients, and write or restore vault snapshots. The renderer is sandboxed — no Node, no filesystem, no navigation, no external links — and the passphrase never reaches it.
 
-Download it from any [`v*` release](https://github.com/abdul-hamid-achik/tinyvault/releases) (`TinyVault-<version>-mac-arm64.dmg`, `-mac-x64.dmg`, `-linux-{x64,arm64}.AppImage`, `-win-{x64,arm64}.exe`), or build it from source with `cd app && bun install && bun run build && bunx electron .`. It needs the `tvault` CLI on `PATH` — the app is a front end, not a self-contained bundle.
+Download it from any [`v*` release](https://github.com/abdul-hamid-achik/tinyvault/releases) (`TinyVault-<version>-mac-arm64.dmg`, `-mac-x64.dmg`, `-linux-x86_64.AppImage`, `-linux-arm64.AppImage`, `-win-x64.exe`, `-win-arm64.exe`), or build it from source with `cd app && bun install && bun run build && bunx electron .`. It needs the `tvault` CLI on `PATH` — the app is a front end, not a self-contained bundle.
 
 The builds are **unsigned and unnotarized** (no Developer ID or Authenticode certificate in this project) and have **no auto-update**, so macOS Gatekeeper and Windows SmartScreen will warn on first launch: right-click → Open, or `xattr -dr com.apple.quarantine /Applications/TinyVault.app`. See [the desktop guide](https://tinyvault.dev/guide/desktop) for the prerequisites (`tvault` on PATH, an `mcp-policy.yaml`, a non-interactive passphrase source) and for what the app deliberately refuses to do.
 

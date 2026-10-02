@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Desktop release artifacts are now built one Windows architecture per
+  invocation, so a release carries `-win-x64.exe` and `-win-arm64.exe` only. Given
+  both arches at once, electron-builder's NSIS target also emits a combined
+  installer whose `${arch}` is empty — v0.25.0 therefore has a redundant 211 MB
+  `TinyVault-0.25.0-win.exe` beside the two named ones. It is not produced from the
+  next release.
+
 ## [0.25.0] - 2026-10-01
 
 ### Added
@@ -38,7 +47,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   [docs/guide/desktop.md](docs/guide/desktop.md).
 - **Desktop release artifacts.** `.github/workflows/release-app.yml` runs after the
   Release workflow, checks out the same tag, and attaches
-  `TinyVault-<version>-mac-{arm64,x64}.dmg`, `-linux-{x64,arm64}.AppImage`, and
+  `TinyVault-<version>-mac-{arm64,x64}.dmg`, `-linux-{x86_64,arm64}.AppImage`, and
   `-win-{x64,arm64}.exe` to the existing GitHub Release, then appends first-launch
   instructions to the release body (idempotently — a re-run cannot stack them).
   The builds are **unsigned and unnotarized** (this project holds no Developer ID

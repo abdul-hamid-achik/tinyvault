@@ -29,10 +29,10 @@ Every [`v*` release](https://github.com/abdul-hamid-achik/tinyvault/releases) ca
 |---|---|
 | macOS (Apple silicon) | `TinyVault-<version>-mac-arm64.dmg` |
 | macOS (Intel) | `TinyVault-<version>-mac-x64.dmg` |
-| Linux | `TinyVault-<version>-linux-x64.AppImage`, `…-linux-arm64.AppImage` |
+| Linux | `TinyVault-<version>-linux-x86_64.AppImage`, `…-linux-arm64.AppImage` |
 | Windows | `TinyVault-<version>-win-x64.exe`, `…-win-arm64.exe` |
 
-They are built by `.github/workflows/release-app.yml` from the same tag as the CLI, so the app and the binary it drives are always the same release.
+They are built by `.github/workflows/release-app.yml` from the same tag as the CLI, so the app and the binary it drives are always the same release. Note the Linux `x86_64`: electron-builder names that architecture differently per platform, so the macOS and Windows assets say `x64` and the AppImage does not.
 
 ### First launch
 
