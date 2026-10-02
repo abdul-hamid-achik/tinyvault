@@ -338,6 +338,46 @@ Match on the binary path, not the bare string `tvault mcp` — any agent process
 whose command line quotes this README will otherwise match too. Verified
 2026-09-27: one child while running, zero survivors after SIGTERM.
 
+### Smoke-test a packaged build
+
+`bunx electron .` and a packaged bundle are not the same program. The bundle runs
+out of `app.asar`, resolves `tvault` without your shell's `PATH`, and exercises the
+real quit path. No CI job launches one, so do it by hand before a release tag:
+
+```bash
+bun run package
+
+SMOKE="$(mktemp -d)"; chmod 700 "$SMOKE"
+export TVAULT_DIR="$SMOKE" TVAULT_PASSPHRASE=smoke TVAULT_NO_AGENT=1
+../bin/tvault init
+cat > "$SMOKE/mcp-policy.yaml" <<'POLICY'
+access_mode: read-write
+projects_allow: ["*"]
+projects_deny: []
+secrets_allow: ["*"]
+secrets_deny: []
+allow_exec: false
+max_reads_per_session: 50
+redact_output: true
+POLICY
+../bin/tvault set SMOKE_KEY smoke-value
+
+TVAULT_DESKTOP_DEBUG=1 ./release/mac-arm64/TinyVault.app/Contents/MacOS/TinyVault
+```
+
+A healthy boot logs exactly two renderer lines — `bootstrap` and `secrets loaded` —
+with `session_connected: true`, `backend: kek`, `tools: 50`, and `count: 1`. SIGTERM
+it and re-run the orphan check above.
+
+Point `TVAULT_DIR` at a scratch vault, not your real one: the app forwards every
+`TVAULT_*` variable to the child it spawns, so the smoke test would otherwise read
+your actual vault (harmlessly, but there is no reason to).
+
+Verified 2026-10-01 on the packaged arm64 bundle: booted from `app.asar`, resolved
+`/opt/homebrew/bin/tvault` (a Homebrew cask at 0.24.0 — the app also works against
+an older CLI, since v0.25.0 added no new tools), rendered the seeded key, and shut
+down with no orphans.
+
 ---
 
 ## CI
