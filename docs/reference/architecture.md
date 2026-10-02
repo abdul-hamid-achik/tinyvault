@@ -185,7 +185,7 @@ This is the foundation for [sharing](/guide/sharing), [committable secrets](/gui
 Sharing is easy to add; removing future access requires more than deleting a recipient stanza. `tvault projects unshare` re-keys the updated live vault.
 
 ```bash
-tvault projects unshare myapp tvault1exampleRecipient
+tvault projects unshare tvault1exampleRecipient -p myapp
 ```
 
 When you remove a recipient, `store.RekeyProject` runs atomically and:
@@ -248,14 +248,15 @@ bbolt is an embedded, single-writer key/value store. There is no daemon, no sock
 `~/.tvault/vault.db` and any `tvault-key1...` private identity must never be committed or backed up unencrypted to a shared location. The public `tvault1...` recipients are the only key material that is safe to share. The commit-safe path for secrets is the v2 `.env.encrypted` format in [Committable secrets](/guide/committable-secrets).
 :::
 
-## Two interfaces, one API
+## Three front ends, one API
 
-The CLI and the MCP server are thin front ends over the same vault API. They share the same crypto, the same storage, and the same audit log — get/set/delete and the other primitives write that log in the vault layer, so every surface is covered once. The differences are in surface and policy, not in how secrets are handled underneath.
+The CLI, the MCP server, and the desktop GUI are thin front ends over the same vault API. They share the same crypto, the same storage, and the same audit log — get/set/delete and the other primitives write that log in the vault layer, so every surface is covered once. The differences are in surface and policy, not in how secrets are handled underneath.
 
 | Interface | How you reach it | Notes |
 | --- | --- | --- |
 | CLI | `tvault ...` | The primary surface for humans and scripts. |
 | MCP server | `tvault mcp` | For AI agents; uses the same API under an access policy. |
+| Desktop GUI | `app/` (Electron, built from source) | A front end over `tvault mcp`: it spawns the server and speaks JSON-RPC over stdio, so it adds no second path to the vault and never opens `vault.db` itself. See [Desktop App](/guide/desktop). |
 
 ### Global flags
 

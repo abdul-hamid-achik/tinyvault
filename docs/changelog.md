@@ -12,15 +12,101 @@ the canonical source is [`CHANGELOG.md`](https://github.com/abdul-hamid-achik/ti
 Install or upgrade:
 
 ```bash
-brew upgrade --cask tvault   # Homebrew
-go install github.com/abdul-hamid-achik/tinyvault/cmd/tvault@latest
+brew upgrade --cask tvault                                           # Homebrew
+npm install -g @thelacanians/tinyvault@latest                        # npm
+go install github.com/abdul-hamid-achik/tinyvault/cmd/tvault@latest  # Go, from source
+tvault self-update                                                   # downloaded release binary
 ```
+
+`tvault self-update` verifies the release checksum before replacing the binary
+and is meant for a binary you downloaded yourself; keep Homebrew, npm, and distro
+packages on their own package manager. See
+[Install & quickstart](/guide/getting-started) for every install option.
 
 If `tvault` was installed from the retired formula, migrate once with
 `brew uninstall --formula tvault`, then run
 `brew install --cask abdul-hamid-achik/tap/tvault`.
 
 ## Unreleased
+
+## 0.25.0 — 2026-10-01
+
+### Added
+
+- **Desktop app** (`app/`): an Electron GUI over `tvault mcp` — secrets with
+  per-field reveal, create/edit/delete and random generate, a sortable table and
+  empty-vault onboarding, version history and rollback, cross-project search, the
+  audit log with server-side time-range, action, and resource-type filters,
+  environment groups (create by linking existing projects, drift matrix, promote
+  with dry-run, add and remove environments, delete a group, inheritance,
+  pin/unpin), sharing (identities,
+  recipients, share/revoke, seal to a commit-safe v2 blob, open a sealed blob back
+  to a `0600` file), a `.env` screen (discover dotenv files in a folder, preview
+  then run an import, diff against a project, sync pull/push/mirror, export
+  plaintext or encrypted), and vault snapshots (write, list, restore). It is a
+  front end, not a second implementation: it spawns the CLI and speaks JSON-RPC
+  over stdio, and never opens `vault.db`, so the Go process keeps sole ownership of
+  the crypto, the audit log, and the single-writer bbolt lock. The renderer is
+  sandboxed (no Node, no filesystem, no navigation, `window.open` denied), values
+  auto-hide after 30s, the clipboard self-clears, screen-capture exclusion engages
+  only while a value is on screen, and the passphrase never reaches the renderer.
+  **It cannot author a file path either**: every read or write target comes from an
+  OS dialog answered in the main process, or from a dotenv file the server
+  discovered inside a folder you picked, and main refuses any path it did not
+  issue. See [Desktop App](/guide/desktop).
+- **Desktop release artifacts.** Each `v*` release now also carries
+  `TinyVault-<version>-mac-{arm64,x64}.dmg`, `-linux-{x64,arm64}.AppImage`, and
+  `-win-{x64,arm64}.exe`, built from the same tag as the CLI. They are **unsigned
+  and unnotarized** and have no auto-update, so Gatekeeper and SmartScreen warn
+  until you clear them — [the desktop guide](/guide/desktop) has the exact steps.
+  The app does not bundle the Go binary; it resolves `tvault` at runtime, so
+  install the CLI as well.
+- `--json` for `tvault backup`, `tvault restore`, and `tvault key rotate`, with
+  metadata-only shapes (`{path, bytes, raw_bytes, compressed, immutable,
+  created_at}`, `{restored, source, vault_dir, saved_snapshot, restored_at}`, and
+  `{rotated, vault_dir, rotated_at}`), recorded in the `tvault docs features`
+  manifest. Snapshots are copied as opaque bytes and never decrypted, so there is
+  no value to leak. Passphrase prompts and warnings (for example, `--immutable`
+  not applied on this platform) go to stderr so stdout stays a single JSON
+  document, and `restore --json` requires `--yes` because a confirmation prompt
+  cannot be answered on a machine-readable stream.
+
+### Changed
+
+- Every remaining `--json` writer (`list`, `projects`, `search`, `status`, `sync`,
+  `diff`, `doctor`, the locked-vault envelope, `help`, `docs`) now goes through one
+  encoder — `writeJSON`, with HTML escaping off — so `&`, `<`, and `>` are emitted
+  verbatim instead of arriving as HTML escapes. A `DATABASE_URL` with a query
+  string was previously corrupted in JSON output. `tvault sync --json` also reports
+  snake_case fields and names its direction.
+
+### Fixed
+
+- **`vault_env_seal` ignored its `output_path`.** The handler set the path, then
+  overwrote it with an empty string and returned the whole sealed blob as base64
+  anyway — so a caller that asked for a file got ciphertext in the conversation
+  instead, contradicting the tool's documented contract and diverging from
+  `vault_seal_for_recipients` and `vault_export_env_encrypted`, which both write a
+  `0600` file and return only its path. Ciphertext is not plaintext, so nothing was
+  exposed, but the point of `output_path` is to keep the blob out of the model's
+  context. It now writes the file like its two siblings.
+- **`tvault sync --json` emitted plaintext secret values.** `sync.Conflict` carried
+  `VaultValue` and `EnvValue` with no JSON tags, and the whole result was marshalled
+  to stdout, so both sides of every conflict landed in machine-readable output —
+  against the value-minimisation model in [Security](/reference/security). Nothing
+  consumed those fields: the human output and the MCP layer report key + resolution
+  only. They are deleted rather than tagged out, which also keeps the values out of
+  memory after the merge.
+- `tvault restore` works on Windows when a vault already exists (it released the
+  lock too late to rename over the open file), caps gzip expansion at 8 GiB, and
+  names its fallback `vault.db.pre-restore-*` copy with millisecond resolution so
+  two quick restores cannot overwrite each other.
+- Backup rotation matches only the exact names it writes, so a hand-made
+  `vault-*.db` in the backup directory is never pruned; the directory is fsync'd
+  after each rename; `--keep` rejects negative values; the success line reports the
+  compressed size on disk.
+- `tvault env --format shell` and the `tvault ssh` script skip keys that are not
+  valid shell identifiers (defense in depth; keys are validated on write).
 
 ## 0.24.0 — 2026-09-23
 

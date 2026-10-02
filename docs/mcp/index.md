@@ -18,7 +18,7 @@ You need:
 3. either `TVAULT_PASSPHRASE` in the server process, **or** a running [`tvault agent`](/guide/agent) on the same machine; and
 4. an access policy for anything beyond fail-closed metadata access.
 
-`tvault mcp` cannot prompt for a passphrase because stdin carries MCP messages. If a local agent is already unlocked, the MCP server uses it for secret **reads** and does not need `TVAULT_PASSPHRASE` in the host config. Writes still need the passphrase — the agent is read-only. Otherwise supply the passphrase through the host's environment or a credential-store launcher. Do not commit it in an MCP configuration file.
+`tvault mcp` cannot prompt for a passphrase because stdin carries MCP messages. If a local agent is already unlocked, the MCP server uses it for secret **reads** and does not need `TVAULT_PASSPHRASE` in the host config. Anything that **mutates the vault** still needs the passphrase — the agent cannot write to the database. A few tools only read secrets and write a *file* (`vault_export_env`, `vault_seal_for_recipients`, `vault_env_seal`); those are reads as far as the vault is concerned, so the policy's `access_mode` governs them rather than the presence of a passphrase. Otherwise supply the passphrase through the host's environment or a credential-store launcher. Do not commit it in an MCP configuration file.
 
 `--connect auto` (default) prefers a passphrase when one is set, otherwise the agent. `--connect unix://PATH` pins the agent socket. `--connect none` or `--no-agent` always unlocks with a passphrase.
 
@@ -141,7 +141,7 @@ The server also publishes metadata resources:
 
 | Resource | Contents |
 | --- | --- |
-| `vault://status` | Vault status and project summary |
+| `vault://status` | Lock state, vault path, project count, vault id, and creation time |
 | `vault://projects` | Policy-filtered project metadata |
 | `vault://projects/{name}/keys` | Policy-filtered key metadata, without values |
 

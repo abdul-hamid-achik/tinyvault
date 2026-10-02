@@ -46,10 +46,23 @@ MCP host configuration (Claude Desktop, Cursor, etc.):
 }
 ```
 
-`tvault mcp` cannot prompt for a passphrase (stdin carries MCP messages) —
-supply `TVAULT_PASSPHRASE` through the host's secret/environment controls.
-Without `~/.tvault/mcp-policy.yaml`, the server starts fail-closed (metadata
-only, no values, no writes).
+`tvault mcp` cannot prompt for a passphrase (stdin carries MCP messages), so it
+unlocks in one of three ways:
+
+- **A running `tvault agent`** — the default (`--connect auto`). Secret reads are
+  served by the agent with no passphrase in the host config at all. Writes still
+  need one; the agent is read-only.
+- **A passphrase source in the environment** — `TVAULT_PASSPHRASE_FILE` (a `0600`
+  env-style file) or `TVAULT_PASSPHRASE_COMMAND` (a 1Password, Keychain, or `pass`
+  helper whose stdout is the passphrase).
+- **`TVAULT_PASSPHRASE`** — the blunt option: it puts the passphrase itself in the
+  host's configuration.
+
+`--connect none` (or `--no-agent`) skips the agent and requires a passphrase
+directly. Without `~/.tvault/mcp-policy.yaml`, the server starts fail-closed
+(metadata only, no values, no writes). See
+[Passphrase sources](https://tinyvault.dev/guide/passphrase-sources) and
+[MCP server](https://tinyvault.dev/mcp/).
 
 ## Update
 

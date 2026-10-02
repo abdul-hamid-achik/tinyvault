@@ -93,8 +93,8 @@ An **identity** is a passphrase-independent keypair stored at `~/.tvault/identit
 | Private **identity** | `tvault-key1...` | **No — this is a secret key** |
 
 ```bash
-tvault identity new ci                              # create an identity named "ci"
-tvault projects share api tvault1exampleRecipient  # rewrap the DEK to that recipient
+tvault identity new ci                             # create an identity named "ci"
+tvault projects share tvault1exampleRecipient -p api # rewrap the DEK to that recipient
 ```
 
 Sharing rewraps the project's DEK to each recipient's public key, so a recipient can unwrap the DEK with their private identity — no passphrase required. This same recipient layer powers [committable secrets](/guide/committable-secrets) and the [git filter](/guide/git-filter).

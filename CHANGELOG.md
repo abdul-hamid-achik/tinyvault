@@ -6,8 +6,84 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-01
+
+### Added
+
+- **Desktop app** (`app/`): an Electron GUI over `tvault mcp` — secrets with
+  per-field reveal, create/edit/delete and random generate, a sortable table and
+  empty-vault onboarding, version history and rollback, cross-project search, the
+  audit log with server-side time-range, action, and resource-type filters,
+  environment groups (create by linking existing projects, drift matrix, promote
+  with dry-run, add and remove environments, delete a group, inheritance,
+  pin/unpin), sharing (identities, recipients, share/revoke, seal to a
+  commit-safe v2 blob, open a sealed blob back to a `0600` file), a `.env` screen
+  (discover dotenv files in a folder, preview then run an import, diff against a
+  project, sync pull/push/mirror, export plaintext or encrypted), and vault
+  snapshots (write, list, restore). It is a
+  front end, not a second implementation: it spawns the CLI and speaks JSON-RPC
+  over stdio, and never opens `vault.db`, so the Go process keeps sole ownership
+  of the crypto, the audit log, and the single-writer bbolt lock. The renderer is
+  sandboxed (no Node, no filesystem, no navigation, `window.open` denied), values
+  auto-hide after 30s, the clipboard self-clears, screen-capture exclusion
+  engages only while a value is on screen, and the passphrase never reaches the
+  renderer. **The renderer cannot author a file path either**: every read or write
+  target comes from an OS dialog answered in the main process, or from a dotenv
+  file the server discovered inside a folder you picked, and main refuses any path
+  it did not issue — otherwise `export_env` and `sync_env` would be an
+  arbitrary-file-write primitive. Built from source with bun (`bun run build &&
+  bunx electron .`), or downloaded from a release (next entry).
+  `.github/workflows/ci-app.yml` typechecks, builds, and runs the MCP contract
+  test on changes under `app/`. See
+  [docs/guide/desktop.md](docs/guide/desktop.md).
+- **Desktop release artifacts.** `.github/workflows/release-app.yml` runs after the
+  Release workflow, checks out the same tag, and attaches
+  `TinyVault-<version>-mac-{arm64,x64}.dmg`, `-linux-{x64,arm64}.AppImage`, and
+  `-win-{x64,arm64}.exe` to the existing GitHub Release, then appends first-launch
+  instructions to the release body (idempotently — a re-run cannot stack them).
+  The builds are **unsigned and unnotarized** (this project holds no Developer ID
+  or Authenticode certificate) and have no auto-update, so Gatekeeper and
+  SmartScreen warn until you clear them. The app does not bundle the Go binary; it
+  resolves `tvault` at runtime, so the CLI still has to be installed.
+- `--json` for `tvault backup`, `tvault restore`, and `tvault key rotate`, with
+  metadata-only shapes (`{path, bytes, raw_bytes, compressed, immutable,
+  created_at}`, `{restored, source, vault_dir, saved_snapshot, restored_at}`, and
+  `{rotated, vault_dir, rotated_at}`), recorded in the `tvault docs features`
+  manifest. Snapshots are copied as opaque bytes and never decrypted, so there is
+  no value to leak. Passphrase prompts and warnings (for example, `--immutable`
+  not applied on this platform) go to stderr so stdout stays a single JSON
+  document, and `restore --json` requires `--yes` because a confirmation prompt
+  cannot be answered on a machine-readable stream.
+
+### Changed
+
+- Every remaining `--json` writer (`list`, `projects`, `search`, `status`,
+  `sync`, `diff`, `doctor`, the locked-vault envelope, `help`, `docs`) now goes
+  through one encoder — `writeJSON`, with HTML escaping off — so `&`, `<`, and
+  `>` are emitted verbatim instead of arriving as HTML escapes. A `DATABASE_URL`
+  with a query string was previously corrupted in JSON output. `tvault sync
+  --json` also reports snake_case fields and names its direction, matching the
+  rest of the CLI instead of leaking Go's PascalCase field names.
+
 ### Fixed
 
+- **`vault_env_seal` ignored its `output_path`.** The handler set the output path,
+  then overwrote it with an empty string and returned the whole sealed blob as
+  base64 anyway — so a caller that asked for a file got ciphertext in the
+  conversation instead, contradicting the tool's own documented contract and
+  diverging from `vault_seal_for_recipients` and `vault_export_env_encrypted`,
+  which both write a `0600` file and return only its path. Ciphertext is not
+  plaintext, so nothing was exposed, but the point of `output_path` is to keep the
+  blob out of the model's context. It now writes the file like its two siblings
+  and records the destination in the audit entry.
+- **`tvault sync --json` emitted plaintext secret values.** `sync.Conflict`
+  carried `VaultValue` and `EnvValue` with no JSON tags, and `cmd/sync.go`
+  marshals the whole result to stdout, so both sides of every conflict landed in
+  machine-readable output — against the value-minimisation model in
+  [docs/reference/security.md](docs/reference/security.md). Nothing consumed
+  those fields: the human output and the MCP layer report key + resolution only.
+  They are deleted rather than tagged out, which also keeps the values out of
+  memory after the merge.
 - `tvault restore` works on Windows when a vault already exists (it released
   the lock too late to rename over the open file), caps gzip expansion at
   8 GiB, and names its fallback `vault.db.pre-restore-*` copy with
@@ -609,7 +685,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 See the [GitHub releases](https://github.com/abdul-hamid-achik/tinyvault/releases)
 for v0.8.0 and earlier.
 
-[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.22.2...v0.23.0
 [0.22.2]: https://github.com/abdul-hamid-achik/tinyvault/compare/v0.22.1...v0.22.2

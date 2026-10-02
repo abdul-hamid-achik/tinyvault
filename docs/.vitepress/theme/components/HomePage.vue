@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 
-const installCommand = 'brew install abdul-hamid-achik/tap/tvault'
+const installCommand = 'brew install --cask abdul-hamid-achik/tap/tvault'
 const activeFlow = ref<'developer' | 'agent'>('developer')
 const copied = ref(false)
 let copyTimer: ReturnType<typeof setTimeout> | undefined

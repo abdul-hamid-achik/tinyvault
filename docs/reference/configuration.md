@@ -144,17 +144,20 @@ These files live in your **project repository**, not under `~/.tvault/`. They ma
 
 ```bash
 # Typical project setup
-tvault projects share myapp --to tvault1exampleRecipient   # writes .tvault-recipients
-tvault git-filter track                                     # writes .gitattributes
+tvault projects share tvault1exampleRecipient -p myapp       # grant read access (writes no repo file)
+tvault git-filter install --recipient tvault1exampleRecipient # seeds .tvault-recipients + filter config
+tvault git-filter track .env 'secrets/*.env'                 # writes .gitattributes
 git add .tvault-recipients .gitattributes .env.encrypted
 echo ".env" >> .gitignore
 ```
+
+`projects share` changes only the vault: it wraps the project key to that recipient. The committed read-set in `.tvault-recipients` is seeded by `git-filter install --recipient` (repeatable), which is what makes the tracked files decryptable by anyone holding a matching identity.
 
 ::: warning `.env` is plaintext — never commit it
 The plaintext `.env` is an import/export convenience only. Commit `.env.encrypted` instead, and keep `.env` in `.gitignore`. Likewise, `tvault k8s render` writes **plaintext** YAML to stdout — pipe it straight to `kubectl` and never commit the result:
 
 ```bash
-tvault k8s render myapp --project myapp | kubectl apply -f -
+tvault k8s render --in sealed.yaml --identity cluster | kubectl apply -f -
 ```
 :::
 

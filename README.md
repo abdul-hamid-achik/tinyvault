@@ -39,6 +39,7 @@ TinyVault is built around value-minimizing agent workflows: search metadata, inj
 - **Output Redaction** -- MCP execution can replace literal secret values in captured output when `redact_output` is enabled; transformed values can bypass it
 - **Access Policy** -- YAML-based allow/deny patterns control what AI agents can access
 - **Zero External Services Required** -- No database server, Docker daemon, account, or hosted control plane -- just a local bbolt file
+- **Desktop GUI (optional)** -- an Electron app in `app/` over `tvault mcp`: reveal, edit, roll back, search, diff environment groups, share, and restore snapshots without a terminal. Built from source; unsigned
 - **Cross-Platform** -- Linux, macOS, Windows (amd64 and arm64)
 
 ## Install
@@ -455,6 +456,24 @@ secrets_deny:
   - "MASTER_KEY"
 ```
 
+## Desktop app (optional)
+
+Prefer a window? `app/` is an Electron GUI over the same binary — a **front end**, not a second implementation. It spawns `tvault mcp` and speaks JSON-RPC over stdio, so the Go process keeps sole ownership of the crypto, the audit log, and the single-writer bbolt lock; your CLI keeps working while the window is open.
+
+```bash
+git clone https://github.com/abdul-hamid-achik/tinyvault.git
+cd tinyvault/app
+bun install
+bun run build          # out/ is gitignored and is Electron's entry point
+bunx electron .        # or: bun run package -> release/mac-arm64/TinyVault.app
+```
+
+Browse and reveal secrets (values auto-hide after 30s, the clipboard self-clears), roll back versions, search across projects, filter the audit log, diff and promote environment groups, share and revoke recipients, and write or restore vault snapshots. The renderer is sandboxed — no Node, no filesystem, no navigation, no external links — and the passphrase never reaches it.
+
+Download it from any [`v*` release](https://github.com/abdul-hamid-achik/tinyvault/releases) (`TinyVault-<version>-mac-arm64.dmg`, `-mac-x64.dmg`, `-linux-{x64,arm64}.AppImage`, `-win-{x64,arm64}.exe`), or build it from source with `cd app && bun install && bun run build && bunx electron .`. It needs the `tvault` CLI on `PATH` — the app is a front end, not a self-contained bundle.
+
+The builds are **unsigned and unnotarized** (no Developer ID or Authenticode certificate in this project) and have **no auto-update**, so macOS Gatekeeper and Windows SmartScreen will warn on first launch: right-click → Open, or `xattr -dr com.apple.quarantine /Applications/TinyVault.app`. See [the desktop guide](https://tinyvault.dev/guide/desktop) for the prerequisites (`tvault` on PATH, an `mcp-policy.yaml`, a non-interactive passphrase source) and for what the app deliberately refuses to do.
+
 ## CI/CD Integration
 
 Use `TVAULT_PASSPHRASE` environment variable for non-interactive unlock:
@@ -530,14 +549,17 @@ See [Backups & recovery](https://tinyvault.dev/guide/backups) for scheduling, th
 ```
 
 ```
-tvault (single binary)
-  cmd/tvault/       # CLI commands (cobra)
+repo
+  cmd/tvault/       # CLI commands (cobra) -> builds the single `tvault` binary
   internal/
     crypto/         # AES-256-GCM, Argon2id, key generation
     store/          # bbolt storage layer
     vault/          # High-level vault operations
     mcp/            # MCP server (50 tools, access policy, redaction)
     validation/     # Input validation
+  app/              # optional Electron desktop GUI (a front end over `tvault mcp`)
+  npm/              # npm distribution: launcher + per-platform binary packages
+  docs/             # the tinyvault.dev site (VitePress)
 ```
 
 ## Environment Variables
@@ -550,9 +572,13 @@ tvault (single binary)
 | `TVAULT_CONFIG` | Path to `config.yaml`, overriding the default location resolution |
 | `TVAULT_NO_AGENT` | Set to bypass a running `tvault agent` and unlock the vault directly |
 | `TVAULT_AGENT_TOKEN` | Capability token sent to a `--require-token` agent (privilege separation for confined delegates) |
+| `TVAULT_LOG_DIR` | Where the agent writes logs (default: `$XDG_STATE_HOME/tvault`) |
+| `TVAULT_LOG_LEVEL` | Agent log level: `debug`, `info`, `warn`, `error` (default `info`) |
 | `TVAULT_IDENTITY_KEY` | A private identity (`tvault-key1…`) for passphrase-free decrypt in CI/ssh/agents; a local identity file takes precedence |
 | `TVAULT_IDENTITY` | Default identity name for git filters / recipient reads (default: `default`) |
 | `TVAULT_DIR` | Vault directory (default: `~/.tvault`) |
+
+The desktop app reads two of its own (`TVAULT_BIN`, `TVAULT_DESKTOP_DEBUG`). Full reference: [Environment variables](https://tinyvault.dev/reference/environment-variables).
 
 ## License
 

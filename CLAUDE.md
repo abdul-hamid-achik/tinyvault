@@ -16,7 +16,12 @@ Electron GUI in `app/` is a front end that drives `tvault mcp` — it never open
 - Docs site: Vercel auto-builds **`main` only** (`docs/vercel.json`). Tags release the CLI; do not promote docs.
 - [ROADMAP.md](ROADMAP.md) — product direction and deferred work.
 
-## Quick commands (these mirror CI exactly — there is no Makefile/Taskfile)
+Scope split, so the two briefs do not drift into each other: **AGENTS.md is
+structure and conventions** (where things live, import order, the commit
+checklist); **this file is invariants and rationale** (the properties that must
+survive a refactor, and the incident or test that pins each one).
+
+## Quick commands (there is no Makefile/Taskfile)
 
 ```bash
 go build ./...                 # Build
@@ -26,10 +31,20 @@ govulncheck ./...              # Security Scan
 ```
 
 CI (`.github/workflows/ci.yml`) gates `main` on four jobs: **Test, Lint,
-Security Scan, Build**. All four must be green.
+Security Scan, Build**. All four must be green. The Build job is a six-way
+cross-compile with `CGO_ENABLED=0`, so `go build ./...` is necessary but not
+quite sufficient. Three more workflows run beside it: `ci-app.yml` (desktop app:
+typecheck, build, contract test — only on `app/**` changes), `release.yml`
+(GoReleaser on `v*` tags), and `npm-publish.yml` (publishes
+`@thelacanians/tinyvault` after a Release, then smoke-tests it on three OSes).
 
 > ⚠️ **Run `golangci-lint run ./...` locally before pushing.** It is not
-> installed by default (`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest`).
+> installed by default. **Match CI's pinned versions** — `ci.yml` uses
+> golangci-lint **v2.12.2** and govulncheck **v1.4.0**, and a newer local linter
+> reports findings CI does not (new rules land between versions), which reads
+> exactly like a red `main` that is not:
+> `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2`,
+> `go install golang.org/x/vuln/cmd/govulncheck@v1.4.0`.
 > `go build` + `go test` passing is **not** enough — the Lint job (gocritic,
 > exhaustive, revive, unparam, gosec, …) is strict and is a common cause of a
 > red `main`. Config lives in `.golangci.yml`.
@@ -46,8 +61,8 @@ Security Scan, Build**. All four must be green.
   `vault_get_secret` may return plaintext, and they must remain explicit and
   policy-gated.
 - **Exhaustive switches:** a `default:` clause counts as exhaustive
-  (`default-signifies-exhaustive`). Enum sentinels like `paneCount` don't need
-  an explicit case.
+  (`default-signifies-exhaustive`), so an enum's trailing count sentinel does not
+  need a case that could only panic.
 
 ## Sharing & committable secrets (the recipient layer)
 
@@ -141,9 +156,19 @@ Security Scan, Build**. All four must be green.
   umask (no listen→chmod window), `flock` single-instance, mandatory peer-uid
   check (fail-closed; per-OS `peercred_*.go`), read-only ops, and KEK zeroing on
   **every** exit path (signal/idle/stop/panic). `agent start` never daemonizes.
-- CLI routing (`get`/`env`/`run`) tries the agent then falls back to a direct
-  unlock; `--no-agent` / `TVAULT_NO_AGENT` force direct. `x/sys` is now a direct
-  require for the peer-cred calls (was indirect — no new module).
+- **Two lifecycles, not one.** `agent start` is a foreground process; backgrounding
+  it (`&`, `nohup`) is the caller's business. `agent install` registers a per-user
+  service instead (launchd on macOS, systemd on Linux — `internal/service/`), taking
+  `--passphrase-file`, `--idle`, `--log-dir`/`--log-level`, `--no-load`, and
+  `--dry-run`; `restart` picks up an upgraded binary, `uninstall` removes the
+  definition, and `logs` reports (or with `--clear` deletes) the log path. The
+  service resolves its own passphrase source at start, so an installed agent is the
+  durable form of the same read-only boundary — it does not widen it.
+- CLI routing tries the agent then falls back to a direct unlock for every
+  read-path command — `get`, `env`, `run`, `ssh`, `docker`, and `tvault mcp`
+  (through `secrets_load.go` / `agent_client.go`); `--no-agent` /
+  `TVAULT_NO_AGENT` force direct. `x/sys` is now a direct require for the
+  peer-cred calls (was indirect — no new module).
 - **The agent accelerates reads; it never unlocks a write.** There is no write
   op and no way to obtain the KEK over the socket, so `set`/`delete`/`import`/
   `rotate` need the passphrase even while it runs
@@ -206,6 +231,64 @@ Security Scan, Build**. All four must be green.
   `shell-init`, so `eval "$(tvault env)"` could execute part of the value.
   Any new shell-emitting surface must go through the same helper.
 
+## Environment groups (`internal/vault/envgroup.go`, `cmd/tvault/cmd/env_group.go`)
+
+- A group links **existing projects** as named environments of one application
+  (`production=liftclub`, `preview=liftclub-preview`). It is **pure metadata**: no
+  new crypto, no copied values, and deleting a group never touches a project or a
+  secret. A project belongs to at most one group unless `create --force` says
+  otherwise.
+- **Inheritance is resolved at read time, not stored.** `ResolveKey(group, env, key)`
+  walks the child→base chain; `--group`/`--env` on `get`, `env`, `run`, `ssh`,
+  `docker`, and the MCP equivalents all go through it, and `--show-source` reports
+  which environment answered. Keep that resolution in one place — a second
+  implementation would disagree about precedence.
+- **`pin` is the only operation here that writes a value.** It copies the resolved
+  value into the child project (breaking inheritance for that key); `unpin`
+  **deletes** it, which purges that key's version history in the child. That is why
+  the desktop UI disables unpin when the child has no base: with nothing to fall
+  back to, the key would simply become missing.
+- `promote` copies values between environments (decrypt + re-encrypt into the
+  target, creating a new version and archiving the old one) and audits each key as
+  `secret.promote`. `--dry-run` reports candidates without writing; without `--yes`
+  it always prompts.
+- `env seal` writes **one** v2 blob with a labelled section per environment
+  (`--- tvault-env:<name> ---`), which `decrypt-env --section <env>` extracts. With
+  `output_path` it writes a 0600 file and returns only the path — never the blob —
+  matching `vault_seal_for_recipients` and `vault_export_env_encrypted`.
+- MCP surface is `vault_env_group_create/list/show/add/remove/delete`,
+  `vault_env_diff/promote/inherit/inherited/pin/unpin/seal`. Note the trap: `add`
+  and `remove` take **`env_name`**, while every other env tool takes `env`.
+
+## Distribution & machine output
+
+- **Four install channels, and they must be documented consistently:** the
+  Homebrew **cask** `abdul-hamid-achik/tap/tvault` (the formula is retired —
+  `tap_migrations.json` maps it to the cask, so always write `--cask`), npm
+  `@thelacanians/tinyvault` (a launcher in `npm/cli` plus six
+  `@thelacanians/tinyvault-<platform>` binary packages that `npm/scripts/pack.mjs`
+  fills from the release's checksummed raw binaries), `go install …/cmd/tvault@latest`
+  (builds from source, so `--version` reports `dev` — the version string is stamped
+  by GoReleaser's ldflags, not by the toolchain), and the release archives /
+  `.deb` / `.rpm` / `.apk`. `tvault self-update` is only for a binary you downloaded
+  yourself. Touching one install instruction means checking README.md,
+  docs/guide/getting-started.md, docs/changelog.md, docs/mcp/index.md,
+  npm/cli/README.md, and the hero command in HomePage.vue.
+- **`--json` is a global persistent flag** (`root.go`), not a per-command
+  afterthought: `list`, `projects`, `search`, `status`, `sync`, `diff`, `doctor`,
+  `env diff`, `agent status`, `backup`, `restore`, `key rotate`, and the
+  locked-vault envelope all honour it. Every writer goes through **one** encoder
+  (`writeJSON`/`marshalJSON` in `json_helper.go`, `SetEscapeHTML(false)`) — adding a
+  second `json.Marshal` call site is how HTML escaping creeps back in and corrupts
+  a `DATABASE_URL` with a query string. Prompts and warnings go to **stderr** so
+  stdout stays a single JSON document, and any command that would otherwise prompt
+  (`restore`) requires `--yes` under `--json`.
+- **Machine output is metadata-only by construction.** `json_output_test.go` pins
+  the `backup`/`restore`/`rotate` shapes; the `sync` value leak (a `Conflict`
+  struct carrying `VaultValue`/`EnvValue` with no JSON tags) is the regression it
+  exists to prevent. If a new `--json` surface has a value in scope, the answer is
+  to remove the field, not to tag it out.
+
 ## Documentation site (`docs/` → tinyvault.dev)
 
 User-facing docs live in `docs/` — a **VitePress (v1) + Bun** site deployed to
@@ -220,7 +303,10 @@ verified against the real binary.
 
 ## Committing
 
-Branch off `main` for changes; ensure all four CI checks pass locally before
-pushing. Keep `AGENTS.md`, `README.md`, `ROADMAP.md`, the Architecture,
-Security, and MCP docs, and `tvault help` / `tvault docs` in sync when behavior
-changes — they cross-reference each other.
+Branch off `main` for changes; ensure the four `ci.yml` checks pass locally before
+pushing, plus `bun run typecheck` / `build` / `verify` under `app/` when the change
+touches the desktop app or any `internal/mcp` output struct. Keep `AGENTS.md`,
+`CLAUDE.md`, `README.md`, `ROADMAP.md`, the Architecture, Security, and MCP docs,
+and `tvault help` / `tvault docs` in sync when behavior changes — they
+cross-reference each other, and `tvault docs --help` builds its topic list from the
+registry so it cannot drift (the topics themselves still can).

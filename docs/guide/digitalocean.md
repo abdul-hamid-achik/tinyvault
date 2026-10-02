@@ -124,9 +124,11 @@ tvault run -- myapp                           # injects all project secrets as e
 Run the [local agent](/guide/agent) so repeated reads in one SSH session skip the prompt and the Argon2id derivation:
 
 ```bash
-tvault agent start &                          # unix socket, 0600, peer-uid checked
-tvault hook >> ~/.bashrc                      # optional: auto-route get/env/run through it
+tvault agent start &                            # unix socket, 0600, peer-uid checked
+echo 'eval "$(tvault hook bash)"' >> ~/.bashrc  # defines tvault_load; loading stays explicit
 ```
+
+`tvault hook` requires a shell argument (`bash`, `zsh`, `fish`, `direnv`) and prints a snippet — append the `eval` line, not the snippet's output. The snippet only *defines* `tvault_load`; nothing loads on `cd`, so a stray shell never pulls secrets it did not ask for. For an agent that survives reboots, `tvault agent install` registers a per-user service instead of backgrounding a foreground process.
 
 systemd for an app that reads from the server's vault:
 

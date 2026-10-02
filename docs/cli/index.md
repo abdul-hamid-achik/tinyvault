@@ -67,6 +67,9 @@ tvault get MISSING_KEY; echo "exit=$?"   # exit=4
 | `delete` | `rm`, `remove` |
 | `projects` | `project`, `p` |
 | `history` | `versions`, `hist` |
+| `mcp` | `mcp-server` |
+| `self-update` | `upgrade` |
+| `env group` | `env groups` |
 
 `tvault use <project>` is shorthand for `tvault projects use <project>`.
 
@@ -151,6 +154,9 @@ Print a single secret value. Reading from the vault decrypts on demand and is au
 | --- | --- |
 | `--from <path>` | Read the value from a dotenv file instead of the vault (no unlock). |
 | `--version <N>` | Print a specific historical version (default: current). |
+| `--group <name>` | Resolve the key through an [environment group](/guide/env-groups)'s inheritance chain. |
+| `--env <name>` | Environment within the group (requires `--group`). |
+| `--show-source` | Show which environment a resolved value came from (with `--group`). |
 
 ### `list`
 
@@ -164,6 +170,7 @@ List secret keys in the active project. Metadata only — values are never print
 | Flag | Description |
 | --- | --- |
 | `--prefix <str>` | Only show keys starting with this prefix. |
+| `--names-only` | List key names only. Lock-free — never decrypts, so it works on a locked vault. |
 
 ### `delete`
 
@@ -305,6 +312,7 @@ Run a command with the project's secrets injected into its environment. Use `--`
 | `--no-vault` | Do not inject vault secrets (use only `--env-file` / inherited env). |
 | `--only <k1,k2>` | Inject only these secret keys (comma-separated allowlist). |
 | `--prefix <p>` | Inject only secret keys with this prefix. |
+| `--redact` | Replace literal injected secret values in child stdout/stderr with `[REDACTED:KEY]` (safety net; misses short, split, or transformed values). |
 | `--strict` | Fail before starting the child when an explicit `--only` key is missing. |
 | `--identity <name>` | Read shared project values with an X25519 identity instead of the vault passphrase. It also works with `--group`/`--env` when the identity has access to every participating project; cannot combine with `--no-vault`. |
 | `--group <name>` | Resolve secrets through an [environment group](/guide/env-groups)'s inheritance chain. |
@@ -365,13 +373,16 @@ Print the project's secrets as environment assignments. The default format is `s
 
 | Flag | Description |
 | --- | --- |
-| `-f`, `--format <fmt>` | `shell`, `dotenv`, `json`, `yaml`, or `k8s-secret` (default `shell`). |
+| `-f`, `--format <fmt>` | `shell`, `dotenv`, `json`, `yaml`, `k8s-secret`, or `pulumi-config` (default `shell`). |
 | `-e`, `--export` | Prefix shell output with `export` (default `true`). |
 | `--name <str>` | Secret name (for `k8s-secret`). |
-| `--namespace <str>` | Namespace (for `k8s-secret`). |
+| `--namespace <str>` | Namespace (for `k8s-secret`; default `default`). |
+| `--stack <name>` | Pulumi stack to target (`pulumi-config` format; optional). |
 | `--identity <name>` | Read a **shared** project with an X25519 identity — no passphrase needed. |
 | `--only <k1,k2>` | Emit only these keys; missing explicit keys fail closed. |
 | `--prefix <p>` | Emit only keys with this prefix; combines with `--only` as a union. |
+| `--group <name>` | Resolve secrets through an [environment group](/guide/env-groups)'s inheritance chain. |
+| `--env <name>` | Environment within the group (requires `--group`). |
 
 ### `env group`
 
@@ -495,7 +506,7 @@ Export the project's secrets. **Prints plaintext** — never commit the output.
 | `-f`, `--format <fmt>` | `dotenv`, `json`, `yaml`, or `k8s-secret` (default `dotenv`). |
 | `-o`, `--output <file>` | Write to a file instead of stdout. |
 | `--name <str>` | Secret name (for `k8s-secret`). |
-| `--namespace <str>` | Namespace (for `k8s-secret`). |
+| `--namespace <str>` | Namespace (for `k8s-secret`; default `default`). |
 
 ::: danger Plaintext output
 `tvault export` writes decrypted values. Treat the output like the secrets themselves: keep it out of version control and off shared disks.
@@ -548,7 +559,7 @@ Encrypt a dotenv file. With one or more `--recipient`, you get **v2** output: co
 | Flag | Description |
 | --- | --- |
 | `-i`, `--in <file>` | Input file (default stdin). |
-| `-o`, `--out <file>` | Output file (default stdout). |
+| `-o`, `--out <file>` | Output file (default: `<in>.encrypted`). |
 | `--recipient <tvault1…>` | Recipient public key. Repeatable. Switches output to v2. |
 
 ### `decrypt-env`
@@ -564,6 +575,7 @@ Decrypt a `.env.encrypted` file. The format is auto-detected: v1 uses your passp
 | `-i`, `--in <file>` | Input file (default stdin). |
 | `-o`, `--out <file>` | Output file (default stdout). |
 | `--identity <name>` | Identity to unwrap v2 blobs. |
+| `--section <env>` | Extract only one environment section from a multi-environment sealed blob (e.g. `preview`). |
 
 ### `seal`
 
@@ -699,13 +711,17 @@ tvault agent status
 tvault agent stop
 ```
 
-Run the local agent (Unix only). It unlocks the vault once and serves secret reads over a private 0600 unix socket, so `get`/`env`/`run` skip the prompt and Argon2id. It caches only the KEK and reopens the vault per request, so direct CLI access keeps working. `agent start` runs in the **foreground** — background it yourself (`&`, `nohup`, systemd, launchd).
+Run the local agent (Unix only). It unlocks the vault once and serves secret reads over a private 0600 unix socket, so the commands that route reads through it — `get`, `env`, `run`, `ssh`, `docker`, and `tvault mcp` — skip the prompt and Argon2id. It caches only the KEK and reopens the vault per request, so direct CLI access keeps working. `agent start` runs in the **foreground**: background it yourself (`&`, `nohup`), or let `agent install` register it as a per-user launchd/systemd service.
 
-| Subcommand | Flags |
-| --- | --- |
-| `start` | `--idle <dur>` (default `15m`; `0` = never), `--require-token`, `--token-file <path>` |
-| `status` | — |
-| `stop` | — |
+| Subcommand | What it does | Flags |
+| --- | --- | --- |
+| `install` | Install the agent as a per-user service (launchd on macOS, systemd on Linux). | `--dry-run`, `--idle`, `--log-dir`, `--log-level`, `--no-load`, `--passphrase-file` |
+| `logs` | Show where the agent logs live, or clear them with `--clear`. | `--clear`, `--log-dir` |
+| `restart` | Restart the installed agent service (picks up an upgraded binary). | — |
+| `start` | Unlock the vault and serve secrets over a local socket (foreground). | `--idle <dur>` (default `15m`; `0` = never), `--require-token`, `--token-file <path>`, `--log-dir <path>`, `--log-level <level>` |
+| `status` | Show whether the agent is running. | — |
+| `stop` | Stop the running agent (zeroing its KEK). | — |
+| `uninstall` | Stop and remove the agent's service definition. | — |
 
 ::: warning Capability tokens are privilege separation, not same-uid defense
 `--require-token` gates an **OS-confined (different-uid) delegate** only. A malicious **same-uid** process can read the token file or dial the socket directly, so tokens are not a defense against it. For untrusted/CI/container delegation, use a scoped identity instead.
@@ -765,7 +781,7 @@ Scaffold a CI workflow that consumes the vault. `--mode passphrase` uses `TVAULT
 | `--provider <name>` | `github-actions` or `gitlab` (**required**). |
 | `--mode <mode>` | `passphrase` or `identity` (default `passphrase`). |
 | `--identity <name>` | Identity to reference (default `default`). |
-| `--output <path>` | Output path (`-` for stdout). |
+| `--output <path>` | Write here; `-` prints to stdout (default: the provider's conventional path). |
 
 ---
 
@@ -811,7 +827,7 @@ Restore the vault from a backup file (plain or gzip, auto-detected). The backup 
 
 | Flag | Description |
 | --- | --- |
-| `-y`, `--yes` | Skip the confirmation prompt. |
+| `-y`, `--yes` | Skip the confirmation prompt. Required with `--json`, because a prompt cannot be answered on a machine-readable stream. |
 
 ### `unlock`
 
@@ -926,11 +942,11 @@ tvault docs run
 tvault docs -t mcp
 ```
 
-Machine-readable docs for agents. Subtopics: `features`, `topics`, `run`, `mcp`, `interpolate`, `sync`, `encrypted-env`, `safety`, `quickstart`.
+Machine-readable docs for agents. Topics: `agent`, `versioning`, `docker`, `run`, `mcp`, `self-update`, `interpolate`, `sync`, `encrypted-env`, `k8s`, `committable-secrets`, `safety`, `quickstart`, `audit`, `codemap`.
 
 | Flag | Description |
 | --- | --- |
-| `-t`, `--topic <name>` | Print a specific subtopic. |
+| `-t`, `--topic <name>` | Print a specific topic (alias for the positional argument). |
 
 ### `completion`
 

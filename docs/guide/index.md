@@ -35,6 +35,7 @@ TinyVault stores secret values locally and makes them available through a CLI an
 
 ## Choose an interface
 
+- [Desktop app](/guide/desktop) — an Electron GUI over `tvault mcp`, built from source.
 - [Local agent](/guide/agent) — keep the vault available between CLI commands on Unix.
 - [MCP server](/mcp/) — connect an AI agent through a disk-controlled policy.
 - [AI agent workflow](/guide/for-ai-agents) — find and use keys while minimizing plaintext in model context.

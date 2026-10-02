@@ -105,11 +105,12 @@ By default the vault lives at `~/.tvault/vault.db` (override with `--vault` or `
 
 ## The MCP server won't connect
 
-The MCP server (`tvault mcp`) speaks JSON-RPC over stdio and **unlocks the vault at startup** — there is no prompt over a pipe.
+The MCP server (`tvault mcp`) speaks JSON-RPC over stdio, so it can never prompt — stdin carries MCP messages. It unlocks in one of two ways: through a running [`tvault agent`](/guide/agent) (the default, `--connect auto`), or with a passphrase source it can read non-interactively. It does not hold the vault open; see the next section.
 
-- **"Connection closed" right away** → the server couldn't unlock. The host must pass `TVAULT_PASSPHRASE` in the server's `env`. Use the host's environment controls or a credential-store launcher — see [MCP Overview → Before you connect](/mcp/#before-you-connect).
+- **"Connection closed" right away** → it could not unlock. Either start the agent (`tvault agent start`), or give the server a passphrase in the host's `env`: `TVAULT_PASSPHRASE`, or preferably `TVAULT_PASSPHRASE_FILE` / `TVAULT_PASSPHRASE_COMMAND` (a password-manager helper) so the secret is not inline in the host config — see [Passphrase sources](/guide/passphrase-sources) and [MCP Overview → Before you connect](/mcp/#before-you-connect).
+- **Reads work but vault changes are refused** → in agent-backed mode the server cannot write to the database; mutations need a passphrase source even when an agent is running. `--connect none` (or `--no-agent`) forces the direct unlock. Note that tools which only *read* secrets and write a file (`vault_export_env`, the sealing tools) are not mutations — they follow the policy's `access_mode`.
 - **After changing the passphrase** the cached key is stale → **restart your MCP/agent sessions** so they reconnect with the new one.
-- **Tools appear but calls are denied** → the [Access Policy](/mcp/access-policy) is gating them (`access_mode`, `allow_exec`, project/secret globs). Check `~/.tvault/mcp-policy.yaml`.
+- **Tools appear but calls are denied** → the [Access Policy](/mcp/access-policy) is gating them (`access_mode`, `allow_exec`, project/secret globs). Check `~/.tvault/mcp-policy.yaml`; without that file the server starts fail-closed (metadata only, no values, no writes).
 
 ## "vault is locked by another tvault process" (exit code `7`)
 

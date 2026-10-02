@@ -24,20 +24,21 @@ agent-facing workflow guide.
 
 ## CLI command specs
 
-Each runs the real binary and asserts on observed output. Together they cover
-every top-level command at least once.
+Each runs the real binary and asserts on observed output.
 
 | Spec | Commands it exercises |
 |------|-----------------------|
 | `cli_core.yml`             | `init` · `set` · `get` · `list` · `status` · `audit` |
 | `cli_delete.yml`           | `delete` (with `-y`) |
 | `cli_projects.yml`         | `projects create/list/delete` · `use` |
+| `cli_lock_unlock_agent.yml`| `lock` · `unlock` · `agent status` |
 | `cli_env_run.yml`          | `env --format dotenv` · `run -- …` (env injection) |
 | `cli_run_only_prefix.yml`  | `run --only` / `--prefix` (least-privilege subset injection) |
 | `cli_env_pulumi.yml`       | `env --format pulumi-config --stack` (Pulumi config lines) |
 | `cli_mcp_coexist.yml`      | `mcp` running + concurrent `get`/`run` (lock coexistence) |
 | `cli_history_rollback.yml` | `history` · `rollback --to` · `get` |
 | `cli_search.yml`           | `search --prefix` · `list --prefix` |
+| `cli_identity.yml`         | `identity new/list/export` |
 | `cli_seal_open.yml`        | `identity new` · `seal --recipient` · `open --identity` |
 | `cli_encrypted_env.yml`    | `encrypt-env` · `decrypt-env` (v2 round-trip) |
 | `cli_export_import.yml`    | `export` · `import` |
@@ -46,3 +47,25 @@ every top-level command at least once.
 | `cli_k8s.yml`              | `seal --format k8s` · `k8s render` |
 | `cli_diff_sync.yml`        | `diff` · `sync` |
 | `cli_git_filter.yml`       | `git-filter install/status` (in a scratch git repo) |
+| `cli_scaffold.yml`         | `ci init --provider` · `completion bash` · `doctor` · `hook zsh` |
+| `env_group_show.yml`       | `env group create/show` |
+| `env_group_diff.yml`       | `env group create` · `env diff` (drift matrix) |
+| `env_json_diff.yml`        | `env diff --json` (machine-readable drift) |
+| `env_promote.yml`          | `env promote` · `env diff` |
+| `env_inherit_resolve.yml`  | `env inherit` · `get --group --env --show-source` |
+| `env_seal_decrypt.yml`     | `identity new/list` · `env seal --recipient` · `decrypt-env --in` |
+
+### Known gaps
+
+These top-level commands have **no spec at all**: `docker`, `ssh`, `shell-init`,
+`generate`, `docs`, and `self-update`. All six are substantial surfaces — `ssh`
+and `shell-init` emit shell, `docker` has four subcommands, `generate` is the
+never-print-the-value path, `docs` is the agent discovery manifest, and
+`self-update` replaces the running binary.
+
+`--json` is only covered by `env_json_diff.yml`; the newer `backup --json`,
+`restore --json`, and `key rotate --json` shapes are asserted in Go
+(`cmd/tvault/cmd/json_output_test.go`) but not in a PTY.
+
+The desktop app is not a CLI surface and has no specs here; `ci-app.yml` runs its
+contract test (`app/scripts/verify-contracts.ts`) instead.

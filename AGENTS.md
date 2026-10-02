@@ -82,10 +82,6 @@ cmd/tvault/
     env_group.go             # tvault env group/diff/promote/inherit/pin/unpin/inherited/seal (environment profiles)
     json_helper.go           # writeJSON()/marshalJSON(): shared --json encoder (SetEscapeHTML false)
     docs.go                  # tvault docs (machine-readable feature manifest)
-    npm/                     # npm distribution (@thelacanians/tinyvault)
-      cli/                   # main package: cli.js shim + package.json (spawns the platform binary)
-      platforms/             # @thelacanians/tinyvault-{os}-{arch} packages (binary payloads)
-      scripts/pack.mjs       # downloads release assets, verifies checksums, versions packages
     projects.go / use.go     # tvault projects list/create / tvault use PROJECT
     backup.go                # tvault backup [path] [--dir D --keep N --immutable] / tvault restore <path>
                              # (restore is a separate command); rotation, gzip, safety
@@ -214,8 +210,18 @@ app/                         # Electron desktop GUI — a FRONT END over `tvault
   src/preload/               #  opens vault.db, because bbolt is single-writer and the
   src/renderer/              #  Go server already reopens per request under a mutex.
   src/shared/                #  Wire types mirroring internal/mcp structs + IPC channels.
-  scripts/verify-contracts.ts # 94 shape/security assertions vs a throwaway vault ($TMPDIR).
-                             #  See app/README.md. No CI job; not signed; local use only.
+  scripts/verify-contracts.ts # shape/security assertions for every tool the app calls, vs a
+                             # throwaway vault ($TMPDIR); prints its own count (228 as of the
+                             # dotenv/sealing screens). See app/README.md. Unsigned/unnotarized.
+                             # CI'd by .github/workflows/ci-app.yml (typecheck + build +
+                             # `bun run verify` on app/** changes) and released as
+                             # dmg/AppImage/nsis by release-app.yml after each Release.
+
+npm/                         # npm distribution (@thelacanians/tinyvault), repo root — NOT under cmd/
+  cli/                       # main package: cli.js shim + package.json (spawns the platform binary)
+  platforms/                 # @thelacanians/tinyvault-{os}-{arch} packages (binary payloads)
+  scripts/pack.mjs           # downloads release assets, verifies checksums, versions packages
+  scripts/wait-for-registry.mjs
 
 specs/
   glyphrun/                  # End-to-end PTY specs for CLI commands (glyphrun)
@@ -395,7 +401,9 @@ libraries (bubbletea, lipgloss, bubbles, glamour).
 - **Quickstart and feature list:** [README.md](README.md)
 - **Documentation site:** `docs/` (VitePress + Bun) → **[tinyvault.dev](https://tinyvault.dev)**. Vercel Root Directory is `docs/`. Git auto-builds **`main` only**, and only when `docs/`, lockfiles, or `docs/vercel.json` change. The ignore command skips the build only when it can prove `docs/` is unchanged against the previously deployed commit; if that commit is absent from Vercel's shallow clone (e.g. after a multi-commit push) it builds instead of erroring — a `git diff` against a missing object fails the whole deployment. Feature branches do not create Preview deployments. Do not `vercel promote`; `main` is the docs release. CLI release is a separate tag pipeline. Local: `cd docs && bun run docs:dev`; gate with `bun run docs:build`.
 - **Contributing guide:** [CONTRIBUTING.md](CONTRIBUTING.md)
-- **CI:** `.github/workflows/ci.yml` (test, lint, govulncheck, build)
-- **Release:** `.github/workflows/release.yml` (GoReleaser on `v*` tags)
+- **Desktop app:** `app/` (Electron front end over `tvault mcp`) — [app/README.md](app/README.md) for internals, [docs/guide/desktop.md](docs/guide/desktop.md) for the published install guide. Unsigned, unnotarized, no auto-update; released as `TinyVault-*.dmg`/`.AppImage`/`.exe` attached to each `v*` tag by `.github/workflows/release-app.yml`, and also buildable from source.
+- **Install channels:** Homebrew **cask** `abdul-hamid-achik/tap/tvault` (the formula is retired; always write `--cask`), npm `@thelacanians/tinyvault` (a launcher plus six `@thelacanians/tinyvault-<platform>` binary packages), `go install github.com/abdul-hamid-achik/tinyvault/cmd/tvault@latest`, and release archives/`.deb`/`.rpm`/`.apk`. `tvault self-update` is only for a self-downloaded binary. When you touch one install instruction, check the others: [README.md](README.md), [docs/guide/getting-started.md](docs/guide/getting-started.md), [docs/changelog.md](docs/changelog.md), [docs/mcp/index.md](docs/mcp/index.md), [npm/cli/README.md](npm/cli/README.md), and the hero command in `docs/.vitepress/theme/components/HomePage.vue`.
+- **CI:** `.github/workflows/ci.yml` (test, lint, govulncheck, build) and `.github/workflows/ci-app.yml` (desktop app: typecheck, build, `bun run verify` contract test — only on `app/**` changes)
+- **Release:** `.github/workflows/release.yml` (GoReleaser on `v*` tags) and `.github/workflows/release-app.yml` (desktop artifacts attached to the same release, via `workflow_run` after Release; checks out the tag explicitly because `workflow_run` runs on the default branch)
 - **npm:** `.github/workflows/npm-publish.yml` (publish `@thelacanians/tinyvault` after each Release; OIDC trusted publishing with NPM_TOKEN fallback; smoke matrix macOS/Linux/Windows)
 - **MCP host config example:** see [MCP server](docs/mcp/index.md) or [README.md](README.md)

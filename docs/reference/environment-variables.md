@@ -1,11 +1,11 @@
 ---
 title: Environment Variables
-description: Reference for the supported TVAULT_* runtime variables — passphrase, vault directory, agent routing, and identities.
+description: Reference for the supported TVAULT_* runtime variables — passphrase, vault directory, agent routing and logging, identities, and the desktop app.
 ---
 
 # Environment Variables
 
-`tvault` reads a small, explicit set of `TVAULT_*` environment variables so you can run it non-interactively — in CI, over ssh, inside containers, or behind an AI agent. This page lists the runtime variables that the command implementation uses and the security caveats for the sensitive ones.
+`tvault` reads a small, explicit set of `TVAULT_*` environment variables so you can run it non-interactively — in CI, over ssh, inside containers, or behind an AI agent. This page lists the variables the CLI reads, the two that belong to the [desktop app](/guide/desktop) instead, and the security caveats for the sensitive ones.
 
 There is no generic environment-variable mapping for command flags. Use only the variables listed below; each section documents its actual resolution rules.
 
@@ -18,10 +18,14 @@ There is no generic environment-variable mapping for command flags. Use only the
 | `TVAULT_PASSPHRASE_FILE` | same surfaces as `TVAULT_PASSPHRASE` | Path to a `0600` env-style file holding `TVAULT_PASSPHRASE`. Preferred for MCP/launchd (the process inherits a path, not the secret). Falls back to `agent.passphrase_command`, then `agent.passphrase_file` in `~/.tvault/config.yaml`, then `~/.config/secrets/env` when that file exists. |
 | `TVAULT_CONFIG` | every command that reads config | Path to `config.yaml`, overriding the default location resolution (same as `--config`). |
 | `TVAULT_DIR` | every command | Vault directory override. Default `~/.tvault`. |
-| `TVAULT_NO_AGENT` | `get`, `env`, `run` | If set, bypass a running agent and unlock directly (same as `--no-agent`). |
-| `TVAULT_AGENT_TOKEN` | agent-routed `get`, `env`, `run` | Bearer token sent to a `--require-token` agent after the mandatory same-uid check. |
+| `TVAULT_NO_AGENT` | commands that route reads through the agent: `get`, `env`, `run`, `ssh`, `docker`, `mcp` | If set, bypass a running agent and unlock directly (same as `--no-agent`). |
+| `TVAULT_AGENT_TOKEN` | the same agent-routed commands | Bearer token sent to a `--require-token` agent after the mandatory same-uid check. |
+| `TVAULT_LOG_DIR` | `agent start`, `agent install`, `agent logs` | Where the agent writes its logs: after `--log-dir`, before `agent.log_dir` in `config.yaml`, and otherwise the XDG state directory. |
+| `TVAULT_LOG_LEVEL` | same as `TVAULT_LOG_DIR` | `debug`, `info`, `warn`, or `error` (default `info`), with the same precedence. |
 | `TVAULT_IDENTITY_KEY` | `open`, `decrypt-env`, identity-mode `env` and `run`, `k8s render`, git filters | A **private** identity string (`tvault-key1...`) for passphrase-free decryption when the selected key file is absent. |
 | `TVAULT_IDENTITY` | `open`, git filters | Default identity **name** (not the key). |
+| `TVAULT_BIN` | [desktop app](/guide/desktop) only | The `tvault` binary the Electron app spawns: an absolute path or a name on `PATH`. Beats the bundled npm binary and the usual install prefixes; loses to a path saved in the app's settings. |
+| `TVAULT_DESKTOP_DEBUG` | [desktop app](/guide/desktop) only | `1` mirrors the renderer's console into the terminal you launched the app from. Counts, names, and errors only — never a value. |
 
 ## Vault location
 
@@ -147,6 +151,18 @@ The agent first verifies that the connecting process has the **same uid** as the
 A malicious same-uid process may be able to read the token file, inspect another process's environment, or otherwise obtain a bearer token. Use tokens for an extra gate between cooperating or OS-confined same-uid clients, not for cross-uid delegation. For a cryptographic boundary across CI, machines, teammates, or untrusted agents, use the [recipient/identity sharing model](/guide/sharing).
 :::
 
+### `TVAULT_LOG_DIR` and `TVAULT_LOG_LEVEL`
+
+The agent writes one structured line per request — operation, peer uid and pid, duration, project, key name, and a selected-key count — plus its own start and stop. That is the same metadata the audit log already keeps: no decrypted value, passphrase, key byte, or capability token reaches the log (a token appears only as a hash prefix). Both variables follow the same precedence: the `--log-dir` / `--log-level` flag wins, then the environment variable, then `agent.log_dir` / `agent.log_level` in `config.yaml`, and finally the XDG state directory and `info`.
+
+```bash
+TVAULT_LOG_LEVEL=debug tvault agent start    # diagnose refusals in the foreground
+tvault agent logs                            # print the resolved log location
+tvault agent logs --clear                    # delete them
+```
+
+`tvault agent install` bakes the values it resolves into the launchd or systemd unit, so a service you install with `TVAULT_LOG_LEVEL=debug` keeps logging at debug until you reinstall it. Levels are `debug`, `info`, `warn`, and `error`.
+
 ## Identities and sharing
 
 TinyVault's [sharing layer](/guide/sharing) uses X25519 keypairs called *identities*. The public half (`tvault1...`) is shareable and committable; the private half (`tvault-key1...`) is not. Two environment variables feed this layer, and they do different things, so read both.
@@ -197,6 +213,22 @@ Other `--identity` flags do not read `TVAULT_IDENTITY` automatically. For exampl
 `TVAULT_IDENTITY` selects a key by name (it expects a matching `<vault-dir>/identities/<name>.key`). `TVAULT_IDENTITY_KEY` *is* the key material itself, for when the selected file does not exist. Set one or the other depending on whether your runner has a key file on disk.
 :::
 
+## Desktop app
+
+Two variables belong to the [desktop app](/guide/desktop) rather than to the CLI: the Electron process reads them when it decides which binary to spawn, and how much to say about it.
+
+### `TVAULT_BIN`
+
+The `tvault` binary the app spawns — an absolute path, or a name to resolve on `PATH`. It sits second in the app's resolution order: after a path saved in the app's own settings, and before the bundled `@thelacanians/tinyvault-<platform>` npm binary, the usual install prefixes (`/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, `~/go/bin`), and a bare `tvault` on an augmented `PATH`.
+
+That augmentation matters on macOS. An app launched from Finder or the Dock inherits a minimal `PATH`, so a Homebrew-installed `tvault` would be invisible to it unless the app adds the prefixes itself.
+
+A path supplied through this variable must be a regular file that you own and that is not group- or world-writable — the same trust rule the CLI applies to `agent.passphrase_command`. Anything else is refused rather than executed. Resolution is cached for the process lifetime, so changing the variable requires an app restart.
+
+### `TVAULT_DESKTOP_DEBUG`
+
+Set to `1` when launching the app from a terminal to mirror the renderer's console into stdout and log renderer milestones. Only counts, names, and errors are logged — never a secret value.
+
 ## Exit codes
 
 Scripts that read these variables will want to branch on the process exit code:
@@ -218,3 +250,4 @@ Scripts that read these variables will want to branch on the process exit code:
 - [CI/CD](/guide/ci-cd) — wiring up passphrase-free and identity-based pipelines.
 - [Sharing Secrets](/guide/sharing) — identities, recipients, live-vault re-keying, and retained-data limits.
 - [Local Agent](/guide/agent) — the unlocked-vault daemon and `--require-token`.
+- [Desktop App](/guide/desktop) — `TVAULT_BIN`, binary resolution, and what the GUI deliberately cannot do.

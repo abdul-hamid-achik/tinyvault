@@ -9,16 +9,24 @@ This quickstart takes you from a new install to a child process using a vault se
 
 ## 1. Install TinyVault
 
-Install the prebuilt binary with Homebrew:
+Every method installs the same single binary. Use whichever your machine already has:
+
+| Method | Install | Update |
+| --- | --- | --- |
+| Homebrew (macOS, Linux) | `brew install --cask abdul-hamid-achik/tap/tvault` | `brew upgrade --cask tvault` |
+| npm (any OS, Node 18+) | `npm install -g @thelacanians/tinyvault` | `npm install -g @thelacanians/tinyvault@latest` |
+| Go toolchain (1.26 or later) | `go install github.com/abdul-hamid-achik/tinyvault/cmd/tvault@latest` | re-run the same command |
+| Linux packages | `.deb`, `.rpm`, or `.apk` from [GitHub Releases](https://github.com/abdul-hamid-achik/tinyvault/releases) | your package manager |
+
+The npm package is a thin launcher: it installs the `tvault` binary for your platform as an optional dependency and runs it directly. That also makes it the zero-install path for an MCP host, which can spawn `npx -y @thelacanians/tinyvault mcp`. The Go route compiles the tagged release from source; because the version string is stamped by the release pipeline rather than by the Go toolchain, that binary reports `tvault version dev` — expected, and without effect on behavior.
+
+Direct binary archives (`.tar.gz` and `.zip`, for every supported OS and architecture) are on the same releases page. If you installed one of those, `tvault self-update` replaces the binary in place after verifying the release checksum. Keep using the package manager for Homebrew, npm, and distro packages so its bookkeeping stays correct.
+
+If Homebrew reports that the retired formula is installed, migrate once to the maintained cask:
 
 ```bash
+brew uninstall --formula tvault
 brew install --cask abdul-hamid-achik/tap/tvault
-```
-
-You can instead download a binary from [GitHub Releases](https://github.com/abdul-hamid-achik/tinyvault/releases), or install from source with Go 1.26 or later:
-
-```bash
-go install github.com/abdul-hamid-achik/tinyvault/cmd/tvault@latest
 ```
 
 Confirm that `tvault` is on your `PATH`:

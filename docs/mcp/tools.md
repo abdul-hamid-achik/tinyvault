@@ -26,9 +26,9 @@ The single most important fact: **only `vault_get_secret` deliberately returns a
 | `vault_run_with_secrets` | No | Run a subprocess with secrets injected as env. |
 | `vault_export_env` | Yes | Write secrets to a `0600` file (dotenv/json/shell). |
 | `vault_list_env_files` | No | Discover `.env` files on disk. |
-| `vault_preview_env_import` | No | Preview a `.env` import (counts only). |
+| `vault_preview_env_import` | No | Preview a `.env` import: key names, actions, and counts. |
 | `vault_import_env_files` | No | Import `.env` files into a project. |
-| `vault_status` | No | Lock state, project count, vault id, creation time. |
+| `vault_status` | No | Lock state, vault path, project count, vault id, creation time. |
 | `vault_audit_log` | No | Recent audit entries. |
 | `vault_audit_log_since` | No | Filtered audit entries. |
 | `vault_seal_for_recipients` | No | Produce commit-safe ciphertext for recipients. |
@@ -129,8 +129,8 @@ Lists the keys in a project — names and metadata only, never values.
 
 The one tool that returns cleartext. Reach for it last.
 
-- **Inputs:** `project` (optional), `key` (required).
-- **Returns:** `{ key, value, warning }`. The `warning` reminds the caller that the value is now in the model's context.
+- **Inputs:** `project` (optional), `key` (required), `group` (optional, environment group name — with `env`, resolves the key through the inheritance chain), `env` (optional, environment name within the group; requires `group`).
+- **Returns:** `{ key, value, warning, source }`. The `warning` reminds the caller that the value is now in the model's context. `source` is present only on the group path and reports which environment the resolved value came from.
 - **Policy gate:** any `access_mode`; project and secret globs applied (the requested key must pass `secrets_allow`/`secrets_deny`).
 
 ::: warning Prefer using the value over reading it
@@ -154,7 +154,7 @@ Stores or updates a secret, encrypted at rest. Overwriting archives the prior va
 Removes a key and **purges its version history**.
 
 - **Inputs:** `project` (optional), `key` (required).
-- **Returns:** confirmation metadata.
+- **Returns:** `{ key, deleted }`.
 - **Policy gate:** `CanWrite`; project and secret globs.
 
 ### `vault_generate_secret`
@@ -261,7 +261,7 @@ Runs a command in a subprocess with the requested secrets injected as environmen
 
 The returned stdout and stderr are scanned for literal secret values when `redact_output` is enabled. That redaction can miss transformed values, and the child can still write values to files or the network, so execution policy is the real boundary.
 
-- **Inputs:** `project` (optional), `command` (required), `secrets` (optional list; the keys to inject), `timeout_seconds` (optional, default `300`).
+- **Inputs:** `project` (optional), `command` (required), `secrets` (optional list; the keys to inject), `prefix` (optional; inject only keys with this prefix — combined with `secrets` as a union), `timeout_seconds` (optional, default `300`), `group` (optional, environment group name — with `env`, resolves the injected set through the inheritance chain), `env` (optional, environment name within the group; requires `group`).
 - **Returns:** `{ exit_code, stdout, stderr }`, with secret values redacted from the output when `redact_output` is on.
 - **Policy gate:** **`CanExec`** — requires `access_mode: full` **and** `allow_exec: true`; project and secret globs.
 
@@ -281,7 +281,7 @@ The returned stdout and stderr are scanned for literal secret values when `redac
 
 Writes selected secrets to a file on disk with `0600` permissions. The values go to the file, not to the model.
 
-- **Inputs:** `project` (optional), `format` (optional: `dotenv` | `json` | `shell`), `output_path` (optional), `keys` (optional list).
+- **Inputs:** `project` (optional), `format` (optional: `dotenv` | `json` | `shell`, default `dotenv`), `output_path` (optional, default `.env`), `keys` (optional list), `group` (optional, environment group name — with `env`, resolves the exported set through the inheritance chain), `env` (optional, environment name within the group; requires `group`).
 - **Returns:** `{ path, count, keys }` — the file path, how many were written, and which key names. No values.
 - **Policy gate:** **`CanWrite`** (`access_mode: read-write` or `full`); project and per-key secret globs determine which keys are exported. Environment-group exports also require access to both the child project and any inherited base project.
 
@@ -308,7 +308,7 @@ Discovers `.env`-style files on disk.
 Dry-runs an import so the agent can see what would happen before committing.
 
 - **Inputs:** `project` (optional), `directory` (optional), `files` (optional), `environment` (optional), `overwrite` (optional).
-- **Returns:** counts of keys that would be created, overwritten, or skipped. No values.
+- **Returns:** counts of keys that would be created (`create_count`), overwritten (`overwrite_count`), or skipped (`skip_count`), plus `diagnostics[]` from the dotenv parser and `blocked_keys[]` (keys the policy denies). No values.
 - **Policy gate:** `CanWrite` (it previews a write); project globs.
 
 ### `vault_import_env_files`
@@ -316,7 +316,7 @@ Dry-runs an import so the agent can see what would happen before committing.
 Imports the `.env` values into the vault without exposing them in the response.
 
 - **Inputs:** `project` (optional), `directory` (optional), `files` (optional), `environment` (optional), `overwrite` (optional).
-- **Returns:** counts of what was created, overwritten, or skipped. No values.
+- **Returns:** counts of what was created (`create_count`), overwritten (`overwrite_count`), or skipped (`skip_count`), plus `diagnostics[]` and `blocked_keys[]`. No values.
 - **Policy gate:** `CanWrite`; project and per-key secret globs.
 
 ---
@@ -328,7 +328,7 @@ Imports the `.env` values into the vault without exposing them in the response.
 Reports the server's view of the vault. It does not return the loaded policy or summarize the caller's effective project/key access.
 
 - **Inputs:** none.
-- **Returns:** lock state, project count, vault id, and creation time.
+- **Returns:** lock state, the vault directory `path`, project count, vault id, and creation time.
 - **Policy gate:** any `access_mode`.
 
 ### `vault_audit_log`
@@ -458,7 +458,7 @@ A trio of tools for working with `.env` files against the vault — comparing dr
 Compares a `.env` file on disk against the project and reports the drift.
 
 - **Inputs:** `file` (required), `project` (optional), `compare_values` (optional).
-- **Returns:** the key sets `only_in_vault`, `only_in_file`, and `in_both`; with `compare_values`, each shared key also gets a `same` / `differs` verdict. **Never the values themselves.**
+- **Returns:** `project`, `file`, the key sets `only_in_vault`, `only_in_file`, and `in_both`, plus an `in_sync` boolean. With `compare_values`, `value_diffs` maps each shared key to a `same` / `differs` / `error` verdict. **Never the values themselves.**
 - **Policy gate:** any `access_mode`; project and per-key secret globs. When value comparison runs, each compared key is recorded as `secret.read` (same as `tvault diff --values`).
 
 ### `vault_sync_env`
@@ -466,7 +466,7 @@ Compares a `.env` file on disk against the project and reports the drift.
 Reconciles a `.env` file with the project in one of three directions.
 
 - **Inputs:** `direction` (required: `pull` | `push` | `mirror`), `path` (optional), `project` (optional), `overwrite` (optional).
-- **Returns:** counts of what was pulled, pushed, or mirrored. No values.
+- **Returns:** `direction`, `project`, `path`, `env_created`, the entry totals `vault_entries` / `env_entries`, and the key-name lists `created[]`, `updated[]`, `skipped[]`, `unchanged[]`, and `conflicts[]`. **Never the values themselves.**
 - **Policy gate:** `pull` reads (any `access_mode`); `push` and `mirror` are writes and require `CanWrite`. Project and per-key secret globs apply.
 
 ### `vault_export_env_encrypted`
@@ -526,14 +526,14 @@ Lists all environment groups with their linked projects.
 Shows one group's linked projects, drift status, and inheritance configuration.
 
 - **Inputs:** `name` (required).
-- **Returns:** environments, drift status (`ok` / `drift`) and the diff keys, and inheritance pointers. No values.
+- **Returns:** `name`, `description`, the linked `environments`, `diff_status` (`ok` / `drift` / `unknown`), and the `inheritance` pointers. No values — and no per-key drift detail; use `vault_env_diff` for that.
 - **Policy gate:** any `access_mode`.
 
 ### `vault_env_group_add`
 
 Adds an environment to an existing group. The project must already exist and must not be in another group.
 
-- **Inputs:** `group` (required), `env` (required, the environment name), `project` (required).
+- **Inputs:** `group` (required), `env_name` (required, the environment name), `project` (required).
 - **Returns:** the updated group. No values.
 - **Policy gate:** `CanWrite`; the project must pass the project globs.
 
@@ -541,7 +541,7 @@ Adds an environment to an existing group. The project must already exist and mus
 
 Removes an environment from a group. The underlying project and its secrets are **not** deleted.
 
-- **Inputs:** `group` (required), `env` (required).
+- **Inputs:** `group` (required), `env_name` (required).
 - **Returns:** the updated group. No values.
 - **Policy gate:** `CanWrite`.
 
@@ -617,7 +617,7 @@ The server exposes three read-only MCP resources. All return JSON, contain **met
 
 | Resource URI | Contents |
 | --- | --- |
-| `vault://status` | Lock state, project count, vault id, creation time. |
+| `vault://status` | Lock state, vault path, project count, vault id, creation time. |
 | `vault://projects` | The list of projects (names, descriptions, counts). |
 | `vault://projects/{name}/keys` | Key names and metadata for one project. |
 

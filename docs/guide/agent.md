@@ -171,7 +171,7 @@ The agent is designed so that turning it on does not widen your trust boundary b
 - **Socket permissions.** The socket is created `0600` inside the `0700` vault directory, born with the right mode via a tight umask (no listen-then-`chmod` race).
 - **Same-uid peers only.** Every connection's peer uid is checked against the agent's own uid and rejected if it differs (fail-closed; `LOCAL_PEERCRED` on macOS, `SO_PEERCRED` on Linux).
 - **Caches only the key, not an open database.** bbolt is single-writer, so a held-open database would block every other `tvault` process. The agent caches only the KEK and reopens the vault per request (serialized by a mutex), so direct CLI access keeps working between requests.
-- **Read-only.** The agent serves reads (`get`, `getall`, `status`, `stop`) only. Writes (`set`, `delete`, rotation, project changes) always go through a direct CLI unlock.
+- **Read-only.** The agent serves exactly five operations — `get` (one key), `getselected` (an `--only`/`--prefix` subset), `getall`, `status`, and `stop`. Writes (`set`, `delete`, rotation, project changes) always go through a direct CLI unlock.
 - **Single instance.** A `flock` prevents two agents from racing on the same vault.
 - **Key zeroing.** The cached key is wiped on stop, idle auto-lock, any signal, and a recovered panic.
 
