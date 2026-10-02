@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -385,6 +387,68 @@ func TestMCPEnvSeal(t *testing.T) {
 	}
 
 	_ = v // keep reference
+}
+
+// TestMCPEnvSeal_OutputPath pins the output_path contract: the blob is written to
+// a 0600 file and only the path comes back. The handler used to ignore the
+// argument and always return base64, which put the entire ciphertext into the
+// model's context and diverged from vault_seal_for_recipients.
+func TestMCPEnvSeal_OutputPath(t *testing.T) {
+	_, _, cs, identity := setupEnvGroupTestVault(t)
+	ctx := context.Background()
+
+	pubRecipient := crypto.EncodeRecipient(identity.Recipient())
+	path := filepath.Join(t.TempDir(), "group.env.encrypted")
+
+	data := callEnvTool(t, ctx, cs, "vault_env_seal", map[string]any{
+		"group":       "liftclub",
+		"recipients":  []string{pubRecipient},
+		"output_path": path,
+	})
+
+	var out envSealOutput
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.Path != path {
+		t.Errorf("path = %q, want %q", out.Path, path)
+	}
+	if out.SealedBase64 != "" {
+		t.Error("sealed_base64 must be empty when output_path is set")
+	}
+	if out.Bytes == 0 {
+		t.Error("bytes should report the blob size")
+	}
+
+	text := string(data)
+	for _, secret := range []string{"prod-db", "sk-prod", "wh-prod"} {
+		if strings.Contains(text, secret) {
+			t.Errorf("secret value %q found in seal output", secret)
+		}
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat sealed file: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("sealed file mode = %o, want 600", perm)
+	}
+	if int64(out.Bytes) != info.Size() {
+		t.Errorf("bytes = %d, file size = %d", out.Bytes, info.Size())
+	}
+
+	sealedBytes, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read sealed file: %v", err)
+	}
+	plaintext, err := encryptedenv.DecryptV2(identity, sealedBytes)
+	if err != nil {
+		t.Fatalf("decrypt: %v", err)
+	}
+	if !strings.Contains(string(plaintext), "--- tvault-env:production ---") {
+		t.Error("missing production section header in the written blob")
+	}
 }
 
 func TestMCPEnvInherit(t *testing.T) {

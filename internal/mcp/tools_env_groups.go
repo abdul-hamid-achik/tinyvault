@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -550,23 +551,15 @@ func (s *VaultMCPServer) handleEnvSeal(_ context.Context, _ *sdkmcp.CallToolRequ
 	}
 
 	if input.OutputPath != "" {
-		// Write to file — don't return ciphertext in the conversation.
-		// The caller (MCP host) writes the file; we return the path only.
-		// Actually, we need to write the file ourselves since the MCP host
-		// doesn't have filesystem access in the same way.
-		// But we can't write files from here. Return base64 instead.
-		// The spec says: "output_path: write the sealed blob to this file."
-		// We'll write it via the vault's file system access.
-		// For now, return base64 if no output_path, or write to the path.
-		// Since we're in the MCP server, we'll write to the path.
-		out.SealedBase64 = "" // don't return if writing to file
+		// Same contract as vault_seal_for_recipients and vault_export_env_encrypted:
+		// with output_path the blob goes to a 0600 file and only the path comes
+		// back, so the ciphertext never enters the model's context. Without it the
+		// caller gets base64. This handler used to ignore output_path entirely and
+		// always return the blob.
+		if werr := os.WriteFile(input.OutputPath, sealed, 0o600); werr != nil {
+			return nil, envSealOutput{}, fmt.Errorf("write file: %w", werr)
+		}
 		out.Path = input.OutputPath
-		// Actually, writing to the filesystem from MCP is fine — the host
-		// delegates this to us. But we don't import "os" here. Let's
-		// return base64 instead and let the caller write it.
-		// This is safer — the caller decides where to write.
-		out.SealedBase64 = base64Encode(sealed)
-		out.Path = ""
 	} else {
 		out.SealedBase64 = base64Encode(sealed)
 	}
@@ -574,6 +567,7 @@ func (s *VaultMCPServer) handleEnvSeal(_ context.Context, _ *sdkmcp.CallToolRequ
 	s.audit("env.seal", "env_group", input.Group, map[string]any{
 		"environments":    includedEnvs,
 		"recipient_count": len(recipients),
+		"output":          out.Path,
 	})
 
 	return nil, out, nil
